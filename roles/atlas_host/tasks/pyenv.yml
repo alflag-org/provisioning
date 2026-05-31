@@ -1,0 +1,23 @@
+---
+- name: Install pyenv
+  ansible.builtin.git:
+    repo: https://github.com/pyenv/pyenv.git
+    dest: /home/ops/.pyenv
+    version: master
+    update: true
+  become: true
+  become_user: ops
+
+- name: Ensure pyenv shell profile
+  ansible.builtin.blockinfile:
+    path: /home/ops/.profile
+    marker: "# {mark} ANSIBLE MANAGED PYENV"
+    create: true
+    owner: ops
+    group: ops
+    mode: "0644"
+    block: |
+      export PYENV_ROOT="$HOME/.pyenv"
+      [[ -d "$PYENV_ROOT/bin" ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+      eval "$(pyenv init - bash)"
+  become: true

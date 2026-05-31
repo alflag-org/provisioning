@@ -1,0 +1,8 @@
+---
+- name: Configure Atlas hosts
+  hosts: kanagawa01
+  gather_facts: true
+
+  roles:
+    - role: atlas_host
+      when: atlas_enabled | default(inventory_hostname == "kng01-mgmt-control-01")

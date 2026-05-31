@@ -1,0 +1,10 @@
+{% set rendered_atlas_role = atlas_role | default('control' if inventory_hostname == 'kng01-mgmt-control-01' else 'host') %}
+name: {{ inventory_hostname }}
+site: {{ site_name }}
+zone: {{ network_zone | default('mgmt') }}
+role: {{ rendered_atlas_role }}
+environment: home
+runtime_kind: {{ atlas_runtime_kind | default('vm') }}
+tags:
+  - atlas
+  - {{ rendered_atlas_role }}

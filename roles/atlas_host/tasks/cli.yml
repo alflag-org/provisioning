@@ -1,0 +1,47 @@
+---
+- name: Create Atlas CLI directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ops
+    group: ops
+    mode: "0755"
+  loop:
+    - "{{ atlas_cli_venv | dirname }}"
+    - "{{ atlas_cli_bin_dir }}"
+  become: true
+
+- name: Create Atlas CLI venv
+  ansible.builtin.command:
+    cmd: "python3 -m venv {{ atlas_cli_venv }}"
+    creates: "{{ atlas_cli_venv }}/bin/python"
+  become: true
+  become_user: ops
+
+- name: Upgrade pip in Atlas CLI venv
+  ansible.builtin.command:
+    cmd: "{{ atlas_cli_venv }}/bin/python -m pip install --upgrade pip"
+  environment:
+    TMPDIR: "{{ atlas_tmp_dir }}"
+  become: true
+  become_user: ops
+  changed_when: false
+
+- name: Install Atlas CLI
+  ansible.builtin.command:
+    cmd: "{{ atlas_cli_venv }}/bin/python -m pip install --upgrade {{ atlas_cli_source }}"
+  environment:
+    TMPDIR: "{{ atlas_tmp_dir }}"
+  become: true
+  become_user: ops
+  changed_when: true
+
+- name: Link atlas command
+  ansible.builtin.file:
+    src: "{{ atlas_cli_venv }}/bin/atlas"
+    dest: "{{ atlas_cli_bin }}"
+    state: link
+    force: "{{ ansible_check_mode }}"
+    owner: ops
+    group: ops
+  become: true

@@ -1,0 +1,15 @@
+---
+- name: Create Atlas directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ops
+    group: ops
+    mode: "0755"
+  loop:
+    - "{{ atlas_etc_dir }}"
+    - "{{ atlas_home }}"
+    - "{{ atlas_var_dir }}"
+    - "{{ atlas_tmp_dir }}"
+    - "{{ atlas_python_build_cache_path }}"
+  become: true

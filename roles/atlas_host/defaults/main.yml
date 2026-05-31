@@ -1,22 +1,16 @@
 ---
-site_name: kanagawa01
-site_short_name: kng01
-
-ansible_user: ops
-ansible_become: true
-
 atlas_home: /opt/atlas
 atlas_etc_dir: /etc/atlas
 atlas_var_dir: /var/lib/atlas
-atlas_tmp_dir: /opt/atlas/tmp
-atlas_python_build_cache_path: /var/lib/atlas/cache/python-build
-
-atlas_runtime_python_version: "3.12.3"
+atlas_tmp_dir: "{{ atlas_home }}/tmp"
+atlas_python_build_cache_path: "{{ atlas_var_dir }}/cache/python-build"
 
 atlas_cli_venv: /home/ops/.local/share/atlas-cli-venv
 atlas_cli_bin_dir: /home/ops/.local/bin
-atlas_cli_bin: /home/ops/.local/bin/atlas
+atlas_cli_bin: "{{ atlas_cli_bin_dir }}/atlas"
 atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master"
+
+atlas_runtime_python_version: "3.12.3"
 
 atlas_releases:
   daedalus:
@@ -25,3 +19,7 @@ atlas_releases:
 atlas_registries:
   daedalus:
     source: "git+https://github.com/alflag-org/daedalus.git#master"
+
+atlas_manage_runtime: false
+atlas_validate_runtime: true
+atlas_validate_shebangs: true

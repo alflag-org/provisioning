@@ -1,0 +1,16 @@
+runtime:
+  python:
+    version: "{{ atlas_runtime_python_version }}"
+
+scripts:
+  releases:
+{% for name, release in atlas_releases.items() %}
+    {{ name }}:
+      source: {{ release.source }}
+{% endfor %}
+
+  registries:
+{% for name, registry in atlas_registries.items() %}
+    {{ name }}:
+      source: "{{ registry.source }}"
+{% endfor %}

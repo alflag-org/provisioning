@@ -1,0 +1,27 @@
+---
+- name: Install packages
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Create directories
+  ansible.builtin.import_tasks: directories.yml
+
+- name: Install pyenv
+  ansible.builtin.import_tasks: pyenv.yml
+
+- name: Configure environment
+  ansible.builtin.import_tasks: env.yml
+
+- name: Render Atlas configuration
+  ansible.builtin.import_tasks: config.yml
+
+- name: Install Atlas CLI
+  ansible.builtin.import_tasks: cli.yml
+
+- name: Update Atlas scripts
+  ansible.builtin.import_tasks: scripts.yml
+
+- name: Manage Atlas runtime
+  ansible.builtin.import_tasks: runtime.yml
+
+- name: Validate Atlas host
+  ansible.builtin.import_tasks: validate.yml

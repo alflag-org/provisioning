@@ -1,0 +1,12 @@
+---
+- name: Update Atlas scripts releases
+  ansible.builtin.command:
+    cmd: "{{ atlas_cli_bin }} scripts update"
+  environment:
+    PATH: "/home/ops/.pyenv/bin:/home/ops/.local/bin:{{ atlas_home }}/bin:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    PYENV_ROOT: "/home/ops/.pyenv"
+    TMPDIR: "{{ atlas_tmp_dir }}"
+    PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
+  become: true
+  become_user: ops
+  changed_when: true

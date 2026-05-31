@@ -1,0 +1,32 @@
+---
+- name: Install Atlas host packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - ca-certificates
+      - sudo
+      - openssh-client
+      - rsync
+      - python3
+      - python3-venv
+      - python3-pip
+      - build-essential
+      - make
+      - gcc
+      - libssl-dev
+      - zlib1g-dev
+      - libbz2-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - llvm
+      - libncurses-dev
+      - xz-utils
+      - tk-dev
+      - libxml2-dev
+      - libxmlsec1-dev
+      - libffi-dev
+      - liblzma-dev
+    state: present
+    update_cache: true
+  become: true

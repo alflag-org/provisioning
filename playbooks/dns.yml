@@ -1,6 +1,6 @@
 ---
 - name: Configure DNS hosts
-  hosts: kng01-recursive-dns-01:kng01-recursive-dns-02
+  hosts: kng01-mgmt-recdns-01:kng01-mgmt-recdns-02
   gather_facts: true
 
   tasks:

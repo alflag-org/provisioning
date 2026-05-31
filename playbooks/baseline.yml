@@ -3,7 +3,5 @@
   hosts: kanagawa01
   gather_facts: true
 
-  tasks:
-    - name: Show target host
-      ansible.builtin.debug:
-        msg: "baseline target={{ inventory_hostname }} site={{ site_name | default('unknown') }}"
+  roles:
+    - role: baseline
