@@ -1,0 +1,6 @@
+---
+- name: sshd
+  ansible.builtin.include_tasks:
+    file: sshd.yml
+  when:
+    - not skip_sshd | default(false)

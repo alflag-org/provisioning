@@ -1,0 +1,24 @@
+---
+- name: restart zabbix-server
+  ansible.builtin.service:
+    name: zabbix-server
+    state: restarted
+    enabled: true
+
+- name: restart php8.3-fpm
+  ansible.builtin.service:
+    name: php8.3-fpm
+    state: restarted
+    enabled: true
+
+- name: restart nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: true
+
+- name: restart mysql
+  ansible.builtin.service:
+    name: mysql
+    state: restarted
+    enabled: true

@@ -1,0 +1,12 @@
+---
+- name: Apply baseline playbook
+  ansible.builtin.import_playbook: baseline.yml
+
+- name: Apply DNS playbook
+  ansible.builtin.import_playbook: dns.yml
+
+- name: Apply monitoring playbook
+  ansible.builtin.import_playbook: monitoring.yml
+
+- name: Apply container playbook
+  ansible.builtin.import_playbook: containers.yml

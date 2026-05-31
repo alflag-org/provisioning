@@ -1,0 +1,22 @@
+---
+- name: Install Zabbix 6.0
+  ansible.builtin.include_tasks:
+    file: zabbix_6.0.yml
+  when: ansible_facts['lsb']['release'] == "22.04"
+
+- name: Install Zabbix 7.0
+  ansible.builtin.include_tasks:
+    file: zabbix_7.0.yml
+  when: ansible_facts['lsb']['release'] == "24.04"
+
+- name: Setup mysql
+  ansible.builtin.include_tasks:
+    file: mysql.yml
+
+- name: Setup php-fpm
+  ansible.builtin.include_tasks:
+    file: php-fpm.yml
+
+- name: Setup nginx
+  ansible.builtin.include_tasks:
+    file: nginx.yml

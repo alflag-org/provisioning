@@ -1,0 +1,37 @@
+---
+- name: Install Zabbix Server
+  ansible.builtin.apt:
+    name:
+      - zabbix-server-mysql
+      - zabbix-frontend-php
+      - fonts-ipafont-gothic
+    state: present
+
+- name: Copy Zabbix Server Configuration
+  template:
+    src: ./etc/zabbix/zabbix_server.conf
+    dest: /etc/zabbix/zabbix_server.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart zabbix-server
+
+- name: Create Symbolic Link
+  ansible.builtin.file:
+    src: /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf
+    dest: /usr/share/zabbix/assets/fonts/ipag.ttf
+    state: link
+  notify: restart zabbix-server
+
+- name: Replace ZBX_GRAPH_FONT_NAME
+  lineinfile:
+    path: /usr/share/zabbix/include/defines.inc.php
+    regexp: "^define\\('ZBX_GRAPH_FONT_NAME',.*$"
+    line: "define('ZBX_GRAPH_FONT_NAME', 'ipag');"
+  notify: restart zabbix-server
+
+- name: Enable Zabbix Server
+  ansible.builtin.systemd_service:
+    name: zabbix-server
+    enabled: true
+    state: started

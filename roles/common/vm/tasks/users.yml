@@ -1,0 +1,30 @@
+---
+# infra user
+- name: Create infra user
+  user:
+    name: "{{ user_infra_name }}"
+    uid: 1000
+    password: "{{ user_infra_password | password_hash( 'sha512', user_infra_salt ) }}"
+    update_password: always
+    group: infra
+    groups: sudo
+    shell: /bin/bash
+    create_home: true
+    home: /home/infra
+    state: present
+  become: true
+
+# minecraft user
+- name: Create minecraft user
+  user:
+    name: "{{ user_minecraft_name }}"
+    uid: 1001
+    password: "{{ user_minecraft_password | password_hash( 'sha512', user_minecraft_salt ) }}"
+    update_password: always
+    group: minecraft
+    groups: sudo
+    shell: /bin/bash
+    create_home: true
+    home: /home/minecraft
+    state: present
+  become: true

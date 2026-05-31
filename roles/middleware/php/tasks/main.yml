@@ -1,0 +1,10 @@
+---
+- name: install php8.1
+  ansible.builtin.include_tasks:
+    file: php8.1.yml
+  when: ansible_facts['lsb']['release'] == "22.04"
+
+- name: install php8.3
+  ansible.builtin.include_tasks:
+    file: php8.3.yml
+  when: ansible_facts['lsb']['release'] == "24.04"

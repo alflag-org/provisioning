@@ -1,0 +1,7 @@
+---
+# FIXME: Linux Containers (LXC) do not support snapd
+# - name: Install terraform
+#   community.general.snap:
+#     name: terraform
+#     state: present
+#     classic: true

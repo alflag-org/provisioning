@@ -1,0 +1,20 @@
+---
+- name: Copy sshd_config.d/00-cloudflare-ssh.conf
+  ansible.builtin.copy:
+    src: ./etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
+    dest: /etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart sshd
+
+- name: add ca.pub
+  ansible.builtin.copy:
+    src: ./etc/ssh/ca.pub
+    dest: /etc/ssh/ca.pub
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart sshd

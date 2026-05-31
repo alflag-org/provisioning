@@ -1,0 +1,8 @@
+---
+- name: Clone terraform-proxmox
+  ansible.builtin.git:
+    repo: "https://github.com/alflag-team/ansible-proxmox.git"
+    dest: "~/repos/terraform-proxmox"
+    version: "master"
+    update: false
+    accept_hostkey: true

@@ -1,0 +1,4 @@
+---
+network_zone: dmz
+network_vlan_id: 130
+network_cidr: 10.10.30.0/24

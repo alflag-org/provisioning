@@ -1,0 +1,48 @@
+---
+- name: locale
+  ansible.builtin.include_tasks:
+    file: locale.yml
+  when:
+    - not skip_locale | default(false)
+
+- name: unattended-upgrades
+  ansible.builtin.include_tasks:
+    file: unattended-upgrades.yml
+  when:
+    - not skip_unattended_upgrades | default(false)
+
+- name: zabbix-package
+  ansible.builtin.include_tasks:
+    file: zabbix-package.yml
+  when:
+    - not skip_zabbix_package | default(false)
+
+- name: zabbix-agent
+  ansible.builtin.include_tasks:
+    file: zabbix-agent.yml
+  when:
+    - not skip_zabbix_agent | default(false)
+
+- name: home
+  ansible.builtin.include_tasks:
+    file: home.yml
+  when:
+    - not skip_home | default(false)
+
+- name: secrets
+  ansible.builtin.include_tasks:
+    file: secrets.yml
+  when:
+    - not skip_secrets | default(false)
+
+- name: ssh
+  ansible.builtin.include_tasks:
+    file: ssh.yml
+  when:
+    - not skip_ssh | default(false)
+
+- name: etckeeper
+  ansible.builtin.include_tasks:
+    file: etckeeper.yml
+  when:
+    - not skip_etckeeper | default(false)

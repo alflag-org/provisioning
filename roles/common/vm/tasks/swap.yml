@@ -1,0 +1,17 @@
+---
+- name: Check
+  ansible.builtin.include_tasks:
+    file: swap-check.yml
+
+- name: Disable
+  ansible.builtin.include_tasks:
+    file: swap-disable.yml
+  when:
+    - swap_file_existing_size_mb != 0
+    - swap_file_existing_size_mb != swap_file_size_mb
+
+- name: Enable
+  ansible.builtin.include_tasks:
+    file: swap-enable.yml
+  when:
+    - swap_file_existing_size_mb != swap_file_size_mb

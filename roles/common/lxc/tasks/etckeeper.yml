@@ -1,0 +1,47 @@
+---
+- name: Install etckeeper
+  ansible.builtin.apt:
+    name:
+      - etckeeper
+    update_cache: true
+    state: present
+
+# 設定ファイルをコピーする
+- name: Copy etckeeper.conf
+  ansible.builtin.copy:
+    src: ./etc/etckeeper/etckeeper.conf
+    dest: /etc/etckeeper/etckeeper.conf
+    owner: root
+    group: root
+    mode: 0644
+  become: true
+- name: Copy commit.d/99push
+  ansible.builtin.copy:
+    src: ./etc/etckeeper/commit.d/99push
+    dest: /etc/etckeeper/commit.d/99push
+    owner: root
+    group: root
+    mode: 0755
+  become: true
+
+# /etc/.git/config が存在する場合、etckeeper が git で管理されているとみなす
+- name: Check if /etc/.git/config exists
+  ansible.builtin.stat:
+    path: /etc/.git/config
+  register: etckeeper_git_config
+
+# /etc/.git/config に [remote "origin"] が設定されている場合、初期化されているとみなす
+- name: Check if [remote "origin"] is set in /etc/.git/config
+  ansible.builtin.shell: cat /etc/.git/config | grep -q '\[remote "origin"\]'
+  when: etckeeper_git_config.stat.exists
+  register: etckeeper_git_remote_origin
+  failed_when: etckeeper_git_remote_origin.rc > 1
+  changed_when: etckeeper_git_remote_origin.rc == 1
+
+#
+- name: Add remote origin to /etc/.git/config
+  ansible.builtin.shell: etckeeper vcs remote add origin git@github.com:alflag-team/etc.git
+  when: not etckeeper_git_remote_origin.rc == 0
+- name: Push to remote origin
+  ansible.builtin.shell: etckeeper vcs push -u origin master:{{ ansible_hostname }}
+  when: not etckeeper_git_remote_origin.rc == 0

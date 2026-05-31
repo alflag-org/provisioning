@@ -1,0 +1,9 @@
+---
+- name: Configure container hosts
+  hosts: kanagawa01
+  gather_facts: true
+
+  tasks:
+    - name: Show container target
+      ansible.builtin.debug:
+        msg: "containers target={{ inventory_hostname }} site={{ site_name | default('unknown') }}"

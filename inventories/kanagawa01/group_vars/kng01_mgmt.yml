@@ -1,0 +1,4 @@
+---
+network_zone: mgmt
+network_vlan_id: 110
+network_cidr: 10.10.10.0/24

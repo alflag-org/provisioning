@@ -1,0 +1,27 @@
+---
+- name: Install Zabbix Agent
+  ansible.builtin.apt:
+    name:
+      - zabbix-agent2
+      - zabbix-agent2-plugin-*
+    update_cache: true
+    state: present
+  notify: restart zabbix-agent
+
+- name: Copy Zabbix Agent Configuration
+  ansible.builtin.copy:
+    src: ./etc/zabbix/zabbix_agent2.conf
+    dest: /etc/zabbix/zabbix_agent2.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart zabbix-agent
+
+- name: Create /var/lib/zabbix directory
+  ansible.builtin.file:
+    path: /var/lib/zabbix
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  notify: restart zabbix-agent

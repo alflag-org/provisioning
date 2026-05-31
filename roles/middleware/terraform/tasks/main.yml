@@ -1,0 +1,36 @@
+---
+- name: install terraform
+  ansible.builtin.include_tasks:
+    file: install.yml
+  when:
+    - not skip_install_terraform | default(false)
+
+- name: terraform-cloudflare-access
+  ansible.builtin.include_tasks:
+    file: terraform-cloudflare-access.yml
+  when:
+    - not skip_terraform_cloudflare_access | default(false)
+
+- name: terraform-cloudflare-tunnel
+  ansible.builtin.include_tasks:
+    file: terraform-cloudflare-tunnel.yml
+  when:
+    - not skip_terraform_cloudflare_tunnel | default(false)
+
+- name: terraform-dns
+  ansible.builtin.include_tasks:
+    file: terraform-dns.yml
+  when:
+    - not skip_terraform_dns | default(false)
+
+- name: terraform-oraclecloud
+  ansible.builtin.include_tasks:
+    file: terraform-oraclecloud.yml
+  when:
+    - not skip_terraform_oraclecloud | default(false)
+
+- name: terraform-proxmox
+  ansible.builtin.include_tasks:
+    file: terraform-proxmox.yml
+  when:
+    - not skip_terraform_proxmox | default(false)

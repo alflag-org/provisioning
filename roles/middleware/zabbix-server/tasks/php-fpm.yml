@@ -1,0 +1,9 @@
+---
+- name: Copy 99-zabbix.ini
+  template:
+    src: ./etc/php/8.3/fpm/conf.d/99-zabbix.ini
+    dest: /etc/php/8.3/fpm/conf.d/99-zabbix.ini
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart php8.3-fpm

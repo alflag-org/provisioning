@@ -1,0 +1,8 @@
+---
+- name: Clone terraform-cloudflare-access
+  ansible.builtin.git:
+    repo: "https://github.com/alflag-team/terraform-cloudflare-access.git"
+    dest: "~/repos/terraform-cloudflare-access"
+    version: "master"
+    update: false
+    accept_hostkey: true

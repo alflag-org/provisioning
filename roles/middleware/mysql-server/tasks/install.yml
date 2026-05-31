@@ -1,0 +1,35 @@
+---
+- name: Install mysql-server
+  ansible.builtin.apt:
+    name:
+      - mysql-server
+      - mysql-client
+      - python3-pymysql  # Required for Ansible
+      - python3-setuptools  # Required for Ansible
+    state: present
+
+- name: Set Root Password
+  community.mysql.mysql_user:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "root"
+    password: "{{ mysql_root_password }}"
+    check_implicit_admin: true
+    state: present
+  notify: restart mysql
+
+- name: Remove anonymous users
+  community.mysql.mysql_user:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: ""
+    state: absent
+  notify: restart mysql
+
+- name: Start mysql
+  ansible.builtin.systemd_service:
+    name: mysql
+    state: started
+    enabled: true

@@ -1,0 +1,19 @@
+---
+# nginx と apache2 を併用することはないはずなので消す
+- name: Uninstall apache2
+  ansible.builtin.apt:
+    name:
+      - apache2*
+    state: absent
+
+- name: Install nginx
+  ansible.builtin.apt:
+    name:
+      - nginx
+    state: present
+
+- name: Start nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: started
+    enabled: true

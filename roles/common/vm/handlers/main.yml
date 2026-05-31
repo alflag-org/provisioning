@@ -1,0 +1,41 @@
+---
+- name: restart sshd
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+    enabled: true
+  become: true
+
+- name: restart systemd-resolved
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: restarted
+  become: true
+
+- name: stop zabbix-agent
+  ansible.builtin.service:
+    name: zabbix-agent2
+    state: stopped
+    enabled: false
+  become: true
+
+- name: start zabbix-agent
+  ansible.builtin.service:
+    name: zabbix-agent2
+    state: started
+    enabled: true
+  become: true
+
+- name: restart zabbix-agent
+  ansible.builtin.service:
+    name: zabbix-agent2
+    state: restarted
+    enabled: true
+  become: true
+
+- name: restart unattended-upgrades
+  ansible.builtin.systemd_service:
+    name: unattended-upgrades
+    state: restarted
+    enabled: true
+  become: true

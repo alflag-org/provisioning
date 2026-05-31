@@ -1,0 +1,39 @@
+---
+- name: Copy mysqld.cnf
+  ansible.builtin.copy:
+    src: ./etc/mysql/mysql.conf.d/mysqld.cnf
+    dest: /etc/mysql/mysql.conf.d/mysqld.cnf
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart mysql
+
+- name: Create Zabbix Database
+  community.mysql.mysql_db:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ mysql_zabbix_dbname }}"
+    state: present
+
+- name: Create Zabbix User
+  community.mysql.mysql_user:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ mysql_zabbix_user }}"
+    password: "{{ mysql_zabbix_password }}"
+    host: "localhost"
+    priv: "zabbix.*:ALL"
+    state: present
+
+- name: Create zabbix_monitor User
+  community.mysql.mysql_user:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ mysql_zabbix_monitor_user }}"
+    password: "{{ mysql_zabbix_monitor_password }}"
+    host: "127.0.0.1"
+    priv: "*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW"
+    state: present
