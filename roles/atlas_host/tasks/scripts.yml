@@ -10,3 +10,4 @@
   become: true
   become_user: ops
   changed_when: true
+  when: atlas_manage_scripts | default(false) | bool
