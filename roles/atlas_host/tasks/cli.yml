@@ -41,7 +41,7 @@
     src: "{{ atlas_cli_venv }}/bin/atlas"
     dest: "{{ atlas_cli_bin }}"
     state: link
-    force: "{{ ansible_check_mode }}"
+    force: true
     owner: ops
     group: ops
   become: true
