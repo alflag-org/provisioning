@@ -5,4 +5,4 @@
 
   roles:
     - role: atlas_host
-      when: atlas_enabled | default(inventory_hostname == "kng01-mgmt-control-01")
+      when: atlas_enabled | default(true)
