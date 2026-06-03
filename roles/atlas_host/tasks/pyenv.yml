@@ -2,19 +2,19 @@
 - name: Install pyenv
   ansible.builtin.git:
     repo: https://github.com/pyenv/pyenv.git
-    dest: /home/ops/.pyenv
+    dest: "{{ atlas_pyenv_root }}"
     version: master
     update: true
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
 
 - name: Ensure pyenv shell profile
   ansible.builtin.blockinfile:
-    path: /home/ops/.profile
+    path: "{{ atlas_operator_profile }}"
     marker: "# {mark} ANSIBLE MANAGED PYENV"
     create: true
-    owner: ops
-    group: ops
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
     mode: "0644"
     block: |
       export PYENV_ROOT="$HOME/.pyenv"

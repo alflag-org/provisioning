@@ -3,12 +3,12 @@
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} runtime install"
   environment:
-    PATH: "/home/ops/.pyenv/bin:/home/ops/.local/bin:{{ atlas_home }}/bin:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    PYENV_ROOT: "/home/ops/.pyenv"
+    PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/bin:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    PYENV_ROOT: "{{ atlas_pyenv_root }}"
     TMPDIR: "{{ atlas_tmp_dir }}"
     PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   changed_when: true
   when: atlas_manage_runtime | bool
 
@@ -21,6 +21,6 @@
   environment:
     TMPDIR: "{{ atlas_tmp_dir }}"
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   changed_when: true
   when: atlas_manage_runtime | bool

@@ -3,7 +3,7 @@
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} status"
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
 
@@ -11,7 +11,7 @@
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} runtime status"
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
   when: atlas_validate_runtime | bool
@@ -20,7 +20,7 @@
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} scripts list --verbose"
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
 
@@ -28,7 +28,7 @@
   ansible.builtin.command:
     cmd: "{{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-inventory --version"
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
   when: atlas_validate_runtime | bool
@@ -40,7 +40,7 @@
   args:
     executable: /bin/bash
   become: true
-  become_user: ops
+  become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
   when:

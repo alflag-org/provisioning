@@ -3,8 +3,8 @@
   ansible.builtin.template:
     src: config.yml.j2
     dest: "{{ atlas_etc_dir }}/config.yml"
-    owner: ops
-    group: ops
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
     mode: "0644"
   become: true
 
@@ -12,7 +12,7 @@
   ansible.builtin.template:
     src: host.yml.j2
     dest: "{{ atlas_etc_dir }}/host.yml"
-    owner: ops
-    group: ops
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
     mode: "0644"
   become: true

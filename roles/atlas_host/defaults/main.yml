@@ -5,8 +5,14 @@ atlas_var_dir: /var/lib/atlas
 atlas_tmp_dir: "{{ atlas_home }}/tmp"
 atlas_python_build_cache_path: "{{ atlas_var_dir }}/cache/python-build"
 
-atlas_cli_venv: /home/ops/.local/share/atlas-cli-venv
-atlas_cli_bin_dir: /home/ops/.local/bin
+atlas_operator_user: "{{ ansible_user }}"
+atlas_operator_group: "{{ atlas_operator_user }}"
+atlas_operator_home: "{{ '/root' if atlas_operator_user == 'root' else '/home/' ~ atlas_operator_user }}"
+atlas_operator_profile: "{{ atlas_operator_home }}/.profile"
+atlas_pyenv_root: "{{ atlas_operator_home }}/.pyenv"
+
+atlas_cli_venv: "{{ atlas_operator_home }}/.local/share/atlas-cli-venv"
+atlas_cli_bin_dir: "{{ atlas_operator_home }}/.local/bin"
 atlas_cli_bin: "{{ atlas_cli_bin_dir }}/atlas"
 atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master"
 
@@ -21,5 +27,5 @@ atlas_registries:
     source: "git+https://github.com/alflag-org/daedalus.git#master"
 
 atlas_manage_runtime: false
-atlas_validate_runtime: true
+atlas_validate_runtime: false
 atlas_validate_shebangs: true

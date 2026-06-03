@@ -3,8 +3,8 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: ops
-    group: ops
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
     mode: "0755"
   loop:
     - "{{ atlas_etc_dir }}"
