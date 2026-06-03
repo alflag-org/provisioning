@@ -1,9 +1,9 @@
 ---
 - name: mkdir ~/repos
   ansible.builtin.file:
-    path: "{{ common_lxc_operator_home }}/repos"
+    path: "{{ common_operator_home }}/repos"
     state: directory
-    owner: "{{ common_lxc_operator_user }}"
-    group: "{{ common_lxc_operator_group }}"
+    owner: "{{ common_operator_user }}"
+    group: "{{ common_operator_group }}"
     mode: "0755"
   become: true

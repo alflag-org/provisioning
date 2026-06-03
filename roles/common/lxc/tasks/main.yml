@@ -1,7 +1,7 @@
 ---
 - name: operator
-  ansible.builtin.include_tasks:
-    file: operator.yml
+  ansible.builtin.include_role:
+    name: common/operator
 
 - name: locale
   ansible.builtin.include_tasks:

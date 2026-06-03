@@ -6,8 +6,21 @@
   ansible.builtin.import_tasks: packages.yml
 
 - name: Ensure Atlas operator account
-  ansible.builtin.import_tasks: operator.yml
+  ansible.builtin.include_role:
+    name: common/operator
   when: atlas_manage_operator_account | bool
+  vars:
+    common_operator_user: "{{ atlas_operator_user }}"
+    common_operator_group: "{{ atlas_operator_group }}"
+    common_operator_home: "{{ atlas_operator_home }}"
+    common_operator_shell: "{{ atlas_operator_shell }}"
+    common_operator_groups: "{{ atlas_operator_groups }}"
+    common_operator_authorized_key_files: "{{ atlas_operator_authorized_key_files }}"
+    common_operator_sudoers_path: "{{ atlas_operator_sudoers_path }}"
+    common_operator_sudoers_content: "{{ atlas_operator_sudoers_content }}"
+    common_operator_manage_authorized_keys: "{{ atlas_manage_operator_authorized_keys }}"
+    common_operator_manage_sudoers: "{{ atlas_manage_operator_sudoers }}"
+    common_operator_become_root: "{{ atlas_become_root }}"
 
 - name: Create directories
   ansible.builtin.import_tasks: directories.yml

@@ -1,0 +1,9 @@
+---
+- name: Bootstrap new hosts for Atlas management
+  hosts: kanagawa01
+  gather_facts: true
+
+  roles:
+    - role: common/bootstrap
+    - role: atlas_host
+      when: atlas_enabled | default(true)

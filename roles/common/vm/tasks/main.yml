@@ -15,6 +15,10 @@
   ansible.builtin.include_tasks:
     file: package.yml
 
+- name: operator
+  ansible.builtin.include_role:
+    name: common/operator
+
 - name: sshd
   ansible.builtin.include_tasks:
     file: sshd.yml
@@ -24,14 +28,6 @@
     file: systemd-resolved.yml
   when:
     - not skip_systemd_resolved | default(false)
-
-- name: groups
-  ansible.builtin.include_tasks:
-    file: groups.yml
-
-- name: users
-  ansible.builtin.include_tasks:
-    file: users.yml
 
 - name: swap
   ansible.builtin.include_tasks:
