@@ -13,15 +13,24 @@ atlas_python_build_cache_path: /var/lib/atlas/cache/python-build
 
 atlas_runtime_python_version: "3.12.3"
 
-atlas_operator_user: "{{ ansible_user }}"
+atlas_operator_user: ops
 atlas_operator_group: "{{ atlas_operator_user }}"
-atlas_operator_home: "{{ '/root' if atlas_operator_user == 'root' else '/home/' ~ atlas_operator_user }}"
+atlas_operator_home: "/home/{{ atlas_operator_user }}"
 atlas_operator_profile: "{{ atlas_operator_home }}/.profile"
 atlas_pyenv_root: "{{ atlas_operator_home }}/.pyenv"
 atlas_bootstrap_mode: managed
-atlas_manage_host: "{{ atlas_bootstrap_mode != 'manual' }}"
 atlas_become_root: "{{ ansible_user != 'root' }}"
 atlas_become_operator: "{{ ansible_user != atlas_operator_user }}"
+atlas_operator_shell: /bin/bash
+atlas_operator_groups:
+  - sudo
+atlas_manage_operator_account: true
+atlas_manage_operator_authorized_keys: true
+atlas_manage_operator_sudoers: true
+atlas_operator_authorized_key_files:
+  - "{{ lookup('env', 'HOME') ~ '/.ssh/infra.pub' }}"
+atlas_operator_sudoers_path: "/etc/sudoers.d/90-{{ atlas_operator_user }}"
+atlas_operator_sudoers_content: "{{ atlas_operator_user }} ALL=(ALL) NOPASSWD:ALL"
 
 atlas_cli_venv: "{{ atlas_operator_home }}/.local/share/atlas-cli-venv"
 atlas_cli_bin_dir: "{{ atlas_operator_home }}/.local/bin"

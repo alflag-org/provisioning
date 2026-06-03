@@ -1,0 +1,41 @@
+---
+- name: Check Atlas operator public keys exist on the controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  delegate_to: localhost
+  become: false
+  register: atlas_operator_key_stats
+  loop: "{{ atlas_operator_authorized_key_files }}"
+  when:
+    - atlas_manage_operator_account | bool
+    - atlas_manage_operator_authorized_keys | bool
+
+- name: Require Atlas operator public keys on the controller
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      Missing Atlas operator public key on the controller: {{ item.stat.path }}.
+      Create it or override atlas_operator_authorized_key_files before bootstrapping ops access.
+  loop: "{{ atlas_operator_key_stats.results | default([]) }}"
+  when:
+    - atlas_manage_operator_account | bool
+    - atlas_manage_operator_authorized_keys | bool
+
+- name: Check passwordless sudo for Atlas host management
+  ansible.builtin.command:
+    cmd: sudo -n true
+  register: atlas_sudo_check
+  changed_when: false
+  failed_when: false
+  when: atlas_become_root | bool
+
+- name: Require passwordless sudo for Atlas host management
+  ansible.builtin.assert:
+    that:
+      - atlas_sudo_check.rc == 0
+    fail_msg: >-
+      Atlas host management needs passwordless sudo for ansible_user={{ ansible_user }}
+      on {{ inventory_hostname }}. Configure NOPASSWD sudo for that user, connect as root,
+      or opt this host out with atlas_enabled: false until sudo is ready.
+  when: atlas_become_root | bool

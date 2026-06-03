@@ -1,0 +1,49 @@
+---
+- name: Ensure LXC operator group exists
+  ansible.builtin.group:
+    name: "{{ common_lxc_operator_group }}"
+    state: present
+  become: true
+
+- name: Ensure LXC operator user exists
+  ansible.builtin.user:
+    name: "{{ common_lxc_operator_user }}"
+    group: "{{ common_lxc_operator_group }}"
+    groups: "{{ common_lxc_operator_groups | join(',') }}"
+    append: true
+    shell: "{{ common_lxc_operator_shell }}"
+    create_home: true
+    home: "{{ common_lxc_operator_home }}"
+    state: present
+  become: true
+
+- name: Ensure LXC operator .ssh directory exists
+  ansible.builtin.file:
+    path: "{{ common_lxc_operator_home }}/.ssh"
+    state: directory
+    owner: "{{ common_lxc_operator_user }}"
+    group: "{{ common_lxc_operator_group }}"
+    mode: "0700"
+  become: true
+
+- name: Install LXC operator authorized keys
+  ansible.builtin.lineinfile:
+    path: "{{ common_lxc_operator_home }}/.ssh/authorized_keys"
+    line: "{{ lookup('ansible.builtin.file', item) | trim }}"
+    create: true
+    owner: "{{ common_lxc_operator_user }}"
+    group: "{{ common_lxc_operator_group }}"
+    mode: "0600"
+    state: present
+  become: true
+  loop: "{{ common_lxc_operator_authorized_key_files }}"
+
+- name: Install passwordless sudo for the LXC operator
+  ansible.builtin.copy:
+    content: "{{ common_lxc_operator_sudoers_content }}\n"
+    dest: "{{ common_lxc_operator_sudoers_path }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"
+  become: true

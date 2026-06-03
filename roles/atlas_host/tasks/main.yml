@@ -1,27 +1,28 @@
 ---
+- name: Check host management prerequisites
+  ansible.builtin.import_tasks: preflight.yml
+
 - name: Install packages
   ansible.builtin.import_tasks: packages.yml
-  when: atlas_manage_host | bool
+
+- name: Ensure Atlas operator account
+  ansible.builtin.import_tasks: operator.yml
+  when: atlas_manage_operator_account | bool
 
 - name: Create directories
   ansible.builtin.import_tasks: directories.yml
-  when: atlas_manage_host | bool
 
 - name: Install pyenv
   ansible.builtin.import_tasks: pyenv.yml
-  when: atlas_manage_host | bool
 
 - name: Configure environment
   ansible.builtin.import_tasks: env.yml
-  when: atlas_manage_host | bool
 
 - name: Render Atlas configuration
   ansible.builtin.import_tasks: config.yml
-  when: atlas_manage_host | bool
 
 - name: Install Atlas CLI
   ansible.builtin.import_tasks: cli.yml
-  when: atlas_manage_host | bool
 
 - name: Update Atlas scripts
   ansible.builtin.import_tasks: scripts.yml

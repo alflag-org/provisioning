@@ -1,0 +1,11 @@
+---
+common_lxc_operator_user: ops
+common_lxc_operator_group: "{{ common_lxc_operator_user }}"
+common_lxc_operator_home: "/home/{{ common_lxc_operator_user }}"
+common_lxc_operator_shell: /bin/bash
+common_lxc_operator_groups:
+  - sudo
+common_lxc_operator_authorized_key_files:
+  - "{{ lookup('env', 'HOME') ~ '/.ssh/infra.pub' }}"
+common_lxc_operator_sudoers_path: "/etc/sudoers.d/90-{{ common_lxc_operator_user }}"
+common_lxc_operator_sudoers_content: "{{ common_lxc_operator_user }} ALL=(ALL) NOPASSWD:ALL"

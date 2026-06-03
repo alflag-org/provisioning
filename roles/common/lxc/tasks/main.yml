@@ -1,4 +1,8 @@
 ---
+- name: operator
+  ansible.builtin.include_tasks:
+    file: operator.yml
+
 - name: locale
   ansible.builtin.include_tasks:
     file: locale.yml
