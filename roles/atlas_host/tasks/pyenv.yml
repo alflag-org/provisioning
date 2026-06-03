@@ -1,4 +1,13 @@
 ---
+- name: Ensure pyenv tree ownership
+  ansible.builtin.file:
+    path: "{{ atlas_pyenv_root }}"
+    state: directory
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    recurse: true
+  become: "{{ atlas_become_root }}"
+
 - name: Install pyenv
   ansible.builtin.git:
     repo: https://github.com/pyenv/pyenv.git

@@ -1,4 +1,13 @@
 ---
+- name: Ensure Atlas CLI venv ownership
+  ansible.builtin.file:
+    path: "{{ atlas_cli_venv }}"
+    state: directory
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    recurse: true
+  become: "{{ atlas_become_root }}"
+
 - name: Create Atlas CLI directories
   ansible.builtin.file:
     path: "{{ item }}"
