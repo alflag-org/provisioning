@@ -9,13 +9,13 @@
   loop:
     - "{{ atlas_cli_venv | dirname }}"
     - "{{ atlas_cli_bin_dir }}"
-  become: true
+  become: "{{ atlas_become_operator }}"
 
 - name: Create Atlas CLI venv
   ansible.builtin.command:
     cmd: "python3 -m venv {{ atlas_cli_venv }}"
     creates: "{{ atlas_cli_venv }}/bin/python"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
 
 - name: Upgrade pip in Atlas CLI venv
@@ -23,7 +23,7 @@
     cmd: "{{ atlas_cli_venv }}/bin/python -m pip install --upgrade pip"
   environment:
     TMPDIR: "{{ atlas_tmp_dir }}"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   changed_when: false
 
@@ -32,7 +32,7 @@
     cmd: "{{ atlas_cli_venv }}/bin/python -m pip install --upgrade {{ atlas_cli_source }}"
   environment:
     TMPDIR: "{{ atlas_tmp_dir }}"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   changed_when: true
 
@@ -44,4 +44,4 @@
     force: true
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
-  become: true
+  become: "{{ atlas_become_operator }}"

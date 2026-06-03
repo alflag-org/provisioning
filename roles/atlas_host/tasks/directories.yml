@@ -12,4 +12,4 @@
     - "{{ atlas_var_dir }}"
     - "{{ atlas_tmp_dir }}"
     - "{{ atlas_python_build_cache_path }}"
-  become: true
+  become: "{{ atlas_become_root }}"

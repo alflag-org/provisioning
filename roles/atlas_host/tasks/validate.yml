@@ -2,7 +2,7 @@
 - name: Check Atlas status
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} status"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
@@ -10,7 +10,7 @@
 - name: Check Atlas runtime status
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} runtime status"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
@@ -19,7 +19,7 @@
 - name: Check daedalus command discovery
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} scripts list --verbose"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
@@ -27,7 +27,7 @@
 - name: Check ansible-inventory version
   ansible.builtin.command:
     cmd: "{{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-inventory --version"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
@@ -39,7 +39,7 @@
     test "$(head -1 {{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-inventory)" = "#!{{ atlas_home }}/runtime/python/envs/scripts/bin/python"
   args:
     executable: /bin/bash
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false

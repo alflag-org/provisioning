@@ -10,6 +10,10 @@ atlas_operator_group: "{{ atlas_operator_user }}"
 atlas_operator_home: "{{ '/root' if atlas_operator_user == 'root' else '/home/' ~ atlas_operator_user }}"
 atlas_operator_profile: "{{ atlas_operator_home }}/.profile"
 atlas_pyenv_root: "{{ atlas_operator_home }}/.pyenv"
+atlas_bootstrap_mode: managed
+atlas_manage_host: "{{ atlas_bootstrap_mode != 'manual' }}"
+atlas_become_root: "{{ ansible_user != 'root' }}"
+atlas_become_operator: "{{ ansible_user != atlas_operator_user }}"
 
 atlas_cli_venv: "{{ atlas_operator_home }}/.local/share/atlas-cli-venv"
 atlas_cli_bin_dir: "{{ atlas_operator_home }}/.local/bin"

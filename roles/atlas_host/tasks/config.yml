@@ -6,7 +6,7 @@
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
     mode: "0644"
-  become: true
+  become: "{{ atlas_become_root }}"
 
 - name: Render Atlas host.yml
   ansible.builtin.template:
@@ -15,4 +15,4 @@
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
     mode: "0644"
-  become: true
+  become: "{{ atlas_become_root }}"

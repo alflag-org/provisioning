@@ -7,7 +7,7 @@
     PYENV_ROOT: "{{ atlas_pyenv_root }}"
     TMPDIR: "{{ atlas_tmp_dir }}"
     PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
-  become: true
+  become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   changed_when: true
   when: atlas_manage_scripts | default(false) | bool

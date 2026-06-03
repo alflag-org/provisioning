@@ -29,4 +29,4 @@
       - liblzma-dev
     state: present
     update_cache: true
-  become: true
+  become: "{{ atlas_become_root }}"
