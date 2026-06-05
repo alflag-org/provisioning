@@ -1,8 +1,0 @@
----
-- name: Configure Atlas hosts
-  hosts: kanagawa01
-  gather_facts: true
-
-  roles:
-    - role: atlas_host
-      when: atlas_enabled | default(true)

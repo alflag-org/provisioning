@@ -1,0 +1,7 @@
+---
+- name: Converge connector hosts
+  hosts: svc_connector
+  gather_facts: true
+
+  roles:
+    - role: services/connector  # noqa role-name[path]

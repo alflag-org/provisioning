@@ -1,9 +1,0 @@
----
-- name: Configure monitoring hosts
-  hosts: kanagawa01
-  gather_facts: true
-
-  tasks:
-    - name: Show monitoring target
-      ansible.builtin.debug:
-        msg: "monitoring target={{ inventory_hostname }} site={{ site_name | default('unknown') }}"

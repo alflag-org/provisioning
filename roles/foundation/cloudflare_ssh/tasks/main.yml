@@ -1,0 +1,6 @@
+---
+- name: Apply Cloudflare SSH foundation role  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: common/cloudflare-ssh
+  vars:
+    skip_sshd: "{{ foundation_cloudflare_ssh_skip_sshd }}"  # noqa var-naming[no-role-prefix]

@@ -1,0 +1,5 @@
+---
+- name: Preserve explicit monitoring service slot during migration
+  ansible.builtin.debug:
+    msg: "svc_monitoring has no bound hosts yet"
+    verbosity: 1

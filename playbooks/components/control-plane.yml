@@ -1,8 +1,7 @@
 ---
-- name: Bootstrap new hosts for Atlas management
+- name: Converge Atlas-managed control plane
   hosts: cap_atlas_host
   gather_facts: true
 
   roles:
-    - role: foundation/bootstrap  # noqa role-name[path]
     - role: control/atlas_host  # noqa role-name[path]

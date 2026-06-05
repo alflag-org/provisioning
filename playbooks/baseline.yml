@@ -1,7 +1,0 @@
----
-- name: Apply baseline configuration
-  hosts: kanagawa01
-  gather_facts: true
-
-  roles:
-    - role: baseline

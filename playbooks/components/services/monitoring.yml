@@ -1,0 +1,7 @@
+---
+- name: Converge monitoring hosts
+  hosts: svc_monitoring
+  gather_facts: true
+
+  roles:
+    - role: services/monitoring  # noqa role-name[path]

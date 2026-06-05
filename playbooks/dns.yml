@@ -1,9 +1,0 @@
----
-- name: Configure DNS hosts
-  hosts: kng01-mgmt-recdns-01:kng01-mgmt-recdns-02
-  gather_facts: true
-
-  tasks:
-    - name: Show DNS target
-      ansible.builtin.debug:
-        msg: "dns target={{ inventory_hostname }} zone={{ network_zone | default('unknown') }}"

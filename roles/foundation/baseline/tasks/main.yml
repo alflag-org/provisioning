@@ -1,0 +1,4 @@
+---
+- name: Apply baseline foundation role
+  ansible.builtin.include_role:
+    name: baseline

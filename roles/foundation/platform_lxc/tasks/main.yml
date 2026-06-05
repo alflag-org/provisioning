@@ -1,0 +1,13 @@
+---
+- name: Apply LXC platform foundation role  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: common/lxc
+  vars:
+    skip_locale: "{{ foundation_lxc_skip_locale }}"  # noqa var-naming[no-role-prefix]
+    skip_unattended_upgrades: "{{ foundation_lxc_skip_unattended_upgrades }}"  # noqa var-naming[no-role-prefix]
+    skip_zabbix_package: "{{ foundation_lxc_skip_zabbix_package }}"  # noqa var-naming[no-role-prefix]
+    skip_zabbix_agent: "{{ foundation_lxc_skip_zabbix_agent }}"  # noqa var-naming[no-role-prefix]
+    skip_home: "{{ foundation_lxc_skip_home }}"  # noqa var-naming[no-role-prefix]
+    skip_secrets: "{{ foundation_lxc_skip_secrets }}"  # noqa var-naming[no-role-prefix]
+    skip_ssh: "{{ foundation_lxc_skip_ssh }}"  # noqa var-naming[no-role-prefix]
+    skip_etckeeper: "{{ foundation_lxc_skip_etckeeper }}"  # noqa var-naming[no-role-prefix]

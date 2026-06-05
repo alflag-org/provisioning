@@ -1,12 +1,9 @@
 ---
-- name: Apply baseline playbook
-  ansible.builtin.import_playbook: baseline.yml
+- name: Converge foundation components
+  ansible.builtin.import_playbook: components/foundation.yml
 
-- name: Apply DNS playbook
-  ansible.builtin.import_playbook: dns.yml
+- name: Converge control-plane components
+  ansible.builtin.import_playbook: components/control-plane.yml
 
-- name: Apply monitoring playbook
-  ansible.builtin.import_playbook: monitoring.yml
-
-- name: Apply container playbook
-  ansible.builtin.import_playbook: containers.yml
+- name: Converge service components
+  ansible.builtin.import_playbook: components/services.yml

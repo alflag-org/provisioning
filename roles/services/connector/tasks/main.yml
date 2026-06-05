@@ -1,0 +1,5 @@
+---
+- name: Preserve explicit connector service slot during migration
+  ansible.builtin.debug:
+    msg: "svc_connector currently converges through foundation roles only"
+    verbosity: 1

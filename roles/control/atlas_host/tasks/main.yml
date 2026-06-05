@@ -1,0 +1,4 @@
+---
+- name: Apply Atlas host control role
+  ansible.builtin.include_role:
+    name: atlas_host

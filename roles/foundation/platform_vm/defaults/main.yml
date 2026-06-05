@@ -1,0 +1,5 @@
+---
+foundation_vm_skip_systemd_resolved: false
+foundation_vm_skip_swap: false
+foundation_vm_skip_unattended_upgrades: false
+foundation_vm_skip_zabbix_agent: false

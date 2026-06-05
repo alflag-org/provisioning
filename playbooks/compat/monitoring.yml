@@ -1,0 +1,3 @@
+---
+- name: Resolve deprecated monitoring playbook alias
+  ansible.builtin.import_playbook: ../components/services/monitoring.yml

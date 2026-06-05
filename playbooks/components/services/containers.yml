@@ -1,0 +1,7 @@
+---
+- name: Converge container-oriented hosts
+  hosts: svc_container_hosts
+  gather_facts: true
+
+  roles:
+    - role: services/containers  # noqa role-name[path]

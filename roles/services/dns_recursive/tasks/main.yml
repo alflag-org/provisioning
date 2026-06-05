@@ -1,0 +1,4 @@
+---
+- name: Apply recursive DNS service role  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: middleware/unbound

@@ -1,0 +1,3 @@
+---
+- name: Resolve deprecated dns playbook alias
+  ansible.builtin.import_playbook: ../components/services/dns.yml

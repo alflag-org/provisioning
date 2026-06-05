@@ -1,0 +1,4 @@
+---
+- name: Apply bootstrap foundation role  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: common/bootstrap

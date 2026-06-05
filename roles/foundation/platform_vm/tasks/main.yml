@@ -1,0 +1,9 @@
+---
+- name: Apply VM platform foundation role  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: common/vm
+  vars:
+    skip_systemd_resolved: "{{ foundation_vm_skip_systemd_resolved }}"  # noqa var-naming[no-role-prefix]
+    skip_swap: "{{ foundation_vm_skip_swap }}"  # noqa var-naming[no-role-prefix]
+    skip_unattended_upgrades: "{{ foundation_vm_skip_unattended_upgrades }}"  # noqa var-naming[no-role-prefix]
+    skip_zabbix_agent: "{{ foundation_vm_skip_zabbix_agent }}"  # noqa var-naming[no-role-prefix]

@@ -1,0 +1,11 @@
+---
+- name: Converge shared foundation
+  hosts: kanagawa01
+  gather_facts: true
+
+  roles:
+    - role: foundation/baseline  # noqa role-name[path]
+    - role: foundation/platform_vm  # noqa role-name[path]
+      when: "'platform_vm' in group_names"
+    - role: foundation/platform_lxc  # noqa role-name[path]
+      when: "'platform_lxc' in group_names"
