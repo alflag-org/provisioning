@@ -13,3 +13,7 @@ docker_host_apt_repository: >-
   deb [arch={{ docker_host_apt_arch }} signed-by={{ docker_host_apt_keyring_path }}]
   https://download.docker.com/linux/ubuntu {{ ansible_facts.get('distribution_release', '') }} stable
 docker_host_service_name: docker
+docker_host_group: docker
+docker_host_grant_zabbix_docker_access: true
+docker_host_zabbix_user: zabbix
+docker_host_zabbix_service_name: zabbix-agent2

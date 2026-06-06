@@ -14,14 +14,6 @@
   become: true
   notify: start zabbix-agent
 
-- name: Add zabbix user to docker group
-  ansible.builtin.user:
-    name: zabbix
-    groups: docker
-    append: true
-  become: true
-  notify: restart zabbix-agent
-
 - name: Copy Zabbix Agent Configuration
   ansible.builtin.copy:
     src: ./etc/zabbix/zabbix_agent2.conf
