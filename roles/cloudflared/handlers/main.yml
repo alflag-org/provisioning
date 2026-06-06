@@ -1,0 +1,10 @@
+---
+- name: Restart cloudflared
+  ansible.builtin.systemd_service:
+    name: "{{ cloudflared_service_name }}"
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  when:
+    - cloudflared_enabled | bool
+    - not ansible_check_mode

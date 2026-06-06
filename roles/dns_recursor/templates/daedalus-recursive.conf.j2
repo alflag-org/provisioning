@@ -1,0 +1,17 @@
+server:
+{% for address in dns_recursor_listen_addresses | unique %}
+  interface: {{ address }}
+{% endfor %}
+  port: 53
+  do-ip4: yes
+  do-ip6: no
+  do-udp: yes
+  do-tcp: yes
+  hide-identity: yes
+  hide-version: yes
+  harden-glue: yes
+  harden-dnssec-stripped: yes
+  qname-minimisation: yes
+{% for cidr in dns_recursor_allowed_cidrs | unique %}
+  access-control: {{ cidr }} allow
+{% endfor %}

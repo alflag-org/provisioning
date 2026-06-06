@@ -1,0 +1,15 @@
+---
+zabbix_agent_enabled: false
+zabbix_agent_package: zabbix-agent2
+zabbix_server: "10.10.10.250"  # noqa var-naming[no-role-prefix]
+zabbix_server_active: "10.10.10.250"  # noqa var-naming[no-role-prefix]
+zabbix_hostname: "{{ inventory_hostname }}"  # noqa var-naming[no-role-prefix]
+
+zabbix_agent_service_name: zabbix-agent2
+zabbix_agent_config_dir: /etc/zabbix
+zabbix_agent_config_path: "{{ zabbix_agent_config_dir }}/zabbix_agent2.conf"
+zabbix_agent_manage_repository: true
+zabbix_agent_repository_deb_urls:
+  "22.04": "https://repo.zabbix.com/zabbix/6.0/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_6.0+ubuntu22.04_all.deb"
+  "24.04": "https://repo.zabbix.com/zabbix/7.0/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_7.0+ubuntu24.04_all.deb"
+zabbix_agent_repository_deb_url: "{{ zabbix_agent_repository_deb_urls.get(ansible_distribution_version, '') }}"

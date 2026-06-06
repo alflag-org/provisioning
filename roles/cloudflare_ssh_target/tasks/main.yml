@@ -1,0 +1,36 @@
+---
+- name: Validate Cloudflare SSH target mode
+  ansible.builtin.assert:
+    that:
+      - cloudflare_ssh_mode in cloudflare_ssh_allowed_modes
+    fail_msg: >-
+      Unsupported cloudflare_ssh_mode={{ cloudflare_ssh_mode }}.
+      Daedalus currently manages only host-side SSH target state.
+  when: cloudflare_ssh_enabled | bool
+
+- name: Ensure SSH server is present for Cloudflare SSH target
+  ansible.builtin.include_role:
+    name: ssh_server
+  vars:
+    ssh_server_enabled: true
+  when: cloudflare_ssh_enabled | bool
+
+- name: Validate local SSH target port
+  ansible.builtin.wait_for:
+    host: "{{ cloudflare_ssh_target_host }}"
+    port: "{{ cloudflare_ssh_target_port }}"
+    timeout: 5
+    state: started
+  when:
+    - cloudflare_ssh_enabled | bool
+    - not ansible_check_mode
+
+- name: Record external Cloudflare SSH routing boundary
+  ansible.builtin.debug:
+    msg: >-
+      Cloudflare SSH target {{ cloudflare_ssh_hostname | default(inventory_hostname, true) }}
+      expects a dashboard, Access, or Terraform-managed route to
+      {{ cloudflare_ssh_target_host }}:{{ cloudflare_ssh_target_port }}.
+      Daedalus does not call the Cloudflare API from this role.
+    verbosity: 1
+  when: cloudflare_ssh_enabled | bool

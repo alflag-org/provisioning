@@ -1,14 +1,10 @@
 ---
-- name: Converge recursive DNS hosts
-  hosts: svc_dns_recursive
+- name: Converge DNS hosts
+  hosts: kanagawa01
   gather_facts: true
 
   roles:
-    - role: services/dns_recursive  # noqa role-name[path]
-
-- name: Converge authoritative DNS hosts
-  hosts: svc_dns_authoritative
-  gather_facts: true
-
-  roles:
-    - role: services/dns_authoritative  # noqa role-name[path]
+    - role: dns_recursor
+      when: dns_recursor_enabled | default(false)
+    - role: dns_authoritative
+      when: dns_authoritative_enabled | default(false)

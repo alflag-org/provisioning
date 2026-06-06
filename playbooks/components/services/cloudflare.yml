@@ -1,0 +1,10 @@
+---
+- name: Converge Cloudflare host-side components
+  hosts: kanagawa01
+  gather_facts: true
+
+  roles:
+    - role: cloudflared
+      when: cloudflared_enabled | default(false)
+    - role: cloudflare_ssh_target
+      when: cloudflare_ssh_enabled | default(false)

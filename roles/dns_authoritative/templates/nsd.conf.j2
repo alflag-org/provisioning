@@ -1,0 +1,13 @@
+server:
+  username: nsd
+  zonesdir: "{{ dns_authoritative_zone_dir }}"
+{% for address in dns_authoritative_listen_addresses | unique %}
+  ip-address: {{ address }}
+{% endfor %}
+
+{% for zone in dns_authoritative_zones %}
+zone:
+  name: "{{ zone.name }}"
+  zonefile: "{{ zone.file | default(dns_authoritative_zone_dir ~ '/' ~ zone.name ~ '.zone') }}"
+
+{% endfor %}

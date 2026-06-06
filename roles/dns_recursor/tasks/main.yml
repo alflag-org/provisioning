@@ -1,0 +1,72 @@
+---
+- name: Install recursive DNS packages
+  ansible.builtin.apt:
+    name: "{{ [dns_recursor_package] + dns_recursor_validation_packages }}"
+    state: present
+    update_cache: true
+  when: dns_recursor_enabled | bool
+
+- name: Check Unbound configuration directory
+  ansible.builtin.stat:
+    path: "{{ dns_recursor_config_dir }}"
+  register: dns_recursor_config_dir_stat
+  when: dns_recursor_enabled | bool
+
+- name: Ensure Unbound configuration directory exists
+  ansible.builtin.file:
+    path: "{{ dns_recursor_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: dns_recursor_enabled | bool
+
+- name: Render recursive DNS configuration
+  ansible.builtin.template:
+    src: daedalus-recursive.conf.j2
+    dest: "{{ dns_recursor_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart unbound
+  when:
+    - dns_recursor_enabled | bool
+    - not ansible_check_mode or dns_recursor_config_dir_stat.stat.exists
+
+- name: Validate Unbound configuration
+  ansible.builtin.command:
+    cmd: unbound-checkconf
+  changed_when: false
+  when:
+    - dns_recursor_enabled | bool
+    - not ansible_check_mode
+
+- name: Enable and start Unbound
+  ansible.builtin.systemd_service:
+    name: "{{ dns_recursor_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - dns_recursor_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate recursive DNS port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 53
+    timeout: 5
+    state: started
+  when:
+    - dns_recursor_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate local recursive lookup
+  ansible.builtin.command:
+    cmd: "dig +time=2 +tries=1 +short {{ dns_recursor_local_lookup_name }} {{ dns_recursor_local_lookup_type }} @127.0.0.1"
+  register: dns_recursor_lookup
+  changed_when: false
+  failed_when:
+    - dns_recursor_lookup.rc != 0 or dns_recursor_lookup.stdout | trim | length == 0
+  when:
+    - dns_recursor_enabled | bool
+    - not ansible_check_mode

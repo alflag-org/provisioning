@@ -1,0 +1,12 @@
+---
+ssh_server_enabled: false
+ssh_server_service_name: ssh
+ssh_server_sshd_binary: /usr/sbin/sshd
+ssh_server_config_dropin_dir: /etc/ssh/sshd_config.d
+ssh_server_config_dropin_path: "{{ ssh_server_config_dropin_dir }}/20-daedalus.conf"
+
+ssh_server_permit_root_login: "prohibit-password"
+ssh_server_password_authentication: false
+ssh_server_pubkey_authentication: true
+ssh_server_allow_tcp_forwarding: false
+ssh_server_x11_forwarding: false

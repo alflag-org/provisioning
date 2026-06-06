@@ -1,0 +1,9 @@
+---
+- name: Restart SSH service
+  ansible.builtin.service:
+    name: "{{ ssh_server_service_name }}"
+    state: restarted
+    enabled: true
+  when:
+    - ssh_server_enabled | bool
+    - not ansible_check_mode

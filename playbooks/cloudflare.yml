@@ -1,0 +1,3 @@
+---
+- name: Converge explicit Cloudflare host-side components
+  ansible.builtin.import_playbook: components/services/cloudflare.yml

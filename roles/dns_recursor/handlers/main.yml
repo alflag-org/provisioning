@@ -1,0 +1,9 @@
+---
+- name: Restart unbound
+  ansible.builtin.systemd_service:
+    name: "{{ dns_recursor_service_name }}"
+    state: restarted
+    enabled: true
+  when:
+    - dns_recursor_enabled | bool
+    - not ansible_check_mode

@@ -1,0 +1,69 @@
+---
+- name: Install Zabbix repository package
+  ansible.builtin.apt:
+    deb: "{{ zabbix_agent_repository_deb_url }}"
+  when:
+    - zabbix_agent_enabled | bool
+    - zabbix_agent_manage_repository | bool
+    - zabbix_agent_repository_deb_url | length > 0
+    - not ansible_check_mode
+
+- name: Install Zabbix agent package
+  ansible.builtin.apt:
+    name: "{{ zabbix_agent_package }}"
+    state: present
+    update_cache: true
+  when:
+    - zabbix_agent_enabled | bool
+    - not ansible_check_mode
+
+- name: Check Zabbix config directory
+  ansible.builtin.stat:
+    path: "{{ zabbix_agent_config_dir }}"
+  register: zabbix_agent_config_dir_stat
+  when: zabbix_agent_enabled | bool
+
+- name: Ensure Zabbix config directory exists
+  ansible.builtin.file:
+    path: "{{ zabbix_agent_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: zabbix_agent_enabled | bool
+
+- name: Render Zabbix agent configuration
+  ansible.builtin.template:
+    src: zabbix_agent2.conf.j2
+    dest: "{{ zabbix_agent_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart zabbix-agent2
+  when:
+    - zabbix_agent_enabled | bool
+    - not ansible_check_mode or zabbix_agent_config_dir_stat.stat.exists
+
+- name: Enable and start Zabbix agent
+  ansible.builtin.service:
+    name: "{{ zabbix_agent_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - zabbix_agent_enabled | bool
+    - not ansible_check_mode
+
+- name: Gather service facts for Zabbix agent
+  ansible.builtin.service_facts:
+  when:
+    - zabbix_agent_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate Zabbix agent service status
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.services.get(zabbix_agent_service_name ~ '.service', {}).state | default('')) == 'running'
+    fail_msg: "Zabbix agent service {{ zabbix_agent_service_name }} is not running."
+  when:
+    - zabbix_agent_enabled | bool
+    - not ansible_check_mode

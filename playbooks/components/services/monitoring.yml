@@ -1,7 +1,10 @@
 ---
-- name: Converge monitoring hosts
-  hosts: svc_monitoring
+- name: Converge monitoring agents
+  hosts: kanagawa01
   gather_facts: true
 
   roles:
-    - role: services/monitoring  # noqa role-name[path]
+    - role: zabbix_agent
+      when: zabbix_agent_enabled | default(false)
+    - role: vector_agent
+      when: vector_agent_enabled | default(false)

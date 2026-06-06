@@ -1,0 +1,6 @@
+---
+ansible_user: root
+ansible_become: false
+
+cloudflared_enabled: true
+zabbix_agent_enabled: true

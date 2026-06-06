@@ -1,0 +1,6 @@
+# Managed by Daedalus. Keep this drop-in conservative.
+PermitRootLogin {{ ssh_server_permit_root_login }}
+PasswordAuthentication {{ 'yes' if ssh_server_password_authentication else 'no' }}
+PubkeyAuthentication {{ 'yes' if ssh_server_pubkey_authentication else 'no' }}
+AllowTcpForwarding {{ 'yes' if ssh_server_allow_tcp_forwarding else 'no' }}
+X11Forwarding {{ 'yes' if ssh_server_x11_forwarding else 'no' }}

@@ -1,0 +1,14 @@
+[Unit]
+Description=cloudflared tunnel service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile={{ cloudflared_tunnel_token_env_file }}
+ExecStart={{ cloudflared_binary_path }} tunnel --no-autoupdate{% if cloudflared_metrics_enabled %} --metrics {{ cloudflared_metrics_address }}:{{ cloudflared_metrics_port }}{% endif %} run --token ${TUNNEL_TOKEN}
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

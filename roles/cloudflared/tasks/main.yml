@@ -1,0 +1,102 @@
+---
+- name: Require cloudflared tunnel token for apply runs
+  ansible.builtin.assert:
+    that:
+      - cloudflared_tunnel_token is defined
+      - cloudflared_tunnel_token is not none
+      - cloudflared_tunnel_token | string | length > 0
+    fail_msg: >-
+      cloudflared_enabled=true requires cloudflared_tunnel_token from Ansible
+      Vault, a local untracked vars file, or an operator-provided extra var.
+      Cloudflare dashboard resources are not managed by this role.
+  when:
+    - cloudflared_enabled | bool
+    - not ansible_check_mode
+
+- name: Install cloudflared package
+  ansible.builtin.apt:
+    name: "{{ cloudflared_package }}"
+    state: present
+    update_cache: true
+  when:
+    - cloudflared_enabled | bool
+    - cloudflared_install_method == 'package'
+
+- name: Install cloudflared binary
+  ansible.builtin.get_url:
+    url: "{{ cloudflared_binary_url }}"
+    dest: "{{ cloudflared_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - cloudflared_enabled | bool
+    - cloudflared_install_method == 'binary'
+
+- name: Ensure cloudflared config directory exists
+  ansible.builtin.file:
+    path: "{{ cloudflared_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: cloudflared_enabled | bool
+
+- name: Render cloudflared tunnel token environment
+  ansible.builtin.template:
+    src: token.env.j2
+    dest: "{{ cloudflared_tunnel_token_env_file }}"
+    owner: root
+    group: root
+    mode: "{{ cloudflared_env_file_mode }}"
+  no_log: true
+  notify: Restart cloudflared
+  when:
+    - cloudflared_enabled | bool
+    - cloudflared_tunnel_token is defined
+    - cloudflared_tunnel_token is not none
+    - cloudflared_tunnel_token | string | length > 0
+    - not ansible_check_mode
+
+- name: Render cloudflared systemd service
+  ansible.builtin.template:
+    src: cloudflared.service.j2
+    dest: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart cloudflared
+  when: cloudflared_enabled | bool
+
+- name: Enable and start cloudflared
+  ansible.builtin.systemd_service:
+    name: "{{ cloudflared_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  when:
+    - cloudflared_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate cloudflared version
+  ansible.builtin.command:
+    cmd: "{{ cloudflared_binary_path }} version"
+  changed_when: false
+  when:
+    - cloudflared_enabled | bool
+    - not ansible_check_mode
+
+- name: Gather service facts for cloudflared
+  ansible.builtin.service_facts:
+  when:
+    - cloudflared_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate cloudflared service status
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.services.get(cloudflared_service_name ~ '.service', {}).state | default('')) == 'running'
+    fail_msg: "cloudflared service {{ cloudflared_service_name }} is not running."
+  when:
+    - cloudflared_enabled | bool
+    - not ansible_check_mode

@@ -1,0 +1,9 @@
+---
+- name: Restart systemd-resolved
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: restarted
+    enabled: true
+  when:
+    - systemd_resolved_enabled | bool
+    - not ansible_check_mode

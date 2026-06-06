@@ -1,0 +1,54 @@
+---
+- name: Check systemd-resolved configuration directory
+  ansible.builtin.stat:
+    path: "{{ systemd_resolved_config_dir }}"
+  register: systemd_resolved_config_dir_stat
+  when: systemd_resolved_enabled | bool
+
+- name: Ensure systemd-resolved configuration directory exists
+  ansible.builtin.file:
+    path: "{{ systemd_resolved_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: systemd_resolved_enabled | bool
+
+- name: Render systemd-resolved DNS policy
+  ansible.builtin.template:
+    src: daedalus.conf.j2
+    dest: "{{ systemd_resolved_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-resolved
+  when:
+    - systemd_resolved_enabled | bool
+    - not ansible_check_mode or systemd_resolved_config_dir_stat.stat.exists
+
+- name: Enable and start systemd-resolved
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: started
+    enabled: true
+  when:
+    - systemd_resolved_enabled | bool
+    - not ansible_check_mode
+
+- name: Manage resolv.conf symlink
+  ansible.builtin.file:
+    src: "{{ systemd_resolved_resolv_conf_target }}"
+    dest: "{{ systemd_resolved_resolv_conf_path }}"
+    state: link
+    force: true
+  when:
+    - systemd_resolved_enabled | bool
+    - systemd_resolved_manage_resolv_conf | bool
+
+- name: Validate systemd-resolved status
+  ansible.builtin.command:
+    cmd: resolvectl status
+  changed_when: false
+  when:
+    - systemd_resolved_enabled | bool
+    - not ansible_check_mode

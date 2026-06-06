@@ -1,0 +1,8 @@
+---
+cloudflare_ssh_enabled: false  # noqa var-naming[no-role-prefix]
+cloudflare_ssh_hostname: null  # noqa var-naming[no-role-prefix]
+cloudflare_ssh_target_host: localhost
+cloudflare_ssh_target_port: 22
+cloudflare_ssh_mode: self_managed_keys  # noqa var-naming[no-role-prefix]
+cloudflare_ssh_allowed_modes:  # noqa var-naming[no-role-prefix]
+  - self_managed_keys

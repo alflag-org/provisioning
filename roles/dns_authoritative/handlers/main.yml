@@ -1,0 +1,10 @@
+---
+- name: Restart nsd
+  ansible.builtin.systemd_service:
+    name: "{{ dns_authoritative_service_name }}"
+    state: restarted
+    enabled: true
+  when:
+    - dns_authoritative_enabled | bool
+    - dns_authoritative_zones | length > 0
+    - not ansible_check_mode

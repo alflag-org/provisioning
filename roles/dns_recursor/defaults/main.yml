@@ -1,0 +1,16 @@
+---
+dns_recursor_enabled: false
+dns_recursor_package: unbound
+dns_recursor_validation_packages:
+  - dnsutils
+dns_recursor_service_name: unbound
+dns_recursor_config_dir: /etc/unbound/unbound.conf.d
+dns_recursor_config_path: "{{ dns_recursor_config_dir }}/daedalus-recursive.conf"
+dns_recursor_listen_addresses:
+  - "127.0.0.1"
+dns_recursor_allowed_cidrs:
+  - 10.10.0.0/24
+  - 10.10.10.0/24
+  - 10.10.30.0/24
+dns_recursor_local_lookup_name: "."
+dns_recursor_local_lookup_type: NS

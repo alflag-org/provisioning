@@ -1,0 +1,21 @@
+---
+cloudflared_enabled: false
+cloudflared_service_name: cloudflared
+cloudflared_tunnel_token_env_file: /etc/cloudflared/token.env
+cloudflared_config_dir: /etc/cloudflared
+cloudflared_metrics_enabled: false
+cloudflared_metrics_address: "127.0.0.1"
+cloudflared_metrics_port: 60123
+
+cloudflared_install_method: binary
+cloudflared_package: cloudflared
+cloudflared_binary_path: /usr/local/bin/cloudflared
+cloudflared_binary_arch_assets:
+  x86_64: cloudflared-linux-amd64
+  aarch64: cloudflared-linux-arm64
+  arm64: cloudflared-linux-arm64
+cloudflared_binary_asset: "{{ cloudflared_binary_arch_assets.get(ansible_architecture, 'cloudflared-linux-amd64') }}"
+cloudflared_binary_url: "https://github.com/cloudflare/cloudflared/releases/latest/download/{{ cloudflared_binary_asset }}"
+
+cloudflared_tunnel_token: null
+cloudflared_env_file_mode: "0600"

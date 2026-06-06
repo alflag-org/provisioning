@@ -1,0 +1,10 @@
+---
+dns_authoritative_enabled: false
+dns_authoritative_package: nsd
+dns_authoritative_service_name: nsd
+dns_authoritative_config_path: /etc/nsd/nsd.conf
+dns_authoritative_config_dir: "{{ dns_authoritative_config_path | dirname }}"
+dns_authoritative_zone_dir: /etc/nsd/zones
+dns_authoritative_listen_addresses:
+  - "127.0.0.1"
+dns_authoritative_zones: []

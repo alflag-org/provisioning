@@ -1,0 +1,51 @@
+---
+- name: Install OpenSSH server
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+    update_cache: true
+  when: ssh_server_enabled | bool
+
+- name: Check sshd drop-in directory
+  ansible.builtin.stat:
+    path: "{{ ssh_server_config_dropin_dir }}"
+  register: ssh_server_dropin_dir
+  when: ssh_server_enabled | bool
+
+- name: Ensure sshd drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ ssh_server_config_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ssh_server_enabled | bool
+
+- name: Render managed sshd policy drop-in
+  ansible.builtin.template:
+    src: daedalus.conf.j2
+    dest: "{{ ssh_server_config_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart SSH service
+  when:
+    - ssh_server_enabled | bool
+    - not ansible_check_mode or ssh_server_dropin_dir.stat.exists
+
+- name: Validate sshd configuration
+  ansible.builtin.command:
+    cmd: "{{ ssh_server_sshd_binary }} -t"
+  changed_when: false
+  when:
+    - ssh_server_enabled | bool
+    - not ansible_check_mode
+
+- name: Enable and start SSH service
+  ansible.builtin.service:
+    name: "{{ ssh_server_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - ssh_server_enabled | bool
+    - not ansible_check_mode
