@@ -18,16 +18,15 @@
   become: true
   when: not swap_file.stat.exists
 
-- name: Enable swap file
-  ansible.builtin.command: swapon -a
-  become: true
-  when: not swap_file.stat.exists
-
-- name: Mount swap file
-  ansible.posix.mount:
-    name: none
-    src: "{{ swap_file_path }}"
-    fstype: swap
-    opts: sw
+- name: Persist swap file in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ swap_file_path | regex_escape() }}\\s+"
+    line: "{{ swap_file_path }} none swap sw 0 0"
     state: present
   become: true
+
+- name: Enable swap file
+  ansible.builtin.command: swapon "{{ swap_file_path }}"
+  become: true
+  when: not swap_file.stat.exists
