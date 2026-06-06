@@ -14,7 +14,7 @@ cloudflared_binary_arch_assets:
   x86_64: cloudflared-linux-amd64
   aarch64: cloudflared-linux-arm64
   arm64: cloudflared-linux-arm64
-cloudflared_binary_asset: "{{ cloudflared_binary_arch_assets.get(ansible_architecture, 'cloudflared-linux-amd64') }}"
+cloudflared_binary_asset: "{{ cloudflared_binary_arch_assets.get(ansible_facts.get('architecture', ''), 'cloudflared-linux-amd64') }}"
 cloudflared_binary_url: "https://github.com/cloudflare/cloudflared/releases/latest/download/{{ cloudflared_binary_asset }}"
 
 cloudflared_tunnel_token: null

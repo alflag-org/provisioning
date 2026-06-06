@@ -1,5 +1,19 @@
 ---
-- name: Set locale
-  community.general.locale_gen:
-    name: ja_JP.UTF-8
-    state: present
+- name: Enable ja_JP.UTF-8 locale
+  ansible.builtin.lineinfile:
+    path: /etc/locale.gen
+    regexp: '^#?\s*ja_JP\.UTF-8\s+UTF-8$'
+    line: ja_JP.UTF-8 UTF-8
+    create: false
+    owner: root
+    group: root
+    mode: "0644"
+  register: common_lxc_locale_gen
+  become: true
+
+- name: Generate ja_JP.UTF-8 locale
+  ansible.builtin.command:
+    cmd: locale-gen ja_JP.UTF-8
+  changed_when: true
+  when: common_lxc_locale_gen.changed
+  become: true

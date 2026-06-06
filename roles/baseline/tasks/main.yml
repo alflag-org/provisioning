@@ -6,15 +6,13 @@
 - name: Confirm hostname fact is available
   ansible.builtin.assert:
     that:
-      - ansible_hostname is defined
-      - ansible_hostname | length > 0
+      - ansible_facts.get('hostname', '') | length > 0
     quiet: true
 
 - name: Confirm Python fact gathering works
   ansible.builtin.assert:
     that:
-      - ansible_python_version is defined
-      - ansible_python_version | length > 0
+      - ansible_facts.get('python_version', '') | length > 0
     quiet: true
 
 - name: Leave timezone policy disabled for now

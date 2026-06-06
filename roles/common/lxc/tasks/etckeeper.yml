@@ -43,5 +43,5 @@
   ansible.builtin.shell: etckeeper vcs remote add origin git@github.com:alflag-team/etc.git
   when: not etckeeper_git_remote_origin.rc == 0
 - name: Push to remote origin
-  ansible.builtin.shell: etckeeper vcs push -u origin master:{{ ansible_hostname }}
+  ansible.builtin.shell: etckeeper vcs push -u origin master:{{ ansible_facts.get('hostname', inventory_hostname) }}
   when: not etckeeper_git_remote_origin.rc == 0
