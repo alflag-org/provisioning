@@ -24,6 +24,22 @@
     mode: 0755
   become: true
 
+- name: Scan GitHub SSH host keys
+  ansible.builtin.command:
+    cmd: ssh-keyscan github.com
+  register: etckeeper_github_host_keys
+  changed_when: false
+  check_mode: false
+
+- name: Trust GitHub SSH host keys for etckeeper
+  ansible.builtin.known_hosts:
+    path: /etc/ssh/ssh_known_hosts
+    name: github.com
+    key: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ etckeeper_github_host_keys.stdout_lines | reject('match', '^#') | list }}"
+
 # /etc/.git/config が存在する場合、etckeeper が git で管理されているとみなす
 - name: Check if /etc/.git/config exists
   ansible.builtin.stat:
