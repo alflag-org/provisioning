@@ -18,6 +18,7 @@
     state: stopped
     enabled: false
   become: true
+  when: not ansible_check_mode
 
 - name: start zabbix-agent
   ansible.builtin.service:
@@ -25,6 +26,7 @@
     state: started
     enabled: true
   become: true
+  when: not ansible_check_mode
 
 - name: restart zabbix-agent
   ansible.builtin.service:
@@ -32,6 +34,7 @@
     state: restarted
     enabled: true
   become: true
+  when: not ansible_check_mode
 
 - name: restart unattended-upgrades
   ansible.builtin.systemd_service:

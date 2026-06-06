@@ -2,3 +2,4 @@
 common_operator_user: ops
 common_operator_group: "{{ common_operator_user }}"
 common_operator_home: "/home/{{ common_operator_user }}"
+common_lxc_secrets_source: "{{ lookup('env', 'HOME') ~ '/secrets' }}"

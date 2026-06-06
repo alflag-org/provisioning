@@ -3,7 +3,6 @@
   ansible.builtin.apt:
     name:
       - zabbix-agent2
-      - zabbix-agent2-plugin-*
     update_cache: true
     state: present
   notify: restart zabbix-agent
