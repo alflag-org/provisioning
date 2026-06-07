@@ -1,0 +1,129 @@
+---
+- name: Install web origin package
+  ansible.builtin.apt:
+    name: "{{ services_web_origin_package }}"
+    state: present
+    update_cache: true
+  when: services_web_origin_enabled | bool
+
+- name: Check web origin document root
+  ansible.builtin.stat:
+    path: "{{ services_web_origin_document_root }}"
+  register: services_web_origin_document_root_stat
+  when: services_web_origin_enabled | bool
+
+- name: Ensure web origin document root exists
+  ansible.builtin.file:
+    path: "{{ services_web_origin_document_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: services_web_origin_enabled | bool
+
+- name: Render web origin default page
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ services_web_origin_index_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode or services_web_origin_document_root_stat.stat.isdir | default(false)
+
+- name: Check web origin nginx available directory
+  ansible.builtin.stat:
+    path: "{{ services_web_origin_nginx_available_dir }}"
+  register: services_web_origin_nginx_available_dir_stat
+  when: services_web_origin_enabled | bool
+
+- name: Check web origin nginx enabled directory
+  ansible.builtin.stat:
+    path: "{{ services_web_origin_nginx_enabled_dir }}"
+  register: services_web_origin_nginx_enabled_dir_stat
+  when: services_web_origin_enabled | bool
+
+- name: Ensure web origin nginx site directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ services_web_origin_nginx_available_dir }}"
+    - "{{ services_web_origin_nginx_enabled_dir }}"
+  when: services_web_origin_enabled | bool
+
+- name: Render web origin nginx site
+  ansible.builtin.template:
+    src: nginx-site.conf.j2
+    dest: "{{ services_web_origin_nginx_available_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload web origin service
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode or services_web_origin_nginx_available_dir_stat.stat.isdir | default(false)
+
+- name: Disable nginx default site
+  ansible.builtin.file:
+    path: "{{ services_web_origin_nginx_default_enabled_path }}"
+    state: absent
+  notify: Reload web origin service
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode or services_web_origin_nginx_enabled_dir_stat.stat.isdir | default(false)
+
+- name: Enable web origin nginx site
+  ansible.builtin.file:
+    src: "{{ services_web_origin_nginx_available_path }}"
+    dest: "{{ services_web_origin_nginx_enabled_path }}"
+    state: link
+    owner: root
+    group: root
+  notify: Reload web origin service
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode or services_web_origin_nginx_available_dir_stat.stat.isdir | default(false)
+    - not ansible_check_mode or services_web_origin_nginx_enabled_dir_stat.stat.isdir | default(false)
+
+- name: Validate web origin nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode
+
+- name: Enable and start web origin service
+  ansible.builtin.service:
+    name: "{{ services_web_origin_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate web origin health endpoint
+  ansible.builtin.uri:
+    url: "{{ services_web_origin_health_check_url }}"
+    return_content: true
+    status_code: 200
+  register: services_web_origin_health_check
+  changed_when: false
+  failed_when: services_web_origin_health_response not in services_web_origin_health_check.content
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode
+
+- name: Record Cloudflare tunnel origin boundary
+  ansible.builtin.debug:
+    msg: >-
+      Cloudflare Tunnel should route to {{ services_web_origin_cloudflare_service_url }}.
+      Daedalus does not manage Cloudflare dashboard resources, routes, DNS
+      records, tunnel tokens, or API tokens from this role.
+    verbosity: 1
+  when: services_web_origin_enabled | bool

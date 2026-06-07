@@ -1,0 +1,8 @@
+---
+- name: Converge web origin hosts
+  hosts: svc_web
+  gather_facts: true
+
+  roles:
+    - role: services/web  # noqa role-name[path]
+      when: services_web_origin_enabled | default(false)

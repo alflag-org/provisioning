@@ -1,0 +1,19 @@
+server {
+    listen {{ services_web_origin_listen_address }}:{{ services_web_origin_port }};
+    server_name {{ services_web_origin_server_name }};
+
+    root {{ services_web_origin_document_root }};
+    index index.html;
+
+    add_header X-Daedalus-Origin "{{ inventory_hostname }}" always;
+
+    location = {{ services_web_origin_health_path }} {
+        access_log off;
+        default_type text/plain;
+        return 200 "{{ services_web_origin_health_response }}\n";
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

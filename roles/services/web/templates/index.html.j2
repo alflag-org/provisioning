@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ services_web_origin_page_title }}</title>
+  </head>
+  <body>
+    <main>
+      <h1>{{ services_web_origin_page_title }}</h1>
+      <dl>
+        <dt>host</dt>
+        <dd>{{ inventory_hostname }}</dd>
+        <dt>site</dt>
+        <dd>{{ site_name | default('unknown') }}</dd>
+        <dt>zone</dt>
+        <dd>{{ network_zone | default('unknown') }}</dd>
+      </dl>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+---
+- name: Reload web origin service
+  ansible.builtin.service:
+    name: "{{ services_web_origin_service_name }}"
+    state: reloaded
+  when:
+    - services_web_origin_enabled | bool
+    - not ansible_check_mode
