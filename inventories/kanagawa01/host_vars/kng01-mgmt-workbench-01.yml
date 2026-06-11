@@ -1,4 +1,5 @@
 ---
 ssh_server_enabled: true
+ssh_server_allow_tcp_forwarding: local
 cloudflare_ssh_enabled: true
 zabbix_agent_enabled: true

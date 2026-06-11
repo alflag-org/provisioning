@@ -2,5 +2,5 @@
 PermitRootLogin {{ ssh_server_permit_root_login }}
 PasswordAuthentication {{ 'yes' if ssh_server_password_authentication else 'no' }}
 PubkeyAuthentication {{ 'yes' if ssh_server_pubkey_authentication else 'no' }}
-AllowTcpForwarding {{ 'yes' if ssh_server_allow_tcp_forwarding else 'no' }}
+AllowTcpForwarding {{ {'disabled': 'no', 'local': 'local', 'enabled': 'yes'}[ssh_server_allow_tcp_forwarding_policy] }}
 X11Forwarding {{ 'yes' if ssh_server_x11_forwarding else 'no' }}

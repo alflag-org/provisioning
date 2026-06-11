@@ -8,5 +8,5 @@ ssh_server_config_dropin_path: "{{ ssh_server_config_dropin_dir }}/20-daedalus.c
 ssh_server_permit_root_login: "prohibit-password"
 ssh_server_password_authentication: false
 ssh_server_pubkey_authentication: true
-ssh_server_allow_tcp_forwarding: false
+ssh_server_allow_tcp_forwarding: "no"
 ssh_server_x11_forwarding: false
