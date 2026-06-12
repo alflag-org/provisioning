@@ -1,7 +1,9 @@
 ---
-- name: Disable swap
-  ansible.builtin.command: swapoff -a
+- name: Disable swap file
+  ansible.builtin.command: swapoff "{{ swap_file_path }}"
   become: true
+  changed_when: true
+  when: swap_file_is_active | bool
 
 - name: Remove swap file
   ansible.builtin.file:

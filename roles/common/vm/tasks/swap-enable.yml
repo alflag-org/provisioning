@@ -1,6 +1,8 @@
 ---
 - name: Create swap file
-  ansible.builtin.command: dd if=/dev/zero of="{{ swap_file_path }}" bs=1M count={{ swap_file_size_mb }}
+  ansible.builtin.command:
+    cmd: dd if=/dev/zero of="{{ swap_file_path }}" bs=1M count={{ swap_file_size_mb | int }}
+    creates: "{{ swap_file_path }}"
   become: true
   when: not swap_file.stat.exists
 
@@ -9,14 +11,19 @@
     path: "{{ swap_file_path }}"
     owner: root
     group: root
-    mode: 0600
+    mode: "0600"
   become: true
-  when: not swap_file.stat.exists
+  when:
+    - not swap_file.stat.exists
+    - not ansible_check_mode
 
 - name: Make swap file
   ansible.builtin.command: mkswap "{{ swap_file_path }}"
   become: true
-  when: not swap_file.stat.exists
+  changed_when: true
+  when:
+    - not swap_file.stat.exists
+    - not ansible_check_mode
 
 - name: Persist swap file in fstab
   ansible.builtin.lineinfile:
@@ -29,4 +36,7 @@
 - name: Enable swap file
   ansible.builtin.command: swapon "{{ swap_file_path }}"
   become: true
-  when: not swap_file.stat.exists
+  changed_when: true
+  when:
+    - not swap_file.stat.exists
+    - not ansible_check_mode
