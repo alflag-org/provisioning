@@ -6,8 +6,9 @@
       - cloudflared_tunnel_token is not none
       - cloudflared_tunnel_token | string | length > 0
     fail_msg: >-
-      cloudflared_enabled=true requires cloudflared_tunnel_token from Ansible
-      Vault, a local untracked vars file, or an operator-provided extra var.
+      cloudflared_enabled=true requires cloudflared_tunnel_token from the
+      operator secret store, a local untracked vars file, or an
+      operator-provided extra var.
       Cloudflare dashboard resources are not managed by this role.
   when:
     - cloudflared_enabled | bool

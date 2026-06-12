@@ -14,8 +14,8 @@
       - (lookup('ansible.builtin.vars', item, default='') | string | length) > 0
     fail_msg: >-
       Required secret variable {{ item }} is missing. Provide it through
-      Ansible Vault, an untracked vars file, or --extra-vars before enabling
-      zabbix_server_installation_managed.
+      the operator secret store, an untracked vars file, or --extra-vars
+      before enabling zabbix_server_installation_managed.
     quiet: true
   loop:
     - mysql_root_password
