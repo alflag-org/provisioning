@@ -1,4 +1,8 @@
 ---
+- name: Validate Zabbix server inputs
+  ansible.builtin.include_tasks:
+    file: preflight.yml
+
 - name: Install Zabbix 6.0
   ansible.builtin.include_tasks:
     file: zabbix_6.0.yml
@@ -7,7 +11,7 @@
 - name: Install Zabbix 7.0
   ansible.builtin.include_tasks:
     file: zabbix_7.0.yml
-  when: ansible_facts['lsb']['release'] == "24.04"
+  when: ansible_facts['lsb']['release'] in ["24.04", "26.04"]
 
 - name: Setup mysql
   ansible.builtin.include_tasks:
@@ -17,6 +21,13 @@
   ansible.builtin.include_tasks:
     file: php-fpm.yml
 
-- name: Setup nginx
+- name: Setup caddy
   ansible.builtin.include_tasks:
-    file: nginx.yml
+    file: caddy.yml
+
+- name: Enable Zabbix Server
+  ansible.builtin.systemd_service:
+    name: "{{ zabbix_server_service_name }}"
+    enabled: true
+    state: started
+  when: not ansible_check_mode

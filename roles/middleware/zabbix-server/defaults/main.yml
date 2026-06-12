@@ -1,0 +1,50 @@
+---
+zabbix_server_supported_lsb_releases:
+  - "22.04"
+  - "24.04"
+  - "26.04"
+
+zabbix_server_php_versions:
+  "22.04": "8.1"
+  "24.04": "8.3"
+  "26.04": "8.3"
+zabbix_server_php_version: >-
+  {{ zabbix_server_php_versions.get(
+    ansible_facts.get('distribution_version', ''),
+    '8.3'
+  ) }}
+zabbix_server_php_fpm_service_name: "php{{ zabbix_server_php_version }}-fpm"
+zabbix_server_php_fpm_ini_dir: "/etc/php/{{ zabbix_server_php_version }}/fpm/conf.d"
+zabbix_server_php_fpm_zabbix_ini_path: "{{ zabbix_server_php_fpm_ini_dir }}/99-zabbix.ini"
+zabbix_server_php_fastcgi: "unix//run/php/php{{ zabbix_server_php_version }}-fpm.sock"
+
+zabbix_server_packages:
+  - zabbix-server-mysql
+  - zabbix-frontend-php
+  - zabbix-sql-scripts
+  - fonts-ipafont-gothic
+  - "php{{ zabbix_server_php_version }}-fpm"
+  - "php{{ zabbix_server_php_version }}-mysql"
+  - "php{{ zabbix_server_php_version }}-gd"
+  - "php{{ zabbix_server_php_version }}-bcmath"
+  - "php{{ zabbix_server_php_version }}-mbstring"
+  - "php{{ zabbix_server_php_version }}-xml"
+  - "php{{ zabbix_server_php_version }}-ldap"
+
+zabbix_server_web_root: /usr/share/zabbix
+zabbix_server_caddy_config_dir: /etc/caddy
+zabbix_server_caddyfile_path: "{{ zabbix_server_caddy_config_dir }}/Caddyfile"
+zabbix_server_caddy_service_name: caddy
+
+zabbix_server_disable_legacy_nginx: true
+zabbix_server_legacy_nginx_config_path: /etc/nginx/conf.d/zabbix.conf
+zabbix_server_legacy_nginx_service_name: nginx
+
+zabbix_server_service_name: zabbix-server
+
+zabbix_dbhost: localhost
+mysql_login_unix_socket: /var/run/mysqld/mysqld.sock
+mysql_zabbix_dbname: zabbix
+mysql_zabbix_user: zabbix
+mysql_zabbix_monitor_user: zabbix_monitor
+zabbix_server_mysql_schema_path: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz

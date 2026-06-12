@@ -1,0 +1,24 @@
+---
+- name: Validate supported Zabbix server OS release
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['lsb']['release'] in zabbix_server_supported_lsb_releases
+    fail_msg: >-
+      Zabbix server provisioning supports Ubuntu releases
+      {{ zabbix_server_supported_lsb_releases | join(', ') }}.
+      This host reports {{ ansible_facts['lsb']['release'] }}.
+
+- name: Validate required Zabbix database secret variables
+  ansible.builtin.assert:
+    that:
+      - item in vars
+      - (vars[item] | default('') | string | length) > 0
+    fail_msg: >-
+      Required secret variable {{ item }} is missing. Provide it through
+      Ansible Vault, an untracked vars file, or --extra-vars before enabling
+      zabbix_server_installation_managed.
+    quiet: true
+  loop:
+    - mysql_root_password
+    - mysql_zabbix_password
+    - mysql_zabbix_monitor_password

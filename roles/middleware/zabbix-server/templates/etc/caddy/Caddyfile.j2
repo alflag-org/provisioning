@@ -1,0 +1,48 @@
+:80 {
+    root * {{ zabbix_server_web_root }}
+
+    handle /api/* {
+        respond 404
+    }
+
+    handle /conf {
+        respond 404
+    }
+
+    handle /conf/* {
+        respond 404
+    }
+
+    handle /include {
+        respond 404
+    }
+
+    handle /include/* {
+        respond 404
+    }
+
+    handle /locale {
+        respond 404
+    }
+
+    handle /locale/* {
+        respond 404
+    }
+
+    handle /vendor {
+        respond 404
+    }
+
+    handle /vendor/* {
+        respond 404
+    }
+
+    handle /.ht* {
+        respond 403
+    }
+
+    handle {
+        php_fastcgi {{ zabbix_server_php_fastcgi }}
+        file_server
+    }
+}

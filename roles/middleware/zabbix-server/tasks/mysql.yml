@@ -14,6 +14,8 @@
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     name: "{{ mysql_zabbix_dbname }}"
+    encoding: utf8mb4
+    collation: utf8mb4_bin
     state: present
 
 - name: Create Zabbix User
@@ -24,7 +26,7 @@
     name: "{{ mysql_zabbix_user }}"
     password: "{{ mysql_zabbix_password }}"
     host: "localhost"
-    priv: "zabbix.*:ALL"
+    priv: "{{ mysql_zabbix_dbname }}.*:ALL"
     state: present
 
 - name: Create zabbix_monitor User
@@ -37,3 +39,47 @@
     host: "127.0.0.1"
     priv: "*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW"
     state: present
+
+- name: Check Zabbix database schema status
+  community.mysql.mysql_query:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    login_db: "{{ mysql_zabbix_dbname }}"
+    query: "SHOW TABLES LIKE 'config'"
+  register: zabbix_server_schema_status
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Check Zabbix initial schema file
+  ansible.builtin.stat:
+    path: "{{ zabbix_server_mysql_schema_path }}"
+  register: zabbix_server_mysql_schema_file
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_status.query_result[0] | length == 0
+
+- name: Validate Zabbix initial schema file exists
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_mysql_schema_file.stat.exists
+    fail_msg: >-
+      Zabbix initial schema file {{ zabbix_server_mysql_schema_path }} is
+      missing. Verify the zabbix-sql-scripts package is available from the
+      configured Zabbix repository.
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_status.query_result[0] | length == 0
+
+- name: Import Zabbix initial schema
+  community.mysql.mysql_db:
+    login_user: "{{ mysql_zabbix_user }}"
+    login_password: "{{ mysql_zabbix_password }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ mysql_zabbix_dbname }}"
+    state: import
+    target: "{{ zabbix_server_mysql_schema_path }}"
+    use_shell: true
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_status.query_result[0] | length == 0
