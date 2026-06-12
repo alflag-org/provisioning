@@ -6,4 +6,3 @@ foundation_lxc_skip_zabbix_agent: false
 foundation_lxc_skip_home: false
 foundation_lxc_skip_secrets: false
 foundation_lxc_skip_ssh: false
-foundation_lxc_skip_etckeeper: false

@@ -44,9 +44,3 @@
     file: ssh.yml
   when:
     - not skip_ssh | default(false)
-
-- name: etckeeper
-  ansible.builtin.include_tasks:
-    file: etckeeper.yml
-  when:
-    - not skip_etckeeper | default(false)
