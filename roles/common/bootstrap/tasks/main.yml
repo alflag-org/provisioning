@@ -7,12 +7,25 @@
       Unsupported common_bootstrap_platform={{ common_bootstrap_platform }}.
       Expected one of: vm, lxc.
 
-- name: Bootstrap VM host
+- name: Bootstrap VM host  # noqa role-name[path]
   ansible.builtin.include_role:
     name: common/vm
+  vars:
+    skip_systemd_resolved: "{{ foundation_vm_skip_systemd_resolved | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_swap: "{{ foundation_vm_skip_swap | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_unattended_upgrades: "{{ foundation_vm_skip_unattended_upgrades | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_zabbix_agent: "{{ foundation_vm_skip_zabbix_agent | default(false) }}"  # noqa var-naming[no-role-prefix]
   when: common_bootstrap_platform == 'vm'
 
-- name: Bootstrap LXC host
+- name: Bootstrap LXC host  # noqa role-name[path]
   ansible.builtin.include_role:
     name: common/lxc
+  vars:
+    skip_locale: "{{ foundation_lxc_skip_locale | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_unattended_upgrades: "{{ foundation_lxc_skip_unattended_upgrades | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_zabbix_package: "{{ foundation_lxc_skip_zabbix_package | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_zabbix_agent: "{{ foundation_lxc_skip_zabbix_agent | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_home: "{{ foundation_lxc_skip_home | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_secrets: "{{ foundation_lxc_skip_secrets | default(false) }}"  # noqa var-naming[no-role-prefix]
+    skip_ssh: "{{ foundation_lxc_skip_ssh | default(false) }}"  # noqa var-naming[no-role-prefix]
   when: common_bootstrap_platform == 'lxc'
