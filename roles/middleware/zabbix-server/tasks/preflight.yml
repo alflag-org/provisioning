@@ -11,8 +11,7 @@
 - name: Validate required Zabbix database secret variables
   ansible.builtin.assert:
     that:
-      - item in vars
-      - (vars[item] | default('') | string | length) > 0
+      - (lookup('ansible.builtin.vars', item, default='') | string | length) > 0
     fail_msg: >-
       Required secret variable {{ item }} is missing. Provide it through
       Ansible Vault, an untracked vars file, or --extra-vars before enabling
