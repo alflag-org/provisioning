@@ -1,0 +1,8 @@
+---
+zabbix_primary_problem_source: true
+zabbix_server_installation_managed: false
+zabbix_intended_components:
+  - zabbix-server
+  - zabbix-frontend
+  - zabbix-agent2
+  - local-database

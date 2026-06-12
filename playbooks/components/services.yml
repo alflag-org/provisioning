@@ -13,3 +13,6 @@
 
 - name: Converge workbench services
   ansible.builtin.import_playbook: services/workbench.yml
+
+- name: Converge Zabbix services
+  ansible.builtin.import_playbook: services/zabbix.yml
