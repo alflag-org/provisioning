@@ -9,9 +9,8 @@
   notify: restart mysql
 
 - name: Create Zabbix Database
-  community.mysql.mysql_db:
+  ansible.mysql.mysql_db:
     login_user: "root"
-    login_password: "{{ mysql_root_password }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     name: "{{ mysql_zabbix_dbname }}"
     encoding: utf8mb4
@@ -19,31 +18,32 @@
     state: present
 
 - name: Create Zabbix User
-  community.mysql.mysql_user:
+  ansible.mysql.mysql_user:
     login_user: "root"
-    login_password: "{{ mysql_root_password }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     name: "{{ mysql_zabbix_user }}"
-    password: "{{ mysql_zabbix_password }}"
     host: "localhost"
+    plugin: "{{ mysql_zabbix_auth_plugin }}"
+    plugin_auth_string: "{{ mysql_zabbix_password }}"
+    salt: "{{ mysql_zabbix_password_salt }}"
     priv: "{{ mysql_zabbix_dbname }}.*:ALL"
     state: present
 
 - name: Create zabbix_monitor User
-  community.mysql.mysql_user:
+  ansible.mysql.mysql_user:
     login_user: "root"
-    login_password: "{{ mysql_root_password }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     name: "{{ mysql_zabbix_monitor_user }}"
-    password: "{{ mysql_zabbix_monitor_password }}"
     host: "127.0.0.1"
+    plugin: "{{ mysql_zabbix_auth_plugin }}"
+    plugin_auth_string: "{{ mysql_zabbix_monitor_password }}"
+    salt: "{{ mysql_zabbix_monitor_password_salt }}"
     priv: "*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW"
     state: present
 
 - name: Check Zabbix database schema status
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     login_user: "root"
-    login_password: "{{ mysql_root_password }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     login_db: "{{ mysql_zabbix_dbname }}"
     query: "SHOW TABLES LIKE 'config'"
@@ -72,7 +72,7 @@
     - zabbix_server_schema_status.query_result[0] | length == 0
 
 - name: Import Zabbix initial schema
-  community.mysql.mysql_db:
+  ansible.mysql.mysql_db:
     login_user: "{{ mysql_zabbix_user }}"
     login_password: "{{ mysql_zabbix_password }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"

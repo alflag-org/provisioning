@@ -1,0 +1,2 @@
+---
+mysql_login_unix_socket: /var/run/mysqld/mysqld.sock

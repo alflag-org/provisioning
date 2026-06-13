@@ -18,6 +18,5 @@
       before enabling zabbix_server_installation_managed.
     quiet: true
   loop:
-    - mysql_root_password
     - mysql_zabbix_password
     - mysql_zabbix_monitor_password
