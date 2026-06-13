@@ -51,3 +51,5 @@ mysql_zabbix_auth_plugin: caching_sha2_password
 mysql_zabbix_password_salt: daedalus_zabbix_user
 mysql_zabbix_monitor_password_salt: daedalus_zbxmon_user
 zabbix_server_mysql_schema_path: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz
+zabbix_server_mysql_schema_min_trigger_count: 65
+zabbix_server_recreate_partial_schema: false

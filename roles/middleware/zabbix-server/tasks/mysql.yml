@@ -46,9 +46,65 @@
     login_user: "root"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     login_db: "{{ mysql_zabbix_dbname }}"
-    query: "SHOW TABLES LIKE 'config'"
+    query: >-
+      SELECT
+      (SELECT COUNT(*) FROM information_schema.tables
+      WHERE table_schema = DATABASE()) AS table_count,
+      (SELECT COUNT(*) FROM information_schema.triggers
+      WHERE trigger_schema = DATABASE()) AS trigger_count
   register: zabbix_server_schema_status
   changed_when: false
+  when: not ansible_check_mode
+
+- name: Record Zabbix database schema status
+  ansible.builtin.set_fact:
+    zabbix_server_schema_table_count: >-
+      {{ zabbix_server_schema_status.query_result[0][0].table_count | int }}
+    zabbix_server_schema_trigger_count: >-
+      {{ zabbix_server_schema_status.query_result[0][0].trigger_count | int }}
+  when: not ansible_check_mode
+
+- name: Reset partial Zabbix database schema when explicitly requested
+  block:
+    - name: Drop partial Zabbix database schema
+      ansible.mysql.mysql_db:
+        login_user: "root"
+        login_unix_socket: "{{ mysql_login_unix_socket }}"
+        name: "{{ mysql_zabbix_dbname }}"
+        state: absent
+
+    - name: Recreate Zabbix database after partial schema reset
+      ansible.mysql.mysql_db:
+        login_user: "root"
+        login_unix_socket: "{{ mysql_login_unix_socket }}"
+        name: "{{ mysql_zabbix_dbname }}"
+        encoding: utf8mb4
+        collation: utf8mb4_bin
+        state: present
+
+    - name: Mark Zabbix database schema as empty after reset
+      ansible.builtin.set_fact:
+        zabbix_server_schema_table_count: 0
+        zabbix_server_schema_trigger_count: 0
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_table_count | int > 0
+    - zabbix_server_schema_trigger_count | int < zabbix_server_mysql_schema_min_trigger_count | int
+    - zabbix_server_recreate_partial_schema | bool
+
+- name: Validate Zabbix database schema is empty or complete
+  ansible.builtin.assert:
+    that:
+      - >-
+        zabbix_server_schema_table_count | int == 0 or
+        zabbix_server_schema_trigger_count | int >=
+        zabbix_server_mysql_schema_min_trigger_count | int
+    fail_msg: >-
+      Zabbix database {{ mysql_zabbix_dbname }} contains a partial schema
+      import: {{ zabbix_server_schema_table_count }} table(s) and
+      {{ zabbix_server_schema_trigger_count }} trigger(s) were found. Recreate
+      the database deliberately, or set zabbix_server_recreate_partial_schema=true
+      for this fresh provisioning run.
   when: not ansible_check_mode
 
 - name: Check Zabbix initial schema file
@@ -57,7 +113,7 @@
   register: zabbix_server_mysql_schema_file
   when:
     - not ansible_check_mode
-    - zabbix_server_schema_status.query_result[0] | length == 0
+    - zabbix_server_schema_table_count | int == 0
 
 - name: Validate Zabbix initial schema file exists
   ansible.builtin.assert:
@@ -69,17 +125,63 @@
       configured Zabbix repository.
   when:
     - not ansible_check_mode
-    - zabbix_server_schema_status.query_result[0] | length == 0
+    - zabbix_server_schema_table_count | int == 0
 
 - name: Import Zabbix initial schema
-  ansible.mysql.mysql_db:
-    login_user: "{{ mysql_zabbix_user }}"
-    login_password: "{{ mysql_zabbix_password }}"
-    login_unix_socket: "{{ mysql_login_unix_socket }}"
-    name: "{{ mysql_zabbix_dbname }}"
-    state: import
-    target: "{{ zabbix_server_mysql_schema_path }}"
-    use_shell: true
+  block:
+    - name: Enable trusted function creators for Zabbix schema import
+      ansible.mysql.mysql_query:
+        login_user: "root"
+        login_unix_socket: "{{ mysql_login_unix_socket }}"
+        query: "SET GLOBAL log_bin_trust_function_creators = 1"
+      changed_when: true
+
+    - name: Import Zabbix initial schema
+      ansible.mysql.mysql_db:
+        login_user: "{{ mysql_zabbix_user }}"
+        login_password: "{{ mysql_zabbix_password }}"
+        login_unix_socket: "{{ mysql_login_unix_socket }}"
+        name: "{{ mysql_zabbix_dbname }}"
+        state: import
+        target: "{{ zabbix_server_mysql_schema_path }}"
+        use_shell: true
+  always:
+    - name: Disable trusted function creators after Zabbix schema import
+      ansible.mysql.mysql_query:
+        login_user: "root"
+        login_unix_socket: "{{ mysql_login_unix_socket }}"
+        query: "SET GLOBAL log_bin_trust_function_creators = 0"
+      changed_when: true
   when:
     - not ansible_check_mode
-    - zabbix_server_schema_status.query_result[0] | length == 0
+    - zabbix_server_schema_table_count | int == 0
+
+- name: Check imported Zabbix schema trigger status
+  ansible.mysql.mysql_query:
+    login_user: "root"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    login_db: "{{ mysql_zabbix_dbname }}"
+    query: >-
+      SELECT COUNT(*) AS trigger_count
+      FROM information_schema.triggers
+      WHERE trigger_schema = DATABASE()
+  register: zabbix_server_imported_schema_status
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_table_count | int == 0
+
+- name: Validate imported Zabbix schema trigger count
+  ansible.builtin.assert:
+    that:
+      - >-
+        zabbix_server_imported_schema_status.query_result[0][0].trigger_count | int >=
+        zabbix_server_mysql_schema_min_trigger_count | int
+    fail_msg: >-
+      Zabbix schema import completed without the expected trigger count.
+      Expected at least {{ zabbix_server_mysql_schema_min_trigger_count }}
+      trigger(s), found
+      {{ zabbix_server_imported_schema_status.query_result[0][0].trigger_count }}.
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_table_count | int == 0
