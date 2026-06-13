@@ -1,18 +1,25 @@
 ---
-- name: Install gnupg
+- name: Install Caddy repository prerequisites
   ansible.builtin.apt:
-    name: gnupg
+    name:
+      - ca-certificates
+      - python3-debian
     state: present
     update_cache: true
 
-- name: Add Caddy repository key
-  ansible.builtin.apt_key:
-    url: "https://dl.cloudsmith.io/public/caddy/stable/gpg.key"
-    keyring: "/usr/share/keyrings/caddy-stable-archive-keyring.gpg"
-
 - name: Add Caddy repository
-  apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+  ansible.builtin.deb822_repository:
+    name: caddy-stable
+    types:
+      - deb
+    uris:
+      - https://dl.cloudsmith.io/public/caddy/stable/deb/debian
+    suites:
+      - any-version
+    components:
+      - main
+    signed_by: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+    state: present
 
 - name: Install Caddy
   ansible.builtin.apt:
