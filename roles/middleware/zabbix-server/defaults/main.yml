@@ -7,7 +7,7 @@ zabbix_server_supported_lsb_releases:
 zabbix_server_php_versions:
   "22.04": "8.1"
   "24.04": "8.3"
-  "26.04": "8.3"
+  "26.04": "8.5"
 zabbix_server_php_version: >-
   {{ zabbix_server_php_versions.get(
     ansible_facts.get('distribution_version', ''),

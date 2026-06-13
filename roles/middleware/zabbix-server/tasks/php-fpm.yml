@@ -9,7 +9,7 @@
 
 - name: Copy 99-zabbix.ini
   ansible.builtin.template:
-    src: ./etc/php/8.3/fpm/conf.d/99-zabbix.ini
+    src: ./etc/php/fpm/conf.d/99-zabbix.ini
     dest: "{{ zabbix_server_php_fpm_zabbix_ini_path }}"
     owner: root
     group: root
