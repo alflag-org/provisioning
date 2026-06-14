@@ -30,5 +30,5 @@ foundation_vm_skip_systemd_resolved: true
 foundation_vm_skip_zabbix_agent: true
 zabbix_agent_enabled: true
 zabbix_server: "127.0.0.1,10.10.10.250"
-zabbix_server_active: "127.0.0.1"
-zabbix_hostname: "Zabbix server"
+zabbix_server_active: "10.10.10.250"
+zabbix_hostname: "kng01-mgmt-zabbix-01"
