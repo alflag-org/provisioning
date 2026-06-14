@@ -2,30 +2,25 @@
 - name: Validate Zabbix server inputs
   ansible.builtin.include_tasks:
     file: preflight.yml
+  when: not zabbix_server_preflight_completed | default(false)
 
-- name: Install Zabbix 6.0
+- name: Install Zabbix server
   ansible.builtin.include_tasks:
-    file: zabbix_6.0.yml
-  when: ansible_facts['lsb']['release'] == "22.04"
+    file: zabbix.yml
 
-- name: Install Zabbix 7.0
-  ansible.builtin.include_tasks:
-    file: zabbix_7.0.yml
-  when: ansible_facts['lsb']['release'] in ["24.04", "26.04"]
-
-- name: Setup mysql
+- name: Setup MySQL
   ansible.builtin.include_tasks:
     file: mysql.yml
 
-- name: Setup php-fpm
+- name: Setup PHP-FPM
   ansible.builtin.include_tasks:
     file: php-fpm.yml
 
-- name: Setup caddy
+- name: Setup Caddy
   ansible.builtin.include_tasks:
     file: caddy.yml
 
-- name: Enable Zabbix Server
+- name: Enable Zabbix server
   ansible.builtin.systemd_service:
     name: "{{ zabbix_server_service_name }}"
     enabled: true

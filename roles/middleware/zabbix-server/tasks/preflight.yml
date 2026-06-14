@@ -20,3 +20,7 @@
   loop:
     - mysql_zabbix_password
     - mysql_zabbix_monitor_password
+
+- name: Mark Zabbix server preflight as completed
+  ansible.builtin.set_fact:
+    zabbix_server_preflight_completed: true

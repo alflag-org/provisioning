@@ -14,7 +14,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart zabbix php-fpm
+  notify: Restart Zabbix PHP-FPM
 
 - name: Enable and start Zabbix PHP-FPM
   ansible.builtin.systemd_service:

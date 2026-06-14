@@ -1,26 +1,26 @@
 ---
-- name: restart zabbix-server
+- name: Restart Zabbix server
   ansible.builtin.service:
     name: "{{ zabbix_server_service_name }}"
     state: restarted
     enabled: true
   when: not ansible_check_mode
 
-- name: restart zabbix php-fpm
+- name: Restart Zabbix PHP-FPM
   ansible.builtin.service:
     name: "{{ zabbix_server_php_fpm_service_name }}"
     state: restarted
     enabled: true
   when: not ansible_check_mode
 
-- name: reload caddy
+- name: Reload Caddy
   ansible.builtin.service:
     name: "{{ zabbix_server_caddy_service_name }}"
     state: reloaded
     enabled: true
   when: not ansible_check_mode
 
-- name: restart mysql
+- name: Restart MySQL
   ansible.builtin.service:
     name: mysql
     state: restarted

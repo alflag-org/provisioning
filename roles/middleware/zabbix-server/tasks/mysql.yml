@@ -5,8 +5,8 @@
     dest: /etc/mysql/mysql.conf.d/mysqld.cnf
     owner: root
     group: root
-    mode: 0644
-  notify: restart mysql
+    mode: "0644"
+  notify: Restart MySQL
 
 - name: Create Zabbix Database
   ansible.mysql.mysql_db:
@@ -28,6 +28,7 @@
     salt: "{{ mysql_zabbix_password_salt }}"
     priv: "{{ mysql_zabbix_dbname }}.*:ALL"
     state: present
+  no_log: true
 
 - name: Create zabbix_monitor User
   ansible.mysql.mysql_user:
@@ -40,6 +41,7 @@
     salt: "{{ mysql_zabbix_monitor_password_salt }}"
     priv: "*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW"
     state: present
+  no_log: true
 
 - name: Check Zabbix database schema status
   ansible.mysql.mysql_query:
