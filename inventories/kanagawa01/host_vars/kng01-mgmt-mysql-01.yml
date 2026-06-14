@@ -1,5 +1,5 @@
 ---
-hostname: kng01-mgmt-mysql-01
+hostname: kng01-mgmt-mysql-shared-01
 site: kng01
 zone: mgmt
 role: mysql
@@ -14,7 +14,7 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: kng01-mgmt-mysql-01.srv.alflag.internal
+network_primary_fqdn: kng01-mgmt-mysql-shared-01.srv.alflag.internal
 network_service_aliases:
   - mysql.alflag.internal
 
