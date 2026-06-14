@@ -1,7 +1,0 @@
----
-- name: Converge bastion hosts
-  hosts: svc_bastion
-  gather_facts: true
-
-  roles:
-    - role: services/bastion  # noqa role-name[path]

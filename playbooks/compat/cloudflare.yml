@@ -1,3 +1,0 @@
----
-- name: Resolve cloudflare playbook alias
-  ansible.builtin.import_playbook: ../components/services/cloudflare.yml

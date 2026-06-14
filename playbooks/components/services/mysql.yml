@@ -4,7 +4,4 @@
   gather_facts: true
 
   roles:
-    - role: zabbix_agent
-      when: zabbix_agent_enabled | default(false)
-    - role: middleware/mysql-server  # noqa role-name[path]
-      when: mysql_server_enabled | default(false)
+    - role: services/mysql  # noqa role-name[path]

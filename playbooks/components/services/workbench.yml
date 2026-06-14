@@ -1,7 +1,0 @@
----
-- name: Converge workbench hosts
-  hosts: svc_workbench
-  gather_facts: true
-
-  roles:
-    - role: services/workbench  # noqa role-name[path]

@@ -1,3 +1,0 @@
----
-- name: Resolve deprecated baseline playbook alias
-  ansible.builtin.import_playbook: ../components/foundation.yml

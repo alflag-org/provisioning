@@ -1,4 +1,0 @@
----
-- name: Apply legacy Terraform controller role  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: middleware/terraform

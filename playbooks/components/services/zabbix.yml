@@ -3,19 +3,5 @@
   hosts: svc_zabbix
   gather_facts: true
 
-  pre_tasks:
-    - name: Validate managed Zabbix service inputs  # noqa role-name[path]
-      ansible.builtin.include_role:
-        name: middleware/zabbix-server
-        tasks_from: preflight
-      when: zabbix_server_installation_managed | default(false)
-
   roles:
-    - role: zabbix_agent
-      when: zabbix_agent_enabled | default(false)
-    - role: middleware/mysql-server  # noqa role-name[path]
-      when: zabbix_server_installation_managed | default(false)
-    - role: middleware/caddy  # noqa role-name[path]
-      when: zabbix_server_installation_managed | default(false)
-    - role: middleware/zabbix-server  # noqa role-name[path]
-      when: zabbix_server_installation_managed | default(false)
+    - role: services/zabbix  # noqa role-name[path]

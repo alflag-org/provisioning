@@ -1,6 +1,0 @@
----
-- name: Keep Vector agent unmanaged until sinks are defined
-  ansible.builtin.debug:
-    msg: "vector_agent_enabled=true, but the Vector agent implementation is intentionally a disabled skeleton."
-    verbosity: 1
-  when: vector_agent_enabled | bool

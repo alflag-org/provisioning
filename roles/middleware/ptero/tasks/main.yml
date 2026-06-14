@@ -1,4 +1,0 @@
----
-- name: Setup cron jobs
-  ansible.builtin.include_tasks:
-    file: cron.yml

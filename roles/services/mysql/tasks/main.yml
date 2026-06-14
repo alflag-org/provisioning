@@ -1,0 +1,10 @@
+---
+- name: Apply MySQL service agent role
+  ansible.builtin.include_role:
+    name: zabbix_agent
+  when: zabbix_agent_enabled | default(false)
+
+- name: Apply shared MySQL server  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: middleware/mysql-server
+  when: mysql_server_enabled | default(false)

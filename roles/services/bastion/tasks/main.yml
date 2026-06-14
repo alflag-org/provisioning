@@ -1,5 +1,0 @@
----
-- name: Preserve explicit bastion service slot during migration
-  ansible.builtin.debug:
-    msg: "svc_bastion currently converges through foundation roles only"
-    verbosity: 1

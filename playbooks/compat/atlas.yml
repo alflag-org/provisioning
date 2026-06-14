@@ -1,3 +1,0 @@
----
-- name: Resolve deprecated atlas playbook alias
-  ansible.builtin.import_playbook: ../components/control-plane.yml

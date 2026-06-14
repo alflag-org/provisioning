@@ -1,5 +1,0 @@
----
-- name: Preserve explicit workbench service slot during migration
-  ansible.builtin.debug:
-    msg: "svc_workbench currently converges through foundation roles only"
-    verbosity: 1
