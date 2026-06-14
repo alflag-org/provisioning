@@ -1,24 +1,22 @@
 ---
 - name: Install mysql-server
   ansible.builtin.apt:
-    name:
-      - mysql-server
-      - mysql-client
-      - python3-pymysql  # Required for Ansible
-      - python3-cryptography  # Required for caching_sha2_password via PyMySQL
-      - python3-setuptools  # Required for Ansible
+    name: "{{ mysql_server_packages }}"
     state: present
 
-- name: Start mysql
+- name: Start mysql-server
   ansible.builtin.systemd_service:
-    name: mysql
+    name: "{{ mysql_server_service_name }}"
     state: started
     enabled: true
 
 - name: Remove anonymous users
   ansible.mysql.mysql_user:
-    login_user: "root"
+    login_user: "{{ mysql_login_user }}"
     login_unix_socket: "{{ mysql_login_unix_socket }}"
     name: ""
     host_all: true
     state: absent
+  when:
+    - mysql_server_remove_anonymous_users | bool
+    - not ansible_check_mode

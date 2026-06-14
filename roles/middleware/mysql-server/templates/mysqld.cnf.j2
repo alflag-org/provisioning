@@ -1,0 +1,23 @@
+#
+# Managed by Daedalus. Local workload-specific databases and users are
+# configured through the middleware/mysql-server role variables.
+#
+
+[mysqld]
+user = {{ mysql_server_user }}
+bind-address = {{ mysql_server_bind_address }}
+port = {{ mysql_server_port }}
+datadir = {{ mysql_server_datadir }}
+
+max_connections = {{ mysql_server_max_connections }}
+key_buffer_size = {{ mysql_server_key_buffer_size }}
+myisam-recover-options = {{ mysql_server_myisam_recover_options }}
+
+log_error = {{ mysql_server_error_log }}
+slow_query_log = {{ 1 if mysql_server_slow_query_log | bool else 0 }}
+slow_query_log_file = {{ mysql_server_slow_query_log_file }}
+long_query_time = {{ mysql_server_long_query_time }}
+max_binlog_size = {{ mysql_server_max_binlog_size }}
+{% for option in mysql_server_extra_mysqld_options %}
+{{ option.key }} = {{ option.value }}
+{% endfor %}

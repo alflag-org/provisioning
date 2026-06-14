@@ -19,7 +19,6 @@
     quiet: true
   loop:
     - mysql_zabbix_password
-    - mysql_zabbix_monitor_password
 
 - name: Mark Zabbix server preflight as completed
   ansible.builtin.set_fact:

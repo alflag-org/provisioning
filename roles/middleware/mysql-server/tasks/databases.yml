@@ -1,0 +1,13 @@
+---
+- name: Manage mysql-server databases
+  ansible.mysql.mysql_db:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ item.name }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    state: "{{ item.state | default('present') }}"
+  loop: "{{ mysql_server_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not ansible_check_mode

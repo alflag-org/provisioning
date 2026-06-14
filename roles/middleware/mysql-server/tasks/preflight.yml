@@ -1,0 +1,42 @@
+---
+- name: Validate required mysql-server secret variables
+  ansible.builtin.assert:
+    that:
+      - (lookup('ansible.builtin.vars', item, default='') | string | length) > 0
+    fail_msg: >-
+      Required secret variable {{ item }} is missing. Provide it through
+      the operator secret store, an untracked vars file, or --extra-vars
+      before enabling this mysql-server workload.
+    quiet: true
+  loop: "{{ mysql_server_required_secret_vars }}"
+  no_log: true
+
+- name: Validate mysql-server database definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | string | length > 0
+    fail_msg: "Every mysql_server_databases entry must define a non-empty name."
+    quiet: true
+  loop: "{{ mysql_server_databases }}"
+  loop_control:
+    label: "{{ item.name | default('<missing>') }}"
+
+- name: Validate mysql-server user definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | string | length > 0
+      - item.host_all | default(false) | bool or item.host is defined
+    fail_msg: >-
+      Every mysql_server_users entry must define a non-empty name and either
+      host or host_all=true.
+    quiet: true
+  loop: "{{ mysql_server_users }}"
+  loop_control:
+    label: "{{ item.name | default('<missing>') }}"
+  no_log: true
+
+- name: Mark mysql-server preflight as completed
+  ansible.builtin.set_fact:
+    mysql_server_preflight_completed: true

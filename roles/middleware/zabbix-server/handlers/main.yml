@@ -19,10 +19,3 @@
     state: reloaded
     enabled: true
   when: not ansible_check_mode
-
-- name: Restart MySQL
-  ansible.builtin.service:
-    name: mysql
-    state: restarted
-    enabled: true
-  when: not ansible_check_mode

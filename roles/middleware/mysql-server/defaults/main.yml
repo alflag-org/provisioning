@@ -1,2 +1,37 @@
 ---
+mysql_login_user: root
 mysql_login_unix_socket: /var/run/mysqld/mysqld.sock
+
+mysql_server_packages:
+  - mysql-server
+  - mysql-client
+  - python3-pymysql
+  - python3-cryptography
+  - python3-setuptools
+
+mysql_server_service_name: mysql
+
+mysql_server_manage_config: true
+mysql_server_config_path: /etc/mysql/mysql.conf.d/mysqld.cnf
+mysql_server_config_owner: root
+mysql_server_config_group: root
+mysql_server_config_mode: "0644"
+
+mysql_server_user: mysql
+mysql_server_bind_address: 127.0.0.1
+mysql_server_port: 3306
+mysql_server_datadir: /var/lib/mysql
+mysql_server_max_connections: 500
+mysql_server_key_buffer_size: 16M
+mysql_server_myisam_recover_options: BACKUP
+mysql_server_error_log: /var/log/mysql/error.log
+mysql_server_slow_query_log: true
+mysql_server_slow_query_log_file: /var/log/mysql/mysql-slow.log
+mysql_server_long_query_time: 2
+mysql_server_max_binlog_size: 100M
+mysql_server_extra_mysqld_options: []
+
+mysql_server_remove_anonymous_users: true
+mysql_server_required_secret_vars: []
+mysql_server_databases: []
+mysql_server_users: []

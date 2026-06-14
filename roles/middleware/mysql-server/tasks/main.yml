@@ -1,4 +1,27 @@
 ---
-- name: install mysql-server
+- name: Validate mysql-server inputs
+  ansible.builtin.include_tasks:
+    file: preflight.yml
+  when: not mysql_server_preflight_completed | default(false)
+
+- name: Install mysql-server
   ansible.builtin.include_tasks:
     file: install.yml
+
+- name: Configure mysql-server
+  ansible.builtin.include_tasks:
+    file: configure.yml
+  when: mysql_server_manage_config | bool
+
+- name: Apply pending mysql-server handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Manage mysql-server databases
+  ansible.builtin.include_tasks:
+    file: databases.yml
+  when: mysql_server_databases | length > 0
+
+- name: Manage mysql-server users
+  ansible.builtin.include_tasks:
+    file: users.yml
+  when: mysql_server_users | length > 0

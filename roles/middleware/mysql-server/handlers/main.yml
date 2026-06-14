@@ -1,18 +1,21 @@
 ---
-- name: start mysql
+- name: Start mysql
   ansible.builtin.service:
-    name: mysql
+    name: "{{ mysql_server_service_name }}"
     state: started
     enabled: true
+  when: not ansible_check_mode
 
-- name: restart mysql
+- name: Restart mysql
   ansible.builtin.service:
-    name: mysql
+    name: "{{ mysql_server_service_name }}"
     state: restarted
     enabled: true
+  when: not ansible_check_mode
 
-- name: stop mysql
+- name: Stop mysql
   ansible.builtin.service:
-    name: mysql
+    name: "{{ mysql_server_service_name }}"
     state: stopped
     enabled: false
+  when: not ansible_check_mode
