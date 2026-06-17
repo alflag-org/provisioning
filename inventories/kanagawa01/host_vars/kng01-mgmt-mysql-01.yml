@@ -7,8 +7,8 @@ virtualization_type: vm
 os_distribution: Ubuntu
 os_version: "26.04"
 
-network_address: 10.10.10.251/24
-network_ipv4_address: 10.10.10.251
+network_address: 10.10.10.221/24
+network_ipv4_address: 10.10.10.221
 network_prefix_length: 24
 network_gateway: 10.10.10.1
 network_dns_resolvers:
