@@ -3,6 +3,7 @@ hostname: kng01-mgmt-mysql-shared-01
 site: kng01
 zone: mgmt
 role: mysql
+purpose: shared
 virtualization_type: vm
 os_distribution: Ubuntu
 os_version: "26.04"
@@ -16,7 +17,7 @@ network_dns_resolvers:
   - 10.10.10.241
 network_primary_fqdn: kng01-mgmt-mysql-shared-01.srv.alflag.internal
 network_service_aliases:
-  - mysql.alflag.internal
+  - mysql-shared.srv.alflag.internal
 
 systemd_resolved_dns:
   - 10.10.10.240
