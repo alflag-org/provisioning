@@ -1,0 +1,13 @@
+---
+- name: Read current timezone
+  ansible.builtin.command:
+    cmd: timedatectl show --property=Timezone --value
+  changed_when: false
+  register: foundation_vm_timezone
+
+- name: Set timezone
+  ansible.builtin.command:
+    cmd: timedatectl set-timezone Asia/Tokyo
+  changed_when: true
+  when: foundation_vm_timezone.stdout != 'Asia/Tokyo'
+  become: true

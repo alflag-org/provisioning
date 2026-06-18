@@ -1,0 +1,19 @@
+---
+- name: Check active swap files
+  ansible.builtin.command: swapon --show=NAME --noheadings --raw
+  register: foundation_vm_swap_active_files
+  changed_when: false
+  check_mode: false
+
+- name: Check if VM swap file exists
+  ansible.builtin.stat:
+    path: "{{ foundation_vm_swap_file_path }}"
+  register: foundation_vm_swap_file
+
+- name: Set VM swap active fact
+  ansible.builtin.set_fact:
+    foundation_vm_swap_is_active: "{{ foundation_vm_swap_file_path in (foundation_vm_swap_active_files.stdout_lines | default([])) }}"
+
+- name: Set VM swap existing size fact
+  ansible.builtin.set_fact:
+    foundation_vm_swap_existing_size_mb: "{{ (foundation_vm_swap_file.stat.size / 1024 / 1024) | int if foundation_vm_swap_file.stat.exists else 0 }}"

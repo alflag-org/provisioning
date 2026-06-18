@@ -1,0 +1,9 @@
+---
+- name: Ensure operator repos directory exists
+  ansible.builtin.file:
+    path: "{{ foundation_operator_home }}/repos"
+    state: directory
+    owner: "{{ foundation_operator_user }}"
+    group: "{{ foundation_operator_group }}"
+    mode: "0755"
+  become: "{{ foundation_lxc_become_root }}"

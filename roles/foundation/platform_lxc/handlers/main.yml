@@ -1,0 +1,7 @@
+---
+- name: Restart LXC unattended-upgrades
+  ansible.builtin.systemd_service:
+    name: unattended-upgrades
+    state: restarted
+    enabled: true
+  become: "{{ foundation_lxc_become_root }}"

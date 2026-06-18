@@ -1,9 +1,0 @@
----
-- name: Copy operator .ssh/config
-  ansible.builtin.copy:
-    src: ./root/.ssh/config
-    dest: "{{ common_operator_home }}/.ssh/config"
-    owner: "{{ common_operator_user }}"
-    group: "{{ common_operator_group }}"
-    mode: 0644
-  become: true

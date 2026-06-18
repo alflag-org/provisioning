@@ -1,0 +1,23 @@
+---
+- name: Check VM swap file
+  ansible.builtin.include_tasks:
+    file: swap_check.yml
+
+- name: Disable mismatched VM swap file
+  ansible.builtin.include_tasks:
+    file: swap_disable.yml
+  when:
+    - foundation_vm_swap_existing_size_mb | int != 0
+    - foundation_vm_swap_existing_size_mb | int != foundation_vm_swap_file_size_mb | int
+
+- name: Re-check VM swap file after disable
+  ansible.builtin.include_tasks:
+    file: swap_check.yml
+  when:
+    - foundation_vm_swap_existing_size_mb | int != 0
+    - foundation_vm_swap_existing_size_mb | int != foundation_vm_swap_file_size_mb | int
+
+- name: Enable VM swap file
+  ansible.builtin.include_tasks:
+    file: swap_enable.yml
+  when: foundation_vm_swap_existing_size_mb | int != foundation_vm_swap_file_size_mb | int

@@ -1,12 +1,29 @@
 ---
-- name: Apply LXC platform foundation role  # noqa role-name[path]
+- name: Ensure LXC operator account
   ansible.builtin.include_role:
-    name: common/lxc
-  vars:
-    skip_locale: "{{ foundation_lxc_skip_locale }}"  # noqa var-naming[no-role-prefix]
-    skip_unattended_upgrades: "{{ foundation_lxc_skip_unattended_upgrades }}"  # noqa var-naming[no-role-prefix]
-    skip_zabbix_package: "{{ foundation_lxc_skip_zabbix_package }}"  # noqa var-naming[no-role-prefix]
-    skip_zabbix_agent: "{{ foundation_lxc_skip_zabbix_agent }}"  # noqa var-naming[no-role-prefix]
-    skip_home: "{{ foundation_lxc_skip_home }}"  # noqa var-naming[no-role-prefix]
-    skip_secrets: "{{ foundation_lxc_skip_secrets }}"  # noqa var-naming[no-role-prefix]
-    skip_ssh: "{{ foundation_lxc_skip_ssh }}"  # noqa var-naming[no-role-prefix]
+    name: foundation/operator
+    public: true
+
+- name: Configure LXC locale
+  ansible.builtin.include_tasks:
+    file: locale.yml
+  when: not foundation_lxc_skip_locale | bool
+
+- name: Install LXC base packages
+  ansible.builtin.include_tasks:
+    file: packages.yml
+
+- name: Configure LXC unattended upgrades
+  ansible.builtin.include_tasks:
+    file: unattended_upgrades.yml
+  when: not foundation_lxc_skip_unattended_upgrades | bool
+
+- name: Prepare LXC operator home
+  ansible.builtin.include_tasks:
+    file: home.yml
+  when: not foundation_lxc_skip_home | bool
+
+- name: Sync LXC operator secrets
+  ansible.builtin.include_tasks:
+    file: secrets.yml
+  when: not foundation_lxc_skip_secrets | bool

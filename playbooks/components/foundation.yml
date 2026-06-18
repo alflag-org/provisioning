@@ -5,11 +5,13 @@
 
   roles:
     - role: foundation/baseline  # noqa role-name[path]
-    - role: ssh_server
-      when: ssh_server_enabled | default(false)
-    - role: systemd_resolved
-      when: systemd_resolved_enabled | default(false)
     - role: foundation/platform_vm  # noqa role-name[path]
       when: "'platform_vm' in group_names"
     - role: foundation/platform_lxc  # noqa role-name[path]
       when: "'platform_lxc' in group_names"
+    - role: ssh_server
+      when: ssh_server_enabled | default(false)
+    - role: systemd_resolved
+      when: systemd_resolved_enabled | default(false)
+    - role: zabbix_agent
+      when: zabbix_agent_enabled | default(false)

@@ -1,9 +1,34 @@
 ---
-- name: Apply VM platform foundation role  # noqa role-name[path]
+- name: Set VM hostname
+  ansible.builtin.include_tasks:
+    file: hostname.yml
+
+- name: Configure VM timezone
+  ansible.builtin.include_tasks:
+    file: timezone.yml
+
+- name: Configure VM locale
+  ansible.builtin.include_tasks:
+    file: locale.yml
+
+- name: Install VM base packages
+  ansible.builtin.include_tasks:
+    file: packages.yml
+
+- name: Ensure VM operator account
   ansible.builtin.include_role:
-    name: common/vm
-  vars:
-    skip_systemd_resolved: "{{ foundation_vm_skip_systemd_resolved }}"  # noqa var-naming[no-role-prefix]
-    skip_swap: "{{ foundation_vm_skip_swap }}"  # noqa var-naming[no-role-prefix]
-    skip_unattended_upgrades: "{{ foundation_vm_skip_unattended_upgrades }}"  # noqa var-naming[no-role-prefix]
-    skip_zabbix_agent: "{{ foundation_vm_skip_zabbix_agent }}"  # noqa var-naming[no-role-prefix]
+    name: foundation/operator
+
+- name: Configure VM swap policy
+  ansible.builtin.include_tasks:
+    file: swap.yml
+  when:
+    - not foundation_vm_skip_swap | bool
+    - ansible_facts.get('virtualization_type', '') != 'lxc'
+
+- name: Configure VM unattended upgrades
+  ansible.builtin.include_tasks:
+    file: unattended_upgrades.yml
+  when:
+    - not foundation_vm_skip_unattended_upgrades | bool
+    - ansible_facts.get('virtualization_type', '') != 'lxc'

@@ -1,8 +1,11 @@
 ---
+foundation_lxc_packages:
+  - git
+  - python3
+foundation_lxc_become_root: "{{ ansible_user != 'root' }}"
+foundation_lxc_secrets_source: "{{ lookup('env', 'HOME') ~ '/secrets' }}"
+foundation_lxc_secrets_required: false
 foundation_lxc_skip_locale: false
 foundation_lxc_skip_unattended_upgrades: false
-foundation_lxc_skip_zabbix_package: false
-foundation_lxc_skip_zabbix_agent: false
 foundation_lxc_skip_home: false
 foundation_lxc_skip_secrets: false
-foundation_lxc_skip_ssh: false

@@ -1,0 +1,12 @@
+---
+- name: Disable VM swap file
+  ansible.builtin.command: swapoff "{{ foundation_vm_swap_file_path }}"
+  become: true
+  changed_when: true
+  when: foundation_vm_swap_is_active | bool
+
+- name: Remove VM swap file
+  ansible.builtin.file:
+    path: "{{ foundation_vm_swap_file_path }}"
+    state: absent
+  become: true

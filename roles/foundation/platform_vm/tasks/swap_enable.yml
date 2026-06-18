@@ -1,0 +1,42 @@
+---
+- name: Create VM swap file
+  ansible.builtin.command:
+    cmd: dd if=/dev/zero of="{{ foundation_vm_swap_file_path }}" bs=1M count={{ foundation_vm_swap_file_size_mb | int }}
+    creates: "{{ foundation_vm_swap_file_path }}"
+  become: true
+  when: not foundation_vm_swap_file.stat.exists
+
+- name: Set VM swap file permissions
+  ansible.builtin.file:
+    path: "{{ foundation_vm_swap_file_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  when:
+    - not foundation_vm_swap_file.stat.exists
+    - not ansible_check_mode
+
+- name: Make VM swap file
+  ansible.builtin.command: mkswap "{{ foundation_vm_swap_file_path }}"
+  become: true
+  changed_when: true
+  when:
+    - not foundation_vm_swap_file.stat.exists
+    - not ansible_check_mode
+
+- name: Persist VM swap file in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ foundation_vm_swap_file_path | regex_escape() }}\\s+"
+    line: "{{ foundation_vm_swap_file_path }} none swap sw 0 0"
+    state: present
+  become: true
+
+- name: Enable VM swap file
+  ansible.builtin.command: swapon "{{ foundation_vm_swap_file_path }}"
+  become: true
+  changed_when: true
+  when:
+    - not foundation_vm_swap_file.stat.exists
+    - not ansible_check_mode

@@ -1,9 +1,0 @@
----
-- name: mkdir ~/repos
-  ansible.builtin.file:
-    path: "{{ common_operator_home }}/repos"
-    state: directory
-    owner: "{{ common_operator_user }}"
-    group: "{{ common_operator_group }}"
-    mode: "0755"
-  become: true

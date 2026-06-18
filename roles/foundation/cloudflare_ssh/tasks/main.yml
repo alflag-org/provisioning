@@ -1,6 +1,20 @@
 ---
-- name: Apply Cloudflare SSH foundation role  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: common/cloudflare-ssh
-  vars:
-    skip_sshd: "{{ foundation_cloudflare_ssh_skip_sshd }}"  # noqa var-naming[no-role-prefix]
+- name: Install Cloudflare SSH sshd drop-in
+  ansible.builtin.copy:
+    src: ./etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
+    dest: /etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Cloudflare SSH sshd
+  when: not foundation_cloudflare_ssh_skip_sshd | bool
+
+- name: Install Cloudflare SSH CA
+  ansible.builtin.copy:
+    src: ./etc/ssh/ca.pub
+    dest: /etc/ssh/ca.pub
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Cloudflare SSH sshd
+  when: not foundation_cloudflare_ssh_skip_sshd | bool

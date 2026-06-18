@@ -1,0 +1,14 @@
+---
+foundation_operator_user: ops
+foundation_operator_group: "{{ foundation_operator_user }}"
+foundation_operator_home: "/home/{{ foundation_operator_user }}"
+foundation_operator_shell: /bin/bash
+foundation_operator_groups:
+  - sudo
+foundation_operator_authorized_key_files:
+  - "{{ lookup('env', 'HOME') ~ '/.ssh/infra.pub' }}"
+foundation_operator_sudoers_path: "/etc/sudoers.d/90-{{ foundation_operator_user }}"
+foundation_operator_sudoers_content: "{{ foundation_operator_user }} ALL=(ALL) NOPASSWD:ALL"
+foundation_operator_manage_authorized_keys: true
+foundation_operator_manage_sudoers: true
+foundation_operator_become_root: "{{ ansible_user != 'root' }}"

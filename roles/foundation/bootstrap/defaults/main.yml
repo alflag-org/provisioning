@@ -1,0 +1,2 @@
+---
+foundation_bootstrap_platform: "{{ 'lxc' if ansible_facts.get('virtualization_type', '') == 'lxc' else 'vm' }}"

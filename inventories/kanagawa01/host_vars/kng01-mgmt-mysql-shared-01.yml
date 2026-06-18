@@ -27,6 +27,4 @@ systemd_resolved_domains:
 
 ssh_server_enabled: true
 systemd_resolved_enabled: true
-foundation_vm_skip_systemd_resolved: true
-foundation_vm_skip_zabbix_agent: true
 zabbix_agent_enabled: true

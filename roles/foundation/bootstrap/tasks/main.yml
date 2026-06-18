@@ -1,4 +1,18 @@
 ---
-- name: Apply bootstrap foundation role  # noqa role-name[path]
+- name: Validate bootstrap platform
+  ansible.builtin.assert:
+    that:
+      - foundation_bootstrap_platform in ['vm', 'lxc']
+    fail_msg: >-
+      Unsupported foundation_bootstrap_platform={{ foundation_bootstrap_platform }}.
+      Expected one of: vm, lxc.
+
+- name: Bootstrap VM host  # noqa role-name[path]
   ansible.builtin.include_role:
-    name: common/bootstrap
+    name: foundation/platform_vm
+  when: foundation_bootstrap_platform == 'vm'
+
+- name: Bootstrap LXC host  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: foundation/platform_lxc
+  when: foundation_bootstrap_platform == 'lxc'
