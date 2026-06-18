@@ -15,3 +15,20 @@ server:
 {% for cidr in dns_recursor_allowed_cidrs | unique %}
   access-control: {{ cidr }} allow
 {% endfor %}
+
+{% for zone in dns_recursor_stub_zones %}
+stub-zone:
+  name: "{{ zone.name }}"
+{% for server in zone.servers %}
+  stub-addr: {{ server }}
+{% endfor %}
+
+{% endfor %}
+{% for zone in dns_recursor_forward_zones %}
+forward-zone:
+  name: "{{ zone.name }}"
+{% for server in zone.servers %}
+  forward-addr: {{ server }}
+{% endfor %}
+
+{% endfor %}

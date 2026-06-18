@@ -1,0 +1,5 @@
+---
+dns_authoritative_enabled: true
+dns_authoritative_zones:
+  - name: alflag.internal
+    file: /etc/nsd/zones/alflag.internal.zone

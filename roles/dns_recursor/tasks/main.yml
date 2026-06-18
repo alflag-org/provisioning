@@ -70,3 +70,16 @@
   when:
     - dns_recursor_enabled | bool
     - not ansible_check_mode
+
+- name: Validate configured recursive DNS lookups
+  ansible.builtin.command:
+    cmd: "dig +time=2 +tries=1 +short {{ item.name }} {{ item.type | default('A') }} @127.0.0.1"
+  loop: "{{ dns_recursor_validation_queries }}"
+  register: dns_recursor_configured_lookup
+  changed_when: false
+  failed_when:
+    - dns_recursor_configured_lookup.rc != 0 or dns_recursor_configured_lookup.stdout | trim | length == 0
+  when:
+    - dns_recursor_enabled | bool
+    - dns_recursor_validation_queries | length > 0
+    - not ansible_check_mode

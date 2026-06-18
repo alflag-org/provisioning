@@ -1,0 +1,14 @@
+---
+dns_recursor_enabled: true
+dns_recursor_allowed_cidrs:
+  - 10.10.0.0/24
+  - 10.10.10.0/24
+  - 10.10.30.0/24
+dns_recursor_stub_zones:
+  - name: alflag.internal
+    servers:
+      - 10.10.10.242
+      - 10.10.10.243
+dns_recursor_validation_queries:
+  - name: alflag.internal
+    type: SOA

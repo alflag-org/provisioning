@@ -28,6 +28,30 @@
     mode: "0755"
   when: dns_authoritative_enabled | bool
 
+- name: Check manual authoritative DNS zone files
+  ansible.builtin.stat:
+    path: "{{ item.file | default(dns_authoritative_zone_dir ~ '/' ~ item.name ~ '.zone') }}"
+  loop: "{{ dns_authoritative_zones }}"
+  register: dns_authoritative_zone_file_stats
+  when:
+    - dns_authoritative_enabled | bool
+    - item.text is not defined
+    - not ansible_check_mode
+
+- name: Require manual authoritative DNS zone files
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      Authoritative DNS zone file is not managed by Daedalus and is missing on
+      {{ inventory_hostname }}: {{ item.stat.path }}. Place the zone file manually
+      or provide explicit zone text in dns_authoritative_zones.
+  loop: "{{ dns_authoritative_zone_file_stats.results | default([]) }}"
+  when:
+    - dns_authoritative_enabled | bool
+    - item.stat is defined
+    - not ansible_check_mode
+
 - name: Render authoritative DNS zones from explicit text
   ansible.builtin.copy:
     content: "{{ item.text }}"
@@ -60,6 +84,16 @@
   changed_when: false
   when:
     - dns_authoritative_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate authoritative DNS zones
+  ansible.builtin.command:
+    cmd: "nsd-checkzone {{ item.name }} {{ item.file | default(dns_authoritative_zone_dir ~ '/' ~ item.name ~ '.zone') }}"
+  loop: "{{ dns_authoritative_zones }}"
+  changed_when: false
+  when:
+    - dns_authoritative_enabled | bool
+    - dns_authoritative_zones | length > 0
     - not ansible_check_mode
 
 - name: Enable and start NSD when zones are configured

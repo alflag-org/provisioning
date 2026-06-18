@@ -2,6 +2,23 @@
 ansible_user: root
 ansible_become: false
 
+hostname: kng01-mgmt-recdns-02
+site: kng01
+zone: mgmt
+role: dns_recursive
+virtualization_type: lxc
+os_distribution: Ubuntu
+os_version: "26.04"
+
+network_address: 10.10.10.241/24
+network_ipv4_address: 10.10.10.241
+network_prefix_length: 24
+network_gateway: 10.10.10.1
+network_dns_resolvers:
+  - 10.10.10.240
+  - 10.10.10.241
+network_primary_fqdn: kng01-mgmt-recdns-02.srv.alflag.internal
+
 dns_recursor_enabled: true
 dns_recursor_listen_addresses:
   - "127.0.0.1"
