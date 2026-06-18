@@ -1,26 +1,21 @@
 ---
 - name: Validate managed Zabbix service inputs  # noqa role-name[path]
   ansible.builtin.include_role:
-    name: middleware/zabbix-server
+    name: components/zabbix_server
     tasks_from: preflight
   when: zabbix_server_installation_managed | default(false)
 
-- name: Apply Zabbix agent role
-  ansible.builtin.include_role:
-    name: zabbix_agent
-  when: zabbix_agent_enabled | default(false)
-
 - name: Apply local MySQL for managed Zabbix  # noqa role-name[path]
   ansible.builtin.include_role:
-    name: middleware/mysql-server
+    name: components/mysql_server
   when: zabbix_server_installation_managed | default(false)
 
 - name: Apply Caddy for managed Zabbix  # noqa role-name[path]
   ansible.builtin.include_role:
-    name: middleware/caddy
+    name: components/caddy
   when: zabbix_server_installation_managed | default(false)
 
 - name: Apply managed Zabbix server  # noqa role-name[path]
   ansible.builtin.include_role:
-    name: middleware/zabbix-server
+    name: components/zabbix_server
   when: zabbix_server_installation_managed | default(false)
