@@ -4,3 +4,6 @@
 
 - name: Converge web origin services
   ansible.builtin.import_playbook: services/web.yml
+
+- name: Converge monitoring services
+  ansible.builtin.import_playbook: services/monitoring.yml

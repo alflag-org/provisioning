@@ -1,0 +1,21 @@
+---
+grafana_enabled: false
+grafana_prerequisite_packages:
+  - ca-certificates
+  - python3-debian
+grafana_package: grafana
+grafana_service_name: grafana-server
+grafana_repository_name: grafana
+grafana_repository_uris:
+  - https://apt.grafana.com
+grafana_repository_suites:
+  - stable
+grafana_repository_components:
+  - main
+grafana_repository_signed_by: https://apt.grafana.com/gpg-full.key
+grafana_datasource_path: /etc/grafana/provisioning/datasources/prometheus.yml
+grafana_dashboard_provider_path: /etc/grafana/provisioning/dashboards/daedalus.yml
+grafana_dashboard_dir: /var/lib/grafana/dashboards
+grafana_dashboard_path: /var/lib/grafana/dashboards/kanagawa01-overview.json
+grafana_prometheus_url: http://127.0.0.1:9090
+grafana_port: 3000

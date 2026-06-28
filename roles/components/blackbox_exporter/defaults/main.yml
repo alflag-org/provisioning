@@ -1,0 +1,7 @@
+---
+blackbox_exporter_enabled: false
+blackbox_exporter_package: prometheus-blackbox-exporter
+blackbox_exporter_service_name: prometheus-blackbox-exporter
+blackbox_exporter_config_dir: /etc/prometheus
+blackbox_exporter_config_path: /etc/prometheus/blackbox.yml
+blackbox_exporter_port: 9115

@@ -1,0 +1,79 @@
+---
+- name: Install Prometheus
+  ansible.builtin.apt:
+    name: "{{ prometheus_package }}"
+    state: present
+    update_cache: true
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Ensure Prometheus directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+  loop:
+    - "{{ prometheus_config_dir }}"
+    - "{{ prometheus_rules_dir }}"
+    - "{{ prometheus_file_sd_dir }}"
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Check Prometheus config directory
+  ansible.builtin.stat:
+    path: "{{ prometheus_config_dir }}"
+  register: prometheus_config_dir_stat
+  when: prometheus_enabled | bool
+
+- name: Check Prometheus rules directory
+  ansible.builtin.stat:
+    path: "{{ prometheus_rules_dir }}"
+  register: prometheus_rules_dir_stat
+  when: prometheus_enabled | bool
+
+- name: Render Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ prometheus_config_path }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  notify: Restart Prometheus
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode or prometheus_config_dir_stat.stat.isdir | default(false)
+
+- name: Render Prometheus alert rules
+  ansible.builtin.template:
+    src: alerts.yml.j2
+    dest: "{{ prometheus_rules_dir }}/kanagawa01.yml"
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  notify: Restart Prometheus
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode or prometheus_rules_dir_stat.stat.isdir | default(false)
+
+- name: Enable and start Prometheus
+  ansible.builtin.service:
+    name: "{{ prometheus_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate Prometheus port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ prometheus_port }}"
+    timeout: 10
+    state: started
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode

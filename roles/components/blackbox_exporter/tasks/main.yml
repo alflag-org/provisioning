@@ -1,0 +1,57 @@
+---
+- name: Install blackbox exporter
+  ansible.builtin.apt:
+    name: "{{ blackbox_exporter_package }}"
+    state: present
+    update_cache: true
+  when:
+    - blackbox_exporter_enabled | bool
+    - not ansible_check_mode
+
+- name: Ensure blackbox exporter config directory exists
+  ansible.builtin.file:
+    path: "{{ blackbox_exporter_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - blackbox_exporter_enabled | bool
+    - not ansible_check_mode
+
+- name: Check blackbox exporter config directory
+  ansible.builtin.stat:
+    path: "{{ blackbox_exporter_config_dir }}"
+  register: blackbox_exporter_config_dir_stat
+  when: blackbox_exporter_enabled | bool
+
+- name: Render blackbox exporter configuration
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ blackbox_exporter_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart blackbox exporter
+  when:
+    - blackbox_exporter_enabled | bool
+    - not ansible_check_mode or blackbox_exporter_config_dir_stat.stat.isdir | default(false)
+
+- name: Enable and start blackbox exporter
+  ansible.builtin.service:
+    name: "{{ blackbox_exporter_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - blackbox_exporter_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate blackbox exporter port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ blackbox_exporter_port }}"
+    timeout: 10
+    state: started
+  when:
+    - blackbox_exporter_enabled | bool
+    - not ansible_check_mode

@@ -1,0 +1,57 @@
+---
+- name: Install Alertmanager
+  ansible.builtin.apt:
+    name: "{{ alertmanager_package }}"
+    state: present
+    update_cache: true
+  when:
+    - alertmanager_enabled | bool
+    - not ansible_check_mode
+
+- name: Ensure Alertmanager config directory exists
+  ansible.builtin.file:
+    path: "{{ alertmanager_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - alertmanager_enabled | bool
+    - not ansible_check_mode
+
+- name: Check Alertmanager config directory
+  ansible.builtin.stat:
+    path: "{{ alertmanager_config_dir }}"
+  register: alertmanager_config_dir_stat
+  when: alertmanager_enabled | bool
+
+- name: Render Alertmanager configuration
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ alertmanager_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Alertmanager
+  when:
+    - alertmanager_enabled | bool
+    - not ansible_check_mode or alertmanager_config_dir_stat.stat.isdir | default(false)
+
+- name: Enable and start Alertmanager
+  ansible.builtin.service:
+    name: "{{ alertmanager_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - alertmanager_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate Alertmanager port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ alertmanager_port }}"
+    timeout: 10
+    state: started
+  when:
+    - alertmanager_enabled | bool
+    - not ansible_check_mode
