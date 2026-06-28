@@ -9,10 +9,14 @@ dns_recursor_stub_zones:
     servers:
       - 10.10.10.242
       - 10.10.10.243
+  - name: access.internal
+    servers:
+      - 10.10.10.242
+      - 10.10.10.243
 dns_recursor_validation_queries:
   - name: alflag.internal
     type: SOA
-  - name: monitor01.alflag.internal
+  - name: mgmt-monitor-01.srv.alflag.internal
     type: A
-  - name: web01.alflag.internal
+  - name: web.access.internal
     type: A

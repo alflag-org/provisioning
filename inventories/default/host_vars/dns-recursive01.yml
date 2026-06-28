@@ -16,7 +16,7 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: dns-recursive01.srv.alflag.internal
+network_primary_fqdn: mgmt-recdns-01.srv.alflag.internal
 
 dns_recursor_enabled: true
 dns_recursor_listen_addresses:

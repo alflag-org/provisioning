@@ -13,13 +13,14 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: workbench01.srv.alflag.internal
+network_primary_fqdn: mgmt-workbench-01.srv.alflag.internal
 
 systemd_resolved_dns:
   - 10.10.10.240
   - 10.10.10.241
 systemd_resolved_domains:
   - srv.alflag.internal
+  - access.internal
 
 ssh_server_enabled: true
 ssh_server_allow_tcp_forwarding: local
