@@ -9,10 +9,14 @@
     state: stopped
     enabled: false
   loop: "{{ retired_monitoring_cleanup_services }}"
+  vars:
+    retired_monitoring_cleanup_service: >-
+      {{ ansible_facts.services.get(item ~ '.service', {}) }}
   when:
     - retired_monitoring_cleanup_enabled | bool
     - not ansible_check_mode
-    - ansible_facts.services.get(item ~ '.service', {}) | length > 0
+    - retired_monitoring_cleanup_service | length > 0
+    - retired_monitoring_cleanup_service.status | default('') != 'not-found'
 
 - name: Purge retired monitoring packages
   ansible.builtin.apt:
