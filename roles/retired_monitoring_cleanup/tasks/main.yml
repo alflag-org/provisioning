@@ -1,0 +1,30 @@
+---
+- name: Gather service facts for retired monitoring cleanup
+  ansible.builtin.service_facts:
+  when: retired_monitoring_cleanup_enabled | bool
+
+- name: Stop retired monitoring services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ retired_monitoring_cleanup_services }}"
+  when:
+    - retired_monitoring_cleanup_enabled | bool
+    - not ansible_check_mode
+    - ansible_facts.services.get(item ~ '.service', {}) | length > 0
+
+- name: Purge retired monitoring packages
+  ansible.builtin.apt:
+    name: "{{ retired_monitoring_cleanup_packages }}"
+    state: absent
+    purge: true
+    autoremove: true
+  when: retired_monitoring_cleanup_enabled | bool
+
+- name: Remove retired monitoring paths
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ retired_monitoring_cleanup_paths }}"
+  when: retired_monitoring_cleanup_enabled | bool
