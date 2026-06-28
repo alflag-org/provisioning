@@ -13,5 +13,3 @@
       when: ssh_server_enabled | default(false)
     - role: systemd_resolved
       when: systemd_resolved_enabled | default(false)
-    - role: zabbix_agent
-      when: zabbix_agent_enabled | default(false)

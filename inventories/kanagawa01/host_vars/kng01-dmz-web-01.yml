@@ -15,4 +15,3 @@ services_web_origin_listen_address: 127.0.0.1
 services_web_origin_port: 8080
 services_web_origin_server_name: kng01-dmz-web-01
 
-zabbix_agent_enabled: true

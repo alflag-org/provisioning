@@ -4,9 +4,3 @@
 
 - name: Converge web origin services
   ansible.builtin.import_playbook: services/web.yml
-
-- name: Converge shared MySQL data services
-  ansible.builtin.import_playbook: services/mysql.yml
-
-- name: Converge Zabbix services
-  ansible.builtin.import_playbook: services/zabbix.yml
