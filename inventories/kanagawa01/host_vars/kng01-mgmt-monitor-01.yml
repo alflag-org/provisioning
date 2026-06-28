@@ -1,8 +1,8 @@
 ---
-hostname: kng01-mgmt-zabbix-01
+hostname: kng01-mgmt-monitor-01
 site: kng01
 zone: mgmt
-role: zabbix
+role: monitor
 virtualization_type: vm
 os_distribution: Ubuntu
 os_version: "26.04"
@@ -14,9 +14,12 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: kng01-mgmt-zabbix-01.srv.alflag.internal
+network_primary_fqdn: kng01-mgmt-monitor-01.srv.alflag.internal
 network_service_aliases:
-  - zabbix.alflag.internal
+  - monitor.srv.alflag.internal
+  - prometheus.srv.alflag.internal
+  - grafana.srv.alflag.internal
+  - alertmanager.srv.alflag.internal
 
 systemd_resolved_dns:
   - 10.10.10.240
@@ -26,7 +29,11 @@ systemd_resolved_domains:
 
 ssh_server_enabled: true
 systemd_resolved_enabled: true
-zabbix_agent_enabled: true
-zabbix_server: "127.0.0.1,10.10.10.250"
-zabbix_server_active: "10.10.10.250"
-zabbix_hostname: "kng01-mgmt-zabbix-01"
+
+node_exporter_enabled: true
+
+monitoring_stack_enabled: true
+prometheus_enabled: true
+alertmanager_enabled: true
+grafana_enabled: true
+blackbox_exporter_enabled: true

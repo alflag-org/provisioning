@@ -4,3 +4,8 @@ site_short_name: kng01
 
 ansible_user: ops
 ansible_become: true
+
+monitoring_enabled: true
+node_exporter_enabled: true
+node_exporter_listen_address: 0.0.0.0
+node_exporter_listen_port: 9100
