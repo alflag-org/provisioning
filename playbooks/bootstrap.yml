@@ -1,6 +1,6 @@
 ---
 - name: Bootstrap new hosts for configuration management
-  hosts: kanagawa01
+  hosts: topmost01
   gather_facts: true
 
   roles:

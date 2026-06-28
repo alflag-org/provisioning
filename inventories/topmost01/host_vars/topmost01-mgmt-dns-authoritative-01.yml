@@ -2,25 +2,25 @@
 ansible_user: root
 ansible_become: false
 
-hostname: kng01-mgmt-authdns-02
-site: kng01
+hostname: topmost01-mgmt-dns-authoritative-01
+site: topmost01
 zone: mgmt
 role: dns_authoritative
 virtualization_type: lxc
 os_distribution: Ubuntu
 os_version: "26.04"
 
-network_address: 10.10.10.243/24
-network_ipv4_address: 10.10.10.243
+network_address: 10.10.10.242/24
+network_ipv4_address: 10.10.10.242
 network_prefix_length: 24
 network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: kng01-mgmt-authdns-02.srv.alflag.internal
+network_primary_fqdn: topmost01-mgmt-dns-authoritative-01.srv.alflag.internal
 
 dns_authoritative_enabled: true
 dns_authoritative_listen_addresses:
   - "127.0.0.1"
-  - "10.10.10.243"
+  - "10.10.10.242"
 zabbix_agent_enabled: true

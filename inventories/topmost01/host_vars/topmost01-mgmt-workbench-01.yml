@@ -1,6 +1,6 @@
 ---
-hostname: kng01-mgmt-workbench-01
-site: kng01
+hostname: topmost01-mgmt-workbench-01
+site: topmost01
 zone: mgmt
 role: workbench
 virtualization_type: vm
@@ -14,7 +14,7 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: kng01-mgmt-workbench-01.srv.alflag.internal
+network_primary_fqdn: topmost01-mgmt-workbench-01.srv.alflag.internal
 
 systemd_resolved_dns:
   - 10.10.10.240

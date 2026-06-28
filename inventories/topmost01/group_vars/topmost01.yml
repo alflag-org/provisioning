@@ -1,0 +1,6 @@
+---
+site_name: topmost01
+site_short_name: topmost01
+
+ansible_user: ops
+ansible_become: true
