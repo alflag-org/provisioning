@@ -8,7 +8,18 @@
     - prometheus_enabled | bool
     - not ansible_check_mode
 
-- name: Ensure Prometheus directories exist
+- name: Ensure Prometheus config directory exists
+  ansible.builtin.file:
+    path: "{{ prometheus_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Ensure Prometheus owned directories exist
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -16,7 +27,6 @@
     group: prometheus
     mode: "0755"
   loop:
-    - "{{ prometheus_config_dir }}"
     - "{{ prometheus_rules_dir }}"
     - "{{ prometheus_file_sd_dir }}"
   when:
