@@ -19,3 +19,5 @@ grafana_dashboard_dir: /var/lib/grafana/dashboards
 grafana_dashboard_path: /var/lib/grafana/dashboards/topmost01-overview.json
 grafana_prometheus_url: http://127.0.0.1:9090
 grafana_port: 3000
+grafana_port_validation_host: 127.0.0.1
+grafana_port_validation_timeout: 120

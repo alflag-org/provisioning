@@ -109,11 +109,15 @@
     - grafana_enabled | bool
     - not ansible_check_mode
 
+- name: Apply pending Grafana handlers
+  ansible.builtin.meta: flush_handlers
+  when: grafana_enabled | bool
+
 - name: Validate Grafana port
   ansible.builtin.wait_for:
-    host: 127.0.0.1
+    host: "{{ grafana_port_validation_host }}"
     port: "{{ grafana_port }}"
-    timeout: 10
+    timeout: "{{ grafana_port_validation_timeout }}"
     state: started
   when:
     - grafana_enabled | bool
