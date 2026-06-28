@@ -1,4 +1,0 @@
----
-- name: Manage Zabbix database schema
-  ansible.builtin.include_tasks:
-    file: mysql_schema.yml

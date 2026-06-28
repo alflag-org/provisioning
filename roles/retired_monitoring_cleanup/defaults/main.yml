@@ -1,0 +1,23 @@
+---
+retired_monitoring_cleanup_enabled: false
+retired_monitoring_cleanup_services:
+  - zabbix-agent2
+  - zabbix-agent
+  - zabbix-server
+retired_monitoring_cleanup_packages:
+  - zabbix-agent2
+  - zabbix-agent
+  - zabbix-server-mysql
+  - zabbix-frontend-php
+  - zabbix-sql-scripts
+  - zabbix-release
+retired_monitoring_cleanup_paths:
+  - /etc/zabbix
+  - /var/lib/zabbix
+  - /var/log/zabbix
+  - /usr/share/zabbix
+  - /etc/nginx/conf.d/zabbix.conf
+  - /etc/apt/sources.list.d/zabbix.list
+  - /etc/apt/sources.list.d/zabbix.sources
+  - /etc/apt/trusted.gpg.d/zabbix-official-repo.gpg
+  - /usr/share/keyrings/zabbix-official-repo.gpg

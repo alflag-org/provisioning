@@ -4,4 +4,3 @@ ansible_become: false
 
 ssh_server_enabled: true
 cloudflare_ssh_enabled: true
-zabbix_agent_enabled: true

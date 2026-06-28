@@ -1,0 +1,6 @@
+---
+- name: Restart Grafana
+  ansible.builtin.service:
+    name: "{{ grafana_service_name }}"
+    state: restarted
+  when: not ansible_check_mode

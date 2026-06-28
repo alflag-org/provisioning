@@ -1,0 +1,11 @@
+# Managed by Daedalus.
+apiVersion: 1
+providers:
+  - name: Daedalus
+    orgId: 1
+    folder: Daedalus
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: {{ grafana_dashboard_dir }}

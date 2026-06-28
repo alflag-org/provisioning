@@ -1,7 +1,0 @@
----
-- name: Converge Zabbix service hosts
-  hosts: svc_zabbix
-  gather_facts: true
-
-  roles:
-    - role: services/zabbix  # noqa role-name[path]

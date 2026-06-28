@@ -1,0 +1,2 @@
+# Managed by Daedalus.
+ARGS="--web.listen-address={{ node_exporter_listen_address }}:{{ node_exporter_listen_port }}{% for arg in node_exporter_extra_args %} {{ arg }}{% endfor %}"

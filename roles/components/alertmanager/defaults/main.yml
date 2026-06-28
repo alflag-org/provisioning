@@ -1,0 +1,7 @@
+---
+alertmanager_enabled: false
+alertmanager_package: prometheus-alertmanager
+alertmanager_service_name: prometheus-alertmanager
+alertmanager_config_dir: /etc/prometheus
+alertmanager_config_path: /etc/prometheus/alertmanager.yml
+alertmanager_port: 9093

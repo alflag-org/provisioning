@@ -1,0 +1,120 @@
+---
+- name: Install Grafana repository prerequisites
+  ansible.builtin.apt:
+    name: "{{ grafana_prerequisite_packages }}"
+    state: present
+    update_cache: true
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode
+
+- name: Add Grafana repository
+  ansible.builtin.deb822_repository:
+    name: "{{ grafana_repository_name }}"
+    types:
+      - deb
+    uris: "{{ grafana_repository_uris }}"
+    suites: "{{ grafana_repository_suites }}"
+    components: "{{ grafana_repository_components }}"
+    signed_by: "{{ grafana_repository_signed_by }}"
+    state: present
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode
+
+- name: Install Grafana
+  ansible.builtin.apt:
+    name: "{{ grafana_package }}"
+    state: present
+    update_cache: true
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode
+
+- name: Ensure Grafana provisioning directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+  loop:
+    - "{{ grafana_datasource_path | dirname }}"
+    - "{{ grafana_dashboard_provider_path | dirname }}"
+    - "{{ grafana_dashboard_dir }}"
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode
+
+- name: Check Grafana datasource directory
+  ansible.builtin.stat:
+    path: "{{ grafana_datasource_path | dirname }}"
+  register: grafana_datasource_dir_stat
+  when: grafana_enabled | bool
+
+- name: Check Grafana dashboard provider directory
+  ansible.builtin.stat:
+    path: "{{ grafana_dashboard_provider_path | dirname }}"
+  register: grafana_dashboard_provider_dir_stat
+  when: grafana_enabled | bool
+
+- name: Check Grafana dashboard directory
+  ansible.builtin.stat:
+    path: "{{ grafana_dashboard_dir }}"
+  register: grafana_dashboard_dir_stat
+  when: grafana_enabled | bool
+
+- name: Render Grafana Prometheus datasource
+  ansible.builtin.template:
+    src: prometheus-datasource.yml.j2
+    dest: "{{ grafana_datasource_path }}"
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: Restart Grafana
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode or grafana_datasource_dir_stat.stat.isdir | default(false)
+
+- name: Render Grafana dashboard provider
+  ansible.builtin.template:
+    src: dashboard-provider.yml.j2
+    dest: "{{ grafana_dashboard_provider_path }}"
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: Restart Grafana
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode or grafana_dashboard_provider_dir_stat.stat.isdir | default(false)
+
+- name: Render Grafana overview dashboard
+  ansible.builtin.template:
+    src: topmost01-overview.json.j2
+    dest: "{{ grafana_dashboard_path }}"
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: Restart Grafana
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode or grafana_dashboard_dir_stat.stat.isdir | default(false)
+
+- name: Enable and start Grafana
+  ansible.builtin.service:
+    name: "{{ grafana_service_name }}"
+    state: started
+    enabled: true
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate Grafana port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ grafana_port }}"
+    timeout: 10
+    state: started
+  when:
+    - grafana_enabled | bool
+    - not ansible_check_mode

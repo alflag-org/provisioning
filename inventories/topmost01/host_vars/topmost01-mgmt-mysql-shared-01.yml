@@ -27,4 +27,3 @@ systemd_resolved_domains:
 
 ssh_server_enabled: true
 systemd_resolved_enabled: true
-zabbix_agent_enabled: true

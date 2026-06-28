@@ -1,0 +1,6 @@
+---
+- name: Restart blackbox exporter
+  ansible.builtin.service:
+    name: "{{ blackbox_exporter_service_name }}"
+    state: restarted
+  when: not ansible_check_mode

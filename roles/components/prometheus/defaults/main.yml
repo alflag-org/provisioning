@@ -1,0 +1,13 @@
+---
+prometheus_enabled: false
+prometheus_package: prometheus
+prometheus_service_name: prometheus
+prometheus_config_dir: /etc/prometheus
+prometheus_config_path: /etc/prometheus/prometheus.yml
+prometheus_rules_dir: /etc/prometheus/rules
+prometheus_file_sd_dir: /var/lib/prometheus/file_sd
+prometheus_scrape_interval: 30s
+prometheus_evaluation_interval: 30s
+prometheus_listen_address: 127.0.0.1
+prometheus_port: 9090
+alertmanager_url: http://127.0.0.1:9093

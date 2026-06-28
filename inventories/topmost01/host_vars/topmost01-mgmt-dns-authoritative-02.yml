@@ -23,4 +23,3 @@ dns_authoritative_enabled: true
 dns_authoritative_listen_addresses:
   - "127.0.0.1"
   - "10.10.10.243"
-zabbix_agent_enabled: true

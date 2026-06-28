@@ -1,7 +1,6 @@
 ---
 mysql_service_intended_components:
   - mysql-server
-  - zabbix-agent2
 
 mysql_server_enabled: true
 mysql_server_bind_address: "{{ network_ipv4_address | default(ansible_host) }}"
