@@ -1,5 +1,135 @@
 ---
 dns_authoritative_enabled: true
+dns_authoritative_default_ttl: 300
 dns_authoritative_zones:
   - name: alflag.internal
     file: /etc/nsd/zones/alflag.internal.zone
+    managed: true
+    ttl: 300
+    serial: 2026062801
+    soa:
+      mname: dns-authoritative01.alflag.internal.
+      rname: hostmaster.alflag.internal.
+      refresh: 3600
+      retry: 900
+      expire: 604800
+      minimum: 300
+    ns:
+      - dns-authoritative01.alflag.internal.
+      - dns-authoritative02.alflag.internal.
+    records:
+      - name: dns-recursive01
+        type: A
+        value: 10.10.10.240
+      - name: dns-recursive02
+        type: A
+        value: 10.10.10.241
+      - name: dns-authoritative01
+        type: A
+        value: 10.10.10.242
+      - name: dns-authoritative02
+        type: A
+        value: 10.10.10.243
+      - name: monitor01
+        type: A
+        value: 10.10.10.250
+      - name: mysql-shared01
+        type: A
+        value: 10.10.10.221
+      - name: connector01
+        type: A
+        value: 10.10.10.41
+      - name: connector02
+        type: A
+        value: 10.10.10.42
+      - name: bastion01
+        type: A
+        value: 10.10.10.60
+      - name: workbench01
+        type: A
+        value: 10.10.10.61
+      - name: control01
+        type: A
+        value: 10.10.10.62
+      - name: web01
+        type: A
+        value: 10.10.30.21
+      - name: mysql-shared.srv
+        type: CNAME
+        value: mysql-shared01.alflag.internal.
+      - name: web.srv
+        type: CNAME
+        value: web01.alflag.internal.
+      - name: monitor.srv
+        type: CNAME
+        value: monitor01.alflag.internal.
+
+  - name: 10.10.10.in-addr.arpa
+    file: /etc/nsd/zones/10.10.10.in-addr.arpa.zone
+    managed: true
+    ttl: 300
+    serial: 2026062801
+    soa:
+      mname: dns-authoritative01.alflag.internal.
+      rname: hostmaster.alflag.internal.
+      refresh: 3600
+      retry: 900
+      expire: 604800
+      minimum: 300
+    ns:
+      - dns-authoritative01.alflag.internal.
+      - dns-authoritative02.alflag.internal.
+    records:
+      - name: "240"
+        type: PTR
+        value: dns-recursive01.alflag.internal.
+      - name: "241"
+        type: PTR
+        value: dns-recursive02.alflag.internal.
+      - name: "242"
+        type: PTR
+        value: dns-authoritative01.alflag.internal.
+      - name: "243"
+        type: PTR
+        value: dns-authoritative02.alflag.internal.
+      - name: "250"
+        type: PTR
+        value: monitor01.alflag.internal.
+      - name: "221"
+        type: PTR
+        value: mysql-shared01.alflag.internal.
+      - name: "41"
+        type: PTR
+        value: connector01.alflag.internal.
+      - name: "42"
+        type: PTR
+        value: connector02.alflag.internal.
+      - name: "60"
+        type: PTR
+        value: bastion01.alflag.internal.
+      - name: "61"
+        type: PTR
+        value: workbench01.alflag.internal.
+      - name: "62"
+        type: PTR
+        value: control01.alflag.internal.
+
+  - name: 10.10.30.in-addr.arpa
+    file: /etc/nsd/zones/10.10.30.in-addr.arpa.zone
+    managed: true
+    ttl: 300
+    serial: 2026062801
+    soa:
+      mname: dns-authoritative01.alflag.internal.
+      rname: hostmaster.alflag.internal.
+      refresh: 3600
+      retry: 900
+      expire: 604800
+      minimum: 300
+    ns:
+      - dns-authoritative01.alflag.internal.
+      - dns-authoritative02.alflag.internal.
+    records:
+      - name: "21"
+        type: PTR
+        value: web01.alflag.internal.
