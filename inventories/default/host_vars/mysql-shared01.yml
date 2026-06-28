@@ -1,6 +1,5 @@
 ---
-hostname: topmost01-mgmt-mysql-shared-01
-site: topmost01
+hostname: mysql-shared01
 zone: mgmt
 role: mysql
 purpose: shared
@@ -15,7 +14,7 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: topmost01-mgmt-mysql-shared-01.srv.alflag.internal
+network_primary_fqdn: mysql-shared01.srv.alflag.internal
 network_service_aliases:
   - mysql-shared.srv.alflag.internal
 

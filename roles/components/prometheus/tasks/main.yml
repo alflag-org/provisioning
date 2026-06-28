@@ -50,7 +50,7 @@
 - name: Render Prometheus alert rules
   ansible.builtin.template:
     src: alerts.yml.j2
-    dest: "{{ prometheus_rules_dir }}/topmost01.yml"
+    dest: "{{ prometheus_rules_dir }}/monitoring.yml"
     owner: prometheus
     group: prometheus
     mode: "0644"

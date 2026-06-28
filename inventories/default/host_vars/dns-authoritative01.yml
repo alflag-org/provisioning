@@ -2,8 +2,7 @@
 ansible_user: root
 ansible_become: false
 
-hostname: topmost01-mgmt-dns-authoritative-01
-site: topmost01
+hostname: dns-authoritative01
 zone: mgmt
 role: dns_authoritative
 virtualization_type: lxc
@@ -17,7 +16,7 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: topmost01-mgmt-dns-authoritative-01.srv.alflag.internal
+network_primary_fqdn: dns-authoritative01.srv.alflag.internal
 
 dns_authoritative_enabled: true
 dns_authoritative_listen_addresses:

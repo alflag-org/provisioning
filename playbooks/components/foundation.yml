@@ -1,6 +1,6 @@
 ---
 - name: Converge shared foundation
-  hosts: topmost01
+  hosts: default
   gather_facts: true
 
   roles:

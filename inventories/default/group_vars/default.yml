@@ -1,6 +1,6 @@
 ---
-site_name: topmost01
-site_short_name: topmost01
+site_name: default
+site_short_name: default
 
 ansible_user: ops
 ansible_become: true

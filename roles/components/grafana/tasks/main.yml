@@ -90,7 +90,7 @@
 
 - name: Render Grafana overview dashboard
   ansible.builtin.template:
-    src: topmost01-overview.json.j2
+    src: monitoring-overview.json.j2
     dest: "{{ grafana_dashboard_path }}"
     owner: grafana
     group: grafana

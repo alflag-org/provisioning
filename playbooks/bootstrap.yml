@@ -1,6 +1,6 @@
 ---
 - name: Bootstrap new hosts for configuration management
-  hosts: topmost01
+  hosts: default
   gather_facts: true
 
   roles:
