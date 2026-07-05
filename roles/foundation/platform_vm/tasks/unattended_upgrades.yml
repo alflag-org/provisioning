@@ -1,11 +1,10 @@
 ---
 - name: Install unattended-upgrades
-  ansible.builtin.apt:
-    name:
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages:
       - unattended-upgrades
-    update_cache: true
-    state: present
-  become: true
 
 - name: Copy 20auto-upgrades
   ansible.builtin.copy:

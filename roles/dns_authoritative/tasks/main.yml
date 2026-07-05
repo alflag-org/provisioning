@@ -1,10 +1,10 @@
 ---
 - name: Install authoritative DNS package
-  ansible.builtin.apt:
-    name: "{{ dns_authoritative_package }}"
-    state: present
-    update_cache: true
-    policy_rc_d: "{{ 101 if dns_authoritative_zones | length == 0 else omit }}"
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ dns_authoritative_package }}"
+    daedalus_apt_policy_rc_d: "{{ 101 if dns_authoritative_zones | length == 0 else omit }}"
   when: dns_authoritative_enabled | bool
 
 - name: Check authoritative DNS config directory

@@ -1,8 +1,9 @@
 ---
 - name: Install mysql-server
-  ansible.builtin.apt:
-    name: "{{ mysql_server_packages }}"
-    state: present
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ mysql_server_packages }}"
 
 - name: Start mysql-server
   ansible.builtin.systemd_service:

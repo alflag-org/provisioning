@@ -1,11 +1,11 @@
 ---
 - name: Install Caddy repository prerequisites
-  ansible.builtin.apt:
-    name:
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages:
       - ca-certificates
       - python3-debian
-    state: present
-    update_cache: true
 
 - name: Add Caddy repository
   ansible.builtin.deb822_repository:
@@ -20,9 +20,11 @@
       - main
     signed_by: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
     state: present
+  register: caddy_repository
 
 - name: Install Caddy
-  ansible.builtin.apt:
-    name: caddy
-    state: present
-    update_cache: true
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: caddy
+    daedalus_apt_force_update_cache: "{{ caddy_repository.changed | default(false) }}"

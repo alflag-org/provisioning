@@ -1,9 +1,9 @@
 ---
 - name: Install Alertmanager
-  ansible.builtin.apt:
-    name: "{{ alertmanager_package }}"
-    state: present
-    update_cache: true
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ alertmanager_package }}"
   when:
     - alertmanager_enabled | bool
     - not ansible_check_mode

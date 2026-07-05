@@ -10,3 +10,8 @@ retired_monitoring_cleanup_enabled: true
 node_exporter_enabled: true
 node_exporter_listen_address: 0.0.0.0
 node_exporter_listen_port: 9100
+
+# Apt package updates are handled by unattended-upgrades. Ansible only invokes
+# apt when a requested package is missing or an explicit purge is needed.
+daedalus_apt_update_cache: true
+daedalus_apt_cache_valid_time: 86400

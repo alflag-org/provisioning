@@ -1,7 +1,9 @@
 ---
 - name: Install Atlas host packages
-  ansible.builtin.apt:
-    name:
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages:
       - git
       - curl
       - ca-certificates
@@ -27,6 +29,4 @@
       - libxmlsec1-dev
       - libffi-dev
       - liblzma-dev
-    state: present
-    update_cache: true
-  become: "{{ atlas_become_root }}"
+    daedalus_apt_become: "{{ atlas_become_root }}"

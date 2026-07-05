@@ -1,9 +1,9 @@
 ---
 - name: Install Grafana repository prerequisites
-  ansible.builtin.apt:
-    name: "{{ grafana_prerequisite_packages }}"
-    state: present
-    update_cache: true
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ grafana_prerequisite_packages }}"
   when:
     - grafana_enabled | bool
     - not ansible_check_mode
@@ -18,15 +18,17 @@
     components: "{{ grafana_repository_components }}"
     signed_by: "{{ grafana_repository_signed_by }}"
     state: present
+  register: grafana_repository
   when:
     - grafana_enabled | bool
     - not ansible_check_mode
 
 - name: Install Grafana
-  ansible.builtin.apt:
-    name: "{{ grafana_package }}"
-    state: present
-    update_cache: true
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ grafana_package }}"
+    daedalus_apt_force_update_cache: "{{ grafana_repository.changed | default(false) }}"
   when:
     - grafana_enabled | bool
     - not ansible_check_mode

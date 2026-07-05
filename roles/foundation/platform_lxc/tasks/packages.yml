@@ -1,7 +1,7 @@
 ---
 - name: Install LXC base packages
-  ansible.builtin.apt:
-    name: "{{ foundation_lxc_packages }}"
-    update_cache: true
-    state: present
-  become: "{{ foundation_lxc_become_root }}"
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ foundation_lxc_packages }}"
+    daedalus_apt_become: "{{ foundation_lxc_become_root }}"

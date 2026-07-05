@@ -15,10 +15,10 @@
     - not ansible_check_mode
 
 - name: Install cloudflared package
-  ansible.builtin.apt:
-    name: "{{ cloudflared_package }}"
-    state: present
-    update_cache: true
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ cloudflared_package }}"
   when:
     - cloudflared_enabled | bool
     - cloudflared_install_method == 'package'

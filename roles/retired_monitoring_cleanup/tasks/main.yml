@@ -19,11 +19,13 @@
     - retired_monitoring_cleanup_service.status | default('') != 'not-found'
 
 - name: Purge retired monitoring packages
-  ansible.builtin.apt:
-    name: "{{ retired_monitoring_cleanup_packages }}"
-    state: absent
-    purge: true
-    autoremove: true
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    daedalus_apt_packages: "{{ retired_monitoring_cleanup_packages }}"
+    daedalus_apt_state: absent
+    daedalus_apt_purge: true
+    daedalus_apt_autoremove: true
   when: retired_monitoring_cleanup_enabled | bool
 
 - name: Remove retired monitoring paths
