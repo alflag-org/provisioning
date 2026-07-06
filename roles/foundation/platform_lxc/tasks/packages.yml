@@ -3,5 +3,5 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: "{{ foundation_lxc_packages }}"
-    daedalus_apt_become: "{{ foundation_lxc_become_root }}"
+    apt_state_packages: "{{ foundation_lxc_packages }}"
+    apt_state_become: "{{ foundation_lxc_become_root }}"

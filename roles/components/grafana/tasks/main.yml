@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: "{{ grafana_prerequisite_packages }}"
+    apt_state_packages: "{{ grafana_prerequisite_packages }}"
   when:
     - grafana_enabled | bool
     - not ansible_check_mode
@@ -27,8 +27,8 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: "{{ grafana_package }}"
-    daedalus_apt_force_update_cache: "{{ grafana_repository.changed | default(false) }}"
+    apt_state_packages: "{{ grafana_package }}"
+    apt_state_force_update_cache: "{{ grafana_repository.changed | default(false) }}"
   when:
     - grafana_enabled | bool
     - not ansible_check_mode

@@ -2,5 +2,7 @@
 ansible_user: root
 ansible_become: false
 
+network_primary_fqdn: mgmt-bastion-01.srv.alflag.internal
+
 ssh_server_enabled: true
 cloudflare_ssh_enabled: true

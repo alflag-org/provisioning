@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages:
+    apt_state_packages:
       - ca-certificates
       - python3-debian
 
@@ -26,5 +26,5 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: caddy
-    daedalus_apt_force_update_cache: "{{ caddy_repository.changed | default(false) }}"
+    apt_state_packages: caddy
+    apt_state_force_update_cache: "{{ caddy_repository.changed | default(false) }}"

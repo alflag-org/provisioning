@@ -2,50 +2,50 @@
 - name: Validate apt state request
   ansible.builtin.assert:
     that:
-      - daedalus_apt_packages is defined
-      - daedalus_apt_state | default('present') in ['present', 'absent']
+      - apt_state_packages is defined
+      - apt_state_state | default('present') in ['present', 'absent']
     quiet: true
 
 - name: Check requested apt packages
   ansible.builtin.command:
-    argv: "{{ ['dpkg-query', '-W', '-f=${binary:Package}\\n'] + daedalus_apt_package_list }}"
+    argv: "{{ ['dpkg-query', '-W', '-f=${binary:Package}\\n'] + apt_state_package_list }}"
   vars:
-    daedalus_apt_package_list: >-
-      {{ [daedalus_apt_packages] if daedalus_apt_packages is string else daedalus_apt_packages }}
-  register: daedalus_apt_query
+    apt_state_package_list: >-
+      {{ [apt_state_packages] if apt_state_packages is string else apt_state_packages }}
+  register: apt_state_query
   changed_when: false
   failed_when: false
   check_mode: false
-  when: daedalus_apt_package_list | length > 0
+  when: apt_state_package_list | length > 0
 
 - name: Install missing apt packages
   ansible.builtin.apt:
-    name: "{{ daedalus_apt_package_list }}"
+    name: "{{ apt_state_package_list }}"
     state: present
-    update_cache: "{{ daedalus_apt_update_cache | default(true) | bool }}"
+    update_cache: "{{ apt_state_update_cache | default(true) | bool }}"
     cache_valid_time: >-
-      {{ 0 if daedalus_apt_force_update_cache | default(false) | bool else daedalus_apt_cache_valid_time | default(86400) }}
-    policy_rc_d: "{{ daedalus_apt_policy_rc_d | default(omit) }}"
+      {{ 0 if apt_state_force_update_cache | default(false) | bool else apt_state_cache_valid_time | default(86400) }}
+    policy_rc_d: "{{ apt_state_policy_rc_d | default(omit) }}"
   vars:
-    daedalus_apt_package_list: >-
-      {{ [daedalus_apt_packages] if daedalus_apt_packages is string else daedalus_apt_packages }}
-  become: "{{ daedalus_apt_become | default(true) }}"
+    apt_state_package_list: >-
+      {{ [apt_state_packages] if apt_state_packages is string else apt_state_packages }}
+  become: "{{ apt_state_become | default(true) }}"
   when:
-    - daedalus_apt_package_list | length > 0
-    - daedalus_apt_state | default('present') == 'present'
-    - daedalus_apt_query.rc | default(1) != 0
+    - apt_state_package_list | length > 0
+    - apt_state_state | default('present') == 'present'
+    - apt_state_query.rc | default(1) != 0
 
 - name: Remove installed apt packages
   ansible.builtin.apt:
-    name: "{{ daedalus_apt_package_list }}"
+    name: "{{ apt_state_package_list }}"
     state: absent
-    purge: "{{ daedalus_apt_purge | default(false) | bool }}"
-    autoremove: "{{ daedalus_apt_autoremove | default(false) | bool }}"
+    purge: "{{ apt_state_purge | default(false) | bool }}"
+    autoremove: "{{ apt_state_autoremove | default(false) | bool }}"
   vars:
-    daedalus_apt_package_list: >-
-      {{ [daedalus_apt_packages] if daedalus_apt_packages is string else daedalus_apt_packages }}
-  become: "{{ daedalus_apt_become | default(true) }}"
+    apt_state_package_list: >-
+      {{ [apt_state_packages] if apt_state_packages is string else apt_state_packages }}
+  become: "{{ apt_state_become | default(true) }}"
   when:
-    - daedalus_apt_package_list | length > 0
-    - daedalus_apt_state | default('present') == 'absent'
-    - daedalus_apt_query.stdout_lines | default([]) | length > 0
+    - apt_state_package_list | length > 0
+    - apt_state_state | default('present') == 'absent'
+    - apt_state_query.stdout_lines | default([]) | length > 0

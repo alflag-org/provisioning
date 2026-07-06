@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: openssh-server
+    apt_state_packages: openssh-server
   when: ssh_server_enabled | bool
 
 - name: Normalize SSH TCP forwarding policy

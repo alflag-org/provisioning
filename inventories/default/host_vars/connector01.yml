@@ -2,4 +2,6 @@
 ansible_user: root
 ansible_become: false
 
+network_primary_fqdn: mgmt-connector-01.srv.alflag.internal
+
 cloudflared_enabled: true

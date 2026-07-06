@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: "{{ [dns_recursor_package] + dns_recursor_validation_packages }}"
+    apt_state_packages: "{{ [dns_recursor_package] + dns_recursor_validation_packages }}"
   when: dns_recursor_enabled | bool
 
 - name: Check Unbound configuration directory

@@ -5,3 +5,9 @@
     state: restarted
     enabled: true
   become: true
+
+- name: Generate VM ja_JP.UTF-8 locale
+  ansible.builtin.command:
+    cmd: locale-gen ja_JP.UTF-8
+  changed_when: true
+  become: true

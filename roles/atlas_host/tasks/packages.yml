@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages:
+    apt_state_packages:
       - git
       - curl
       - ca-certificates
@@ -29,4 +29,4 @@
       - libxmlsec1-dev
       - libffi-dev
       - liblzma-dev
-    daedalus_apt_become: "{{ atlas_become_root }}"
+    apt_state_become: "{{ atlas_become_root }}"

@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    daedalus_apt_packages: "{{ prometheus_package }}"
+    apt_state_packages: "{{ prometheus_package }}"
   when:
     - prometheus_enabled | bool
     - not ansible_check_mode

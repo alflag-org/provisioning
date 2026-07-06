@@ -1,5 +1,5 @@
 ---
-- name: Ensure LXC operator account
+- name: Ensure LXC operator account  # noqa role-name[path]
   ansible.builtin.include_role:
     name: foundation/operator
     public: true

@@ -22,6 +22,7 @@ dns_authoritative_zones:
   - name: srv.alflag.internal
     file: /etc/nsd/zones/srv.alflag.internal.zone
     managed: true
+    inventory_records: server_identity
     ttl: 300
     serial: 2026062901
     soa:
@@ -34,47 +35,12 @@ dns_authoritative_zones:
     ns:
       - mgmt-authdns-01.srv.alflag.internal.
       - mgmt-authdns-02.srv.alflag.internal.
-    records:
-      - name: mgmt-recdns-01
-        type: A
-        value: 10.10.10.240
-      - name: mgmt-recdns-02
-        type: A
-        value: 10.10.10.241
-      - name: mgmt-authdns-01
-        type: A
-        value: 10.10.10.242
-      - name: mgmt-authdns-02
-        type: A
-        value: 10.10.10.243
-      - name: mgmt-monitor-01
-        type: A
-        value: 10.10.10.250
-      - name: mgmt-mysql-shared-01
-        type: A
-        value: 10.10.10.221
-      - name: mgmt-connector-01
-        type: A
-        value: 10.10.10.41
-      - name: mgmt-connector-02
-        type: A
-        value: 10.10.10.42
-      - name: mgmt-bastion-01
-        type: A
-        value: 10.10.10.60
-      - name: mgmt-workbench-01
-        type: A
-        value: 10.10.10.61
-      - name: mgmt-control-01
-        type: A
-        value: 10.10.10.62
-      - name: dmz-web-01
-        type: A
-        value: 10.10.30.21
+    records: []
 
   - name: access.internal
     file: /etc/nsd/zones/access.internal.zone
     managed: true
+    inventory_records: access_aliases
     ttl: 300
     serial: 2026062901
     soa:
@@ -87,29 +53,12 @@ dns_authoritative_zones:
     ns:
       - mgmt-authdns-01.srv.alflag.internal.
       - mgmt-authdns-02.srv.alflag.internal.
-    records:
-      - name: grafana
-        type: A
-        value: 10.10.10.250
-      - name: prometheus
-        type: A
-        value: 10.10.10.250
-      - name: alertmanager
-        type: A
-        value: 10.10.10.250
-      - name: mysql-shared
-        type: A
-        value: 10.10.10.221
-      - name: web
-        type: A
-        value: 10.10.30.21
-      - name: workbench
-        type: A
-        value: 10.10.10.61
+    records: []
 
   - name: 10.10.10.in-addr.arpa
     file: /etc/nsd/zones/10.10.10.in-addr.arpa.zone
     managed: true
+    inventory_records: reverse_ptr
     ttl: 300
     serial: 2026062901
     soa:
@@ -122,44 +71,12 @@ dns_authoritative_zones:
     ns:
       - mgmt-authdns-01.srv.alflag.internal.
       - mgmt-authdns-02.srv.alflag.internal.
-    records:
-      - name: "240"
-        type: PTR
-        value: mgmt-recdns-01.srv.alflag.internal.
-      - name: "241"
-        type: PTR
-        value: mgmt-recdns-02.srv.alflag.internal.
-      - name: "242"
-        type: PTR
-        value: mgmt-authdns-01.srv.alflag.internal.
-      - name: "243"
-        type: PTR
-        value: mgmt-authdns-02.srv.alflag.internal.
-      - name: "250"
-        type: PTR
-        value: mgmt-monitor-01.srv.alflag.internal.
-      - name: "221"
-        type: PTR
-        value: mgmt-mysql-shared-01.srv.alflag.internal.
-      - name: "41"
-        type: PTR
-        value: mgmt-connector-01.srv.alflag.internal.
-      - name: "42"
-        type: PTR
-        value: mgmt-connector-02.srv.alflag.internal.
-      - name: "60"
-        type: PTR
-        value: mgmt-bastion-01.srv.alflag.internal.
-      - name: "61"
-        type: PTR
-        value: mgmt-workbench-01.srv.alflag.internal.
-      - name: "62"
-        type: PTR
-        value: mgmt-control-01.srv.alflag.internal.
+    records: []
 
   - name: 10.10.30.in-addr.arpa
     file: /etc/nsd/zones/10.10.30.in-addr.arpa.zone
     managed: true
+    inventory_records: reverse_ptr
     ttl: 300
     serial: 2026062901
     soa:
@@ -172,7 +89,4 @@ dns_authoritative_zones:
     ns:
       - mgmt-authdns-01.srv.alflag.internal.
       - mgmt-authdns-02.srv.alflag.internal.
-    records:
-      - name: "21"
-        type: PTR
-        value: dmz-web-01.srv.alflag.internal.
+    records: []

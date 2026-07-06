@@ -3,6 +3,8 @@ ansible_connection: local
 ansible_become: true
 ansible_python_interpreter: /usr/bin/python3
 
+network_primary_fqdn: mgmt-control-01.srv.alflag.internal
+
 atlas_enabled: true
 atlas_bootstrap_mode: manual
 atlas_role: control

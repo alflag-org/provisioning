@@ -8,12 +8,5 @@
     owner: root
     group: root
     mode: "0644"
-  register: foundation_lxc_locale_gen
-  become: "{{ foundation_lxc_become_root }}"
-
-- name: Generate ja_JP.UTF-8 locale
-  ansible.builtin.command:
-    cmd: locale-gen ja_JP.UTF-8
-  changed_when: true
-  when: foundation_lxc_locale_gen.changed
+  notify: Generate LXC ja_JP.UTF-8 locale
   become: "{{ foundation_lxc_become_root }}"

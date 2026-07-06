@@ -8,12 +8,5 @@
     owner: root
     group: root
     mode: "0644"
-  register: foundation_vm_locale_gen
-  become: true
-
-- name: Generate ja_JP.UTF-8 locale
-  ansible.builtin.command:
-    cmd: locale-gen ja_JP.UTF-8
-  changed_when: true
-  when: foundation_vm_locale_gen.changed
+  notify: Generate VM ja_JP.UTF-8 locale
   become: true
