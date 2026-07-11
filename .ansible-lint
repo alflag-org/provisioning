@@ -1,0 +1,5 @@
+---
+# Nested roles use namespace-qualified variable prefixes such as foundation_lxc_.
+# ansible-lint 26.6 resolves their role names to only the final path component.
+skip_list:
+  - var-naming[no-role-prefix]
