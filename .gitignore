@@ -1,0 +1,9 @@
+.ansible/
+.venv/
+__pycache__/
+*.py[cod]
+*.retry
+.vault_pass
+collections/ansible_collections/
+inventories/**/group_vars/all/secrets.yml
+inventories/**/group_vars/all/secrets/
