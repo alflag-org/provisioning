@@ -59,7 +59,7 @@ Install the first-party Atlas operations release and build its runtime before in
 from this repository:
 
 ```bash
-atlas scripts install /path/to/atlas/operations
+atlas release install /path/to/atlas/operations
 atlas runtime install
 export PATH="/opt/atlas/shims:$PATH"
 ```
