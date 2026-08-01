@@ -59,7 +59,7 @@ Install the first-party Atlas operations release and build its runtime before in
 from this repository:
 
 ```bash
-atlas release install /path/to/atlas/operations
+atlas release install /path/to/atlas/configuration-operations
 atlas runtime install
 export PATH="/opt/atlas/shims:$PATH"
 ```
@@ -69,26 +69,26 @@ Then keep this checkout as the current working directory:
 ```bash
 cd /path/to/provisioning
 
-config-validate site
-config-check site control01
-config-diff site control01
-inventory-show
+configctl validate site
+configctl check site control01
+configctl diff site control01
+configctl inventory
 ```
 
-`config-apply` is the mutating command and always requires one explicit target:
+`configctl apply` is the mutating command and always requires one explicit target:
 
 ```bash
-config-apply site control01
+configctl apply site control01
 ```
 
 Run the same read-only diff for several targets without bypassing Atlas:
 
 ```bash
-config-diff-many site control01 web01
-printf '%s\n' control01 web01 | config-diff-many site
+configctl diff-many site control01 web01
+printf '%s\n' control01 web01 | configctl diff-many site
 ```
 
-The composition command invokes the public `config-diff` executable once per target. Atlas
+The composition command invokes the public `configctl diff` operation once per target. Atlas
 therefore records each child run under the same operation ID.
 
 See [docs/operations.md](docs/operations.md) for secret handling, production comparison, and

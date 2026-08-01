@@ -6,13 +6,13 @@ Run repository checks after setup and before opening a pull request:
 
 ```bash
 mise run check
-config-validate site
-config-validate bootstrap
-config-validate cloudflare
+configctl validate site
+configctl validate bootstrap
+configctl validate cloudflare
 ```
 
 `mise run check` runs YAML lint, Ansible lint, and native Ansible syntax checks.
-`config-validate` exercises the installed Atlas operations release from this repository's current
+`configctl validate` exercises the installed Atlas configuration release from this repository's current
 working directory. Both paths must succeed.
 
 ## Keep secrets outside Git history
@@ -37,9 +37,9 @@ The `cloudflare` playbook is intentionally outside the normal `site` converge. I
 the required tunnel token is available through the protected operator file:
 
 ```bash
-config-check cloudflare connector01
-config-diff cloudflare connector01
-config-apply cloudflare connector01
+configctl check cloudflare connector01
+configctl diff cloudflare connector01
+configctl apply cloudflare connector01
 ```
 
 ## Compare replacement output before changing hosts
@@ -53,12 +53,12 @@ infra diff --limit control01
 infra diff --limit web01
 
 # This provisioning checkout
-config-diff site control01
-config-diff site web01
+configctl diff site control01
+configctl diff site web01
 ```
 
 Compare stdout, stderr, and exit status. Investigate every material difference before running
-`config-apply`. Repeat the read-only checks over the agreed observation period.
+`configctl apply`. Repeat the read-only checks over the agreed observation period.
 
 If replacement output is not equivalent, stop new callers and continue using the pinned
 Daedalus revision. Do not remove its registry entry, uninstall its release, delete its `infra`
@@ -69,7 +69,7 @@ shim, or archive its repository until the real-host smoke comparison passes.
 After validation and read-only comparison succeed, apply to exactly one named target:
 
 ```bash
-config-apply site control01
+configctl apply site control01
 ```
 
 Atlas does not prompt, add `--yes`, install dependencies, or change Git state. The explicit
