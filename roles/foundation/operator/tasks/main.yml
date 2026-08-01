@@ -13,7 +13,7 @@
     that:
       - item.stat.exists
     fail_msg: >-
-      Missing operator public key on the controller: {{ item.stat.path }}.
+      Missing operator public key on the controller: {{ item.item }}.
       Create it or override foundation_operator_authorized_key_files before bootstrapping host access.
   loop: "{{ foundation_operator_key_stats.results | default([]) }}"
   when: foundation_operator_manage_authorized_keys | bool

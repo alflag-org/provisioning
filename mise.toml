@@ -1,0 +1,40 @@
+[tools]
+python = "3.13.3"
+
+[tasks.setup]
+description = "Install validation tools and Ansible collections"
+run = """
+python -m venv .venv
+.venv/bin/python -m pip install --requirement requirements-dev.txt
+.venv/bin/ansible-galaxy collection install \
+  --requirements-file collections/requirements.yml \
+  --collections-path collections
+"""
+
+[tasks.lint]
+description = "Lint provisioning YAML and Ansible content"
+run = """
+.venv/bin/yamllint \
+  .github/workflows \
+  .yamllint \
+  inventories \
+  playbooks \
+  roles \
+  collections/requirements.yml
+PATH="$PWD/.venv/bin:$PATH" ansible-lint \
+  playbooks/site.yml \
+  playbooks/bootstrap.yml \
+  playbooks/cloudflare.yml
+"""
+
+[tasks.syntax]
+description = "Check public playbook syntax"
+run = """
+.venv/bin/ansible-playbook --syntax-check playbooks/site.yml
+.venv/bin/ansible-playbook --syntax-check playbooks/bootstrap.yml
+.venv/bin/ansible-playbook --syntax-check playbooks/cloudflare.yml
+"""
+
+[tasks.check]
+description = "Run lint and syntax validation"
+depends = ["lint", "syntax"]

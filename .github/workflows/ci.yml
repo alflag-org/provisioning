@@ -1,0 +1,58 @@
+---
+name: CI
+
+"on":
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate provisioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.3"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install validation tools
+        run: python -m pip install --requirement requirements-dev.txt
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install \
+            --requirements-file collections/requirements.yml \
+            --collections-path collections
+
+      - name: Lint YAML
+        run: |
+          yamllint \
+            .github/workflows \
+            .yamllint \
+            inventories \
+            playbooks \
+            roles \
+            collections/requirements.yml
+
+      - name: Lint Ansible
+        run: |
+          ansible-lint \
+            playbooks/site.yml \
+            playbooks/bootstrap.yml \
+            playbooks/cloudflare.yml
+
+      - name: Check playbook syntax
+        run: |
+          ansible-playbook --syntax-check playbooks/site.yml
+          ansible-playbook --syntax-check playbooks/bootstrap.yml
+          ansible-playbook --syntax-check playbooks/cloudflare.yml
