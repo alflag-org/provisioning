@@ -5,7 +5,7 @@ atlas_var_dir: /var/lib/atlas
 atlas_tmp_dir: /opt/atlas/tmp
 atlas_python_build_cache_path: /var/lib/atlas/cache/python-build
 
-atlas_runtime_python_version: "3.12.3"
+atlas_runtime_python_version: "3.14.6"
 
 atlas_operator_user: ops
 atlas_operator_group: "{{ atlas_operator_user }}"
@@ -31,15 +31,6 @@ atlas_cli_bin_dir: "{{ atlas_operator_home }}/.local/bin"
 atlas_cli_bin: "{{ atlas_cli_bin_dir }}/atlas"
 atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master"
 
-atlas_releases:
-  daedalus:
-    source: daedalus
-
-atlas_registries:
-  daedalus:
-    source: "git+https://github.com/alflag-org/daedalus.git#master"
-
-atlas_manage_scripts: false
-atlas_manage_runtime: false
+atlas_programs: {}
+atlas_manage_runtime: true
 atlas_validate_runtime: false
-atlas_validate_shebangs: true

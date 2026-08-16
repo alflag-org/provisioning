@@ -9,9 +9,7 @@ atlas_enabled: true
 atlas_bootstrap_mode: manual
 atlas_role: control
 atlas_runtime_kind: vm
-atlas_manage_scripts: false
-atlas_manage_runtime: false
+atlas_manage_runtime: true
 atlas_validate_runtime: true
-atlas_validate_shebangs: true
 
 ssh_server_enabled: true

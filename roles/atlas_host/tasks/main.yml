@@ -7,7 +7,7 @@
 
 - name: Ensure Atlas operator account
   ansible.builtin.include_role:
-    name: foundation/operator
+    name: foundation/operator  # noqa role-name[path]
   when: atlas_manage_operator_account | bool
   vars:
     foundation_operator_user: "{{ atlas_operator_user }}"
@@ -37,11 +37,11 @@
 - name: Install Atlas CLI
   ansible.builtin.import_tasks: cli.yml
 
-- name: Update Atlas scripts
-  ansible.builtin.import_tasks: scripts.yml
-
 - name: Manage Atlas runtime
   ansible.builtin.import_tasks: runtime.yml
+
+- name: Generate Atlas command shims
+  ansible.builtin.import_tasks: shims.yml
 
 - name: Validate Atlas host
   ansible.builtin.import_tasks: validate.yml

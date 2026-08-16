@@ -1,16 +1,26 @@
 runtime:
   python:
     version: "{{ atlas_runtime_python_version }}"
+{% if atlas_runtime_python_executable | default('') | length > 0 %}
+    executable: "{{ atlas_runtime_python_executable }}"
+{% endif %}
 
-scripts:
-  releases:
-{% for name, release in atlas_releases.items() %}
-    {{ name }}:
-      source: {{ release.source }}
+programs:
+{% if atlas_programs | length == 0 %}
+  {}
+{% else %}
+{% for name, program in atlas_programs.items() %}
+  {{ name }}:
+    root: "{{ program.root }}"
+    runtime:
+      type: "{{ program.runtime.type }}"
+{% if program.runtime.type == 'python' %}
+{% if program.runtime.python | default('') | length > 0 %}
+      python: "{{ program.runtime.python }}"
+{% endif %}
+{% if program.runtime.venv | default('') | length > 0 %}
+      venv: "{{ program.runtime.venv }}"
+{% endif %}
+{% endif %}
 {% endfor %}
-
-  registries:
-{% for name, registry in atlas_registries.items() %}
-    {{ name }}:
-      source: "{{ registry.source }}"
-{% endfor %}
+{% endif %}

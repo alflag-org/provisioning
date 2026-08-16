@@ -7,6 +7,15 @@
   check_mode: false
   changed_when: false
 
+- name: Check Atlas configuration and registered programs
+  ansible.builtin.command:
+    cmd: "{{ atlas_cli_bin }} check"
+  become: "{{ atlas_become_operator }}"
+  become_user: "{{ atlas_operator_user }}"
+  check_mode: false
+  changed_when: false
+  when: atlas_validate_runtime | bool
+
 - name: Check Atlas runtime status
   ansible.builtin.command:
     cmd: "{{ atlas_cli_bin }} runtime status"
@@ -16,33 +25,18 @@
   changed_when: false
   when: atlas_validate_runtime | bool
 
-- name: Check daedalus command discovery
+- name: Check Atlas program discovery
   ansible.builtin.command:
-    cmd: "{{ atlas_cli_bin }} scripts list --verbose"
+    cmd: "{{ atlas_cli_bin }} program list --verbose"
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
 
-- name: Check ansible-inventory version
+- name: Check Atlas command discovery
   ansible.builtin.command:
-    cmd: "{{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-inventory --version"
+    cmd: "{{ atlas_cli_bin }} command list --verbose"
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   check_mode: false
   changed_when: false
-  when: atlas_validate_runtime | bool
-
-- name: Validate ansible-inventory shebang
-  ansible.builtin.shell: |
-    set -euo pipefail
-    test "$(head -1 {{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-inventory)" = "#!{{ atlas_home }}/runtime/python/envs/scripts/bin/python"
-  args:
-    executable: /bin/bash
-  become: "{{ atlas_become_operator }}"
-  become_user: "{{ atlas_operator_user }}"
-  check_mode: false
-  changed_when: false
-  when:
-    - atlas_validate_runtime | bool
-    - atlas_validate_shebangs | bool

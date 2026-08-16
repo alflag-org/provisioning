@@ -27,18 +27,13 @@ atlas_operator_sudoers_content: "{{ atlas_operator_user }} ALL=(ALL) NOPASSWD:AL
 atlas_cli_venv: "{{ atlas_operator_home }}/.local/share/atlas-cli-venv"
 atlas_cli_bin_dir: "{{ atlas_operator_home }}/.local/bin"
 atlas_cli_bin: "{{ atlas_cli_bin_dir }}/atlas"
+atlas_cli_python: /usr/bin/python3
 atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master"
 
-atlas_runtime_python_version: "3.12.3"
+atlas_runtime_python_version: "3.14.6"
+atlas_runtime_python_executable: ""
 
-atlas_releases:
-  daedalus:
-    source: daedalus
+atlas_programs: {}
 
-atlas_registries:
-  daedalus:
-    source: "git+https://github.com/alflag-org/daedalus.git#master"
-
-atlas_manage_runtime: false
+atlas_manage_runtime: true
 atlas_validate_runtime: false
-atlas_validate_shebangs: true

@@ -22,7 +22,7 @@
 
 - name: Create Atlas CLI venv
   ansible.builtin.command:
-    cmd: "python3 -m venv {{ atlas_cli_venv }}"
+    cmd: "{{ atlas_cli_python }} -m venv {{ atlas_cli_venv }}"
     creates: "{{ atlas_cli_venv }}/bin/python"
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"

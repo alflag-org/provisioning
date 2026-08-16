@@ -5,7 +5,7 @@
     state: directory
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
-    recurse: true
+    mode: "0775"
   become: "{{ atlas_become_root }}"
 
 - name: Install pyenv

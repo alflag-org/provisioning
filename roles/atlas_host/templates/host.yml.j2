@@ -1,10 +1,5 @@
-{% set rendered_atlas_role = atlas_role | default('host') %}
-name: {{ inventory_hostname }}
-site: {{ site_name }}
-zone: {{ network_zone | default('mgmt') }}
-role: {{ rendered_atlas_role }}
-environment: home
-runtime_kind: {{ atlas_runtime_kind | default('vm') }}
-tags:
-  - atlas
-  - {{ rendered_atlas_role }}
+version: 1
+host:
+  id: "{{ atlas_host_id | default(inventory_hostname) }}"
+  role: "{{ atlas_role | default('host') }}"
+  site: "{{ site_name | default('') }}"

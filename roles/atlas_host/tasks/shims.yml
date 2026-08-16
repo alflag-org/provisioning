@@ -1,7 +1,7 @@
 ---
-- name: Install Atlas runtime
+- name: Generate Atlas command shims
   ansible.builtin.command:
-    cmd: "{{ atlas_cli_bin }} runtime install"
+    cmd: "{{ atlas_cli_bin }} shim generate"
   environment:
     PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     PYENV_ROOT: "{{ atlas_pyenv_root }}"
@@ -10,4 +10,3 @@
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
   changed_when: true
-  when: atlas_manage_runtime | bool
