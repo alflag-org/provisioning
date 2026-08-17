@@ -32,6 +32,7 @@
     owner: root
     group: root
     mode: "0644"
+    validate: "{{ alertmanager_amtool_binary }} check-config %s"
   notify: Restart Alertmanager
   when:
     - alertmanager_enabled | bool
@@ -45,6 +46,10 @@
   when:
     - alertmanager_enabled | bool
     - not ansible_check_mode
+
+- name: Apply pending Alertmanager handlers
+  ansible.builtin.meta: flush_handlers
+  when: alertmanager_enabled | bool
 
 - name: Validate Alertmanager port
   ansible.builtin.wait_for:

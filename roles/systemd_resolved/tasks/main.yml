@@ -35,6 +35,10 @@
     - systemd_resolved_enabled | bool
     - not ansible_check_mode
 
+- name: Apply pending systemd-resolved handlers
+  ansible.builtin.meta: flush_handlers
+  when: systemd_resolved_enabled | bool
+
 - name: Manage resolv.conf symlink
   ansible.builtin.file:
     src: "{{ systemd_resolved_resolv_conf_target }}"

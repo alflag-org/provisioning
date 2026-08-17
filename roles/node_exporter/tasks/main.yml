@@ -27,6 +27,10 @@
     - node_exporter_enabled | bool
     - not ansible_check_mode
 
+- name: Apply pending node exporter handlers
+  ansible.builtin.meta: flush_handlers
+  when: node_exporter_enabled | bool
+
 - name: Validate node exporter port
   ansible.builtin.wait_for:
     host: 127.0.0.1

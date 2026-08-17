@@ -32,6 +32,7 @@
     owner: root
     group: root
     mode: "0644"
+    validate: "{{ blackbox_exporter_binary }} --config.file=%s --config.check"
   notify: Restart blackbox exporter
   when:
     - blackbox_exporter_enabled | bool
@@ -45,6 +46,10 @@
   when:
     - blackbox_exporter_enabled | bool
     - not ansible_check_mode
+
+- name: Apply pending blackbox exporter handlers
+  ansible.builtin.meta: flush_handlers
+  when: blackbox_exporter_enabled | bool
 
 - name: Validate blackbox exporter port
   ansible.builtin.wait_for:

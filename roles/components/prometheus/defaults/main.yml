@@ -9,9 +9,7 @@ prometheus_file_sd_dir: /var/lib/prometheus/file_sd
 prometheus_promtool_binary: /usr/bin/promtool
 prometheus_scrape_interval: 30s
 prometheus_evaluation_interval: 30s
-prometheus_listen_address: 127.0.0.1
 prometheus_port: 9090
-alertmanager_url: http://127.0.0.1:9093
 
 prometheus_node_exporter_target_group: default
 prometheus_node_exporter_file_sd_path: "{{ prometheus_file_sd_dir }}/node.json"

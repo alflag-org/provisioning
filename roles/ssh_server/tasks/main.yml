@@ -59,3 +59,7 @@
   when:
     - ssh_server_enabled | bool
     - not ansible_check_mode
+
+- name: Apply pending SSH service handlers
+  ansible.builtin.meta: flush_handlers
+  when: ssh_server_enabled | bool

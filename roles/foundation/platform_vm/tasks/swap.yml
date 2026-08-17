@@ -17,7 +17,6 @@
     - foundation_vm_swap_existing_size_mb | int != 0
     - foundation_vm_swap_existing_size_mb | int != foundation_vm_swap_file_size_mb | int
 
-- name: Enable VM swap file
+- name: Converge VM swap file
   ansible.builtin.include_tasks:
     file: swap_enable.yml
-  when: foundation_vm_swap_existing_size_mb | int != foundation_vm_swap_file_size_mb | int

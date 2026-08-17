@@ -50,6 +50,10 @@
     - dns_recursor_enabled | bool
     - not ansible_check_mode
 
+- name: Apply pending Unbound handlers
+  ansible.builtin.meta: flush_handlers
+  when: dns_recursor_enabled | bool
+
 - name: Validate recursive DNS port
   ansible.builtin.wait_for:
     host: 127.0.0.1

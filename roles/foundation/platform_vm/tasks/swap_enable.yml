@@ -13,9 +13,7 @@
     group: root
     mode: "0600"
   become: true
-  when:
-    - not foundation_vm_swap_file.stat.exists
-    - not ansible_check_mode
+  when: not ansible_check_mode
 
 - name: Make VM swap file
   ansible.builtin.command: mkswap "{{ foundation_vm_swap_file_path }}"
@@ -38,5 +36,5 @@
   become: true
   changed_when: true
   when:
-    - not foundation_vm_swap_file.stat.exists
+    - not foundation_vm_swap_is_active | bool
     - not ansible_check_mode

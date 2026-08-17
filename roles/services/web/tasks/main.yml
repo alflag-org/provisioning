@@ -107,6 +107,10 @@
     - services_web_origin_enabled | bool
     - not ansible_check_mode
 
+- name: Apply pending web origin service handlers
+  ansible.builtin.meta: flush_handlers
+  when: services_web_origin_enabled | bool
+
 - name: Validate web origin health endpoint
   ansible.builtin.uri:
     url: "{{ services_web_origin_health_check_url }}"

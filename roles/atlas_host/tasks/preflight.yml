@@ -14,5 +14,5 @@
     fail_msg: >-
       Atlas host management needs passwordless sudo for ansible_user={{ ansible_user }}
       on {{ inventory_hostname }}. Configure NOPASSWD sudo for that user, connect as root,
-      or opt this host out with atlas_enabled: false until sudo is ready.
+      or remove this host from cap_atlas_host until sudo is ready.
   when: atlas_become_root | bool
