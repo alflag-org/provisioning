@@ -1,4 +1,4 @@
-# Managed by Daedalus.
+# Managed by Alflag provisioning.
 global:
   scrape_interval: {{ prometheus_scrape_interval }}
   evaluation_interval: {{ prometheus_evaluation_interval }}
@@ -21,12 +21,12 @@ scrape_configs:
           site: "{{ site_short_name | default('default') }}"
           zone: mgmt
           role: monitor
-          managed_by: daedalus
+          managed_by: alflag-provisioning
 
   - job_name: node
     file_sd_configs:
       - files:
-          - "{{ prometheus_file_sd_dir }}/node*.json"
+          - "{{ prometheus_node_exporter_file_sd_path }}"
 
   - job_name: blackbox_http
     metrics_path: /probe
@@ -35,7 +35,7 @@ scrape_configs:
         - http_2xx
     file_sd_configs:
       - files:
-          - "{{ prometheus_file_sd_dir }}/blackbox_http*.json"
+          - "{{ prometheus_blackbox_http_file_sd_path }}"
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

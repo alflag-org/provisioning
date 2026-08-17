@@ -1,0 +1,17 @@
+{% set records = [] %}
+{% for target_name in groups.get(prometheus_node_exporter_target_group, []) | sort %}
+{% set target = hostvars[target_name] %}
+{% set address = target.network_ipv4_address | default(target.ansible_host | default('')) %}
+{% if target.node_exporter_enabled | default(false) | bool and address | string | length > 0 %}
+{% set _ = records.append({
+  'targets': [address ~ ':' ~ (target.node_exporter_listen_port | default(9100) | string)],
+  'labels': {
+    'host': target_name,
+    'site': target.site_short_name | default(site_short_name | default('default')),
+    'zone': target.network_zone | default('unknown'),
+    'role': target.role | default('unknown')
+  }
+}) %}
+{% endif %}
+{% endfor %}
+{{ records | to_nice_json }}

@@ -50,6 +50,24 @@ check mode and an explicit target before applying changes:
 
 Use the corresponding playbook path for bootstrap or Cloudflare host-side changes.
 
+## Monitoring discovery
+
+On monitoring hosts, Prometheus generates node-exporter file service discovery from members of
+the configured inventory group. A host is included when `node_exporter_enabled` is true and it
+defines `network_ipv4_address` or `ansible_host`.
+
+Blackbox HTTP targets are explicit inventory input because Cloudflare routes and public endpoints
+are outside this repository's responsibility. Define Prometheus file-SD records with
+`prometheus_blackbox_http_targets` when an endpoint is ready to monitor:
+
+```yaml
+prometheus_blackbox_http_targets:
+  - targets:
+      - https://service.example/healthz
+    labels:
+      service: service
+```
+
 ## Secrets
 
 Do not commit passwords, tokens, private keys, vault passwords, or rendered secret variables.

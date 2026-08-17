@@ -45,6 +45,116 @@
   register: prometheus_rules_dir_stat
   when: prometheus_enabled | bool
 
+- name: Check Prometheus file service discovery directory
+  ansible.builtin.stat:
+    path: "{{ prometheus_file_sd_dir }}"
+  register: prometheus_file_sd_dir_stat
+  when: prometheus_enabled | bool
+
+- name: Render Prometheus node target discovery
+  ansible.builtin.template:
+    src: node.json.j2
+    dest: "{{ prometheus_node_exporter_file_sd_path }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  notify: Restart Prometheus
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode or prometheus_file_sd_dir_stat.stat.isdir | default(false)
+
+- name: Render Prometheus blackbox HTTP target discovery
+  ansible.builtin.template:
+    src: blackbox_http.json.j2
+    dest: "{{ prometheus_blackbox_http_file_sd_path }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  notify: Restart Prometheus
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode or prometheus_file_sd_dir_stat.stat.isdir | default(false)
+
+- name: Read Prometheus node target discovery
+  ansible.builtin.slurp:
+    src: "{{ prometheus_node_exporter_file_sd_path }}"
+  register: prometheus_node_target_discovery
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Parse Prometheus node target discovery
+  ansible.builtin.set_fact:
+    prometheus_node_target_records: "{{ prometheus_node_target_discovery.content | b64decode | from_json }}"
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Require the expected number of Prometheus node targets
+  ansible.builtin.assert:
+    that:
+      - prometheus_node_target_records | length >= prometheus_node_exporter_target_minimum | int
+    fail_msg: >-
+      Prometheus generated {{ prometheus_node_target_records | length }} node target(s),
+      below prometheus_node_exporter_target_minimum={{ prometheus_node_exporter_target_minimum }}.
+    quiet: true
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate Prometheus node target records
+  ansible.builtin.assert:
+    that:
+      - item.targets | default([]) | length > 0
+      - (item.labels | default({})).get('host', '') | length > 0
+    quiet: true
+  loop: "{{ prometheus_node_target_records }}"
+  loop_control:
+    label: "{{ (item.labels | default({})).get('host', '<missing>') }}"
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Read Prometheus blackbox HTTP target discovery
+  ansible.builtin.slurp:
+    src: "{{ prometheus_blackbox_http_file_sd_path }}"
+  register: prometheus_blackbox_http_target_discovery
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Parse Prometheus blackbox HTTP target discovery
+  ansible.builtin.set_fact:
+    prometheus_blackbox_http_target_records: "{{ prometheus_blackbox_http_target_discovery.content | b64decode | from_json }}"
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Require the expected number of Prometheus blackbox HTTP targets
+  ansible.builtin.assert:
+    that:
+      - prometheus_blackbox_http_target_records | length >= prometheus_blackbox_http_target_minimum | int
+    fail_msg: >-
+      Prometheus generated {{ prometheus_blackbox_http_target_records | length }} blackbox HTTP target(s),
+      below prometheus_blackbox_http_target_minimum={{ prometheus_blackbox_http_target_minimum }}.
+    quiet: true
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
+- name: Validate Prometheus blackbox HTTP target records
+  ansible.builtin.assert:
+    that:
+      - item.targets | default([]) | length > 0
+      - item.targets | select('match', '^https?://') | list | length == item.targets | length
+    quiet: true
+  loop: "{{ prometheus_blackbox_http_target_records }}"
+  loop_control:
+    label: "{{ item.targets | default([]) | join(', ') }}"
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
 - name: Render Prometheus configuration
   ansible.builtin.template:
     src: prometheus.yml.j2
@@ -69,6 +179,18 @@
     - prometheus_enabled | bool
     - not ansible_check_mode or prometheus_rules_dir_stat.stat.isdir | default(false)
 
+- name: Validate Prometheus configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ prometheus_promtool_binary }}"
+      - check
+      - config
+      - "{{ prometheus_config_path }}"
+  changed_when: false
+  when:
+    - prometheus_enabled | bool
+    - not ansible_check_mode
+
 - name: Enable and start Prometheus
   ansible.builtin.service:
     name: "{{ prometheus_service_name }}"
@@ -77,6 +199,10 @@
   when:
     - prometheus_enabled | bool
     - not ansible_check_mode
+
+- name: Apply pending Prometheus handlers
+  ansible.builtin.meta: flush_handlers
+  when: prometheus_enabled | bool
 
 - name: Validate Prometheus port
   ansible.builtin.wait_for:
