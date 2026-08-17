@@ -5,7 +5,7 @@ dns_recursor_validation_packages:
   - dnsutils
 dns_recursor_service_name: unbound
 dns_recursor_config_dir: /etc/unbound/unbound.conf.d
-dns_recursor_config_path: "{{ dns_recursor_config_dir }}/daedalus-recursive.conf"
+dns_recursor_config_path: "{{ dns_recursor_config_dir }}/alflag-recursive.conf"
 dns_recursor_listen_addresses:
   - "127.0.0.1"
 dns_recursor_allowed_cidrs:

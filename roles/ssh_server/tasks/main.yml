@@ -6,33 +6,13 @@
     apt_state_packages: openssh-server
   when: ssh_server_enabled | bool
 
-- name: Normalize SSH TCP forwarding policy
-  ansible.builtin.set_fact:
-    ssh_server_allow_tcp_forwarding_policy: >-
-      {%- set value = ssh_server_allow_tcp_forwarding -%}
-      {%- set normalized = value | string | trim | lower -%}
-      {%- if value is sameas true -%}
-      enabled
-      {%- elif value is sameas false -%}
-      disabled
-      {%- elif normalized in ['true', 'yes'] -%}
-      enabled
-      {%- elif normalized in ['false', 'no'] -%}
-      disabled
-      {%- elif normalized == 'local' -%}
-      local
-      {%- else -%}
-      {{ normalized }}
-      {%- endif -%}
-  when: ssh_server_enabled | bool
-
 - name: Validate SSH TCP forwarding policy
   ansible.builtin.assert:
     that:
-      - ssh_server_allow_tcp_forwarding_policy in ['disabled', 'local', 'enabled']
+      - ssh_server_allow_tcp_forwarding is string
+      - ssh_server_allow_tcp_forwarding in ['no', 'local', 'yes']
     fail_msg: >-
-      ssh_server_allow_tcp_forwarding must be one of no, local, or yes.
-      Legacy boolean values are also accepted and map to no/yes.
+      ssh_server_allow_tcp_forwarding must be the string no, local, or yes.
     quiet: true
   when: ssh_server_enabled | bool
 
@@ -53,7 +33,7 @@
 
 - name: Render managed sshd policy drop-in
   ansible.builtin.template:
-    src: daedalus.conf.j2
+    src: alflag.conf.j2
     dest: "{{ ssh_server_config_dropin_path }}"
     owner: root
     group: root

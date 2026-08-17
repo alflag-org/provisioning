@@ -123,7 +123,7 @@
   ansible.builtin.debug:
     msg: >-
       Cloudflare Tunnel should route to {{ services_web_origin_cloudflare_service_url }}.
-      Daedalus does not manage Cloudflare dashboard resources, routes, DNS
+      This repository does not manage Cloudflare dashboard resources, routes, DNS
       records, tunnel tokens, or API tokens from this role.
     verbosity: 1
   when: services_web_origin_enabled | bool

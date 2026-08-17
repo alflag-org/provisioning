@@ -44,7 +44,7 @@
     that:
       - item.stat.exists
     fail_msg: >-
-      Authoritative DNS zone file is not managed by Daedalus and is missing on
+      Authoritative DNS zone file is not managed by this provisioning repository and is missing on
       {{ inventory_hostname }}: {{ item.stat.path }}. Place the zone file manually
       or provide explicit zone text in dns_authoritative_zones.
   loop: "{{ dns_authoritative_zone_file_stats.results | default([]) }}"
@@ -125,7 +125,7 @@
 
 - name: Leave NSD service external until zones are configured
   ansible.builtin.debug:
-    msg: "dns_authoritative_enabled=true, but dns_authoritative_zones is empty; NSD service is not started by Daedalus."
+    msg: "dns_authoritative_enabled=true, but dns_authoritative_zones is empty; NSD service is not started by this provisioning repository."
     verbosity: 1
   when:
     - dns_authoritative_enabled | bool

@@ -7,6 +7,6 @@ systemd_resolved_dns:
 systemd_resolved_domains:
   - srv.alflag.internal
 systemd_resolved_config_dir: /etc/systemd/resolved.conf.d
-systemd_resolved_config_path: "{{ systemd_resolved_config_dir }}/10-daedalus.conf"
+systemd_resolved_config_path: "{{ systemd_resolved_config_dir }}/10-alflag.conf"
 systemd_resolved_resolv_conf_path: /etc/resolv.conf
 systemd_resolved_resolv_conf_target: /run/systemd/resolve/stub-resolv.conf

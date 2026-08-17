@@ -4,7 +4,6 @@
   gather_facts: true
 
   roles:
-    - role: foundation/baseline  # noqa role-name[path]
     - role: foundation/platform_vm  # noqa role-name[path]
       when: "'platform_vm' in group_names"
     - role: foundation/platform_lxc  # noqa role-name[path]
@@ -13,7 +12,5 @@
       when: ssh_server_enabled | default(false)
     - role: systemd_resolved
       when: systemd_resolved_enabled | default(false)
-    - role: retired_monitoring_cleanup
-      when: retired_monitoring_cleanup_enabled | default(false)
     - role: node_exporter
       when: node_exporter_enabled | default(false)

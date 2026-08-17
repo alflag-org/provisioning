@@ -6,7 +6,7 @@ services_web_origin_service_name: nginx
 services_web_origin_listen_address: 127.0.0.1
 services_web_origin_port: 8080
 services_web_origin_server_name: _
-services_web_origin_document_root: /var/www/daedalus-origin
+services_web_origin_document_root: /var/www/alflag-origin
 services_web_origin_index_path: "{{ services_web_origin_document_root }}/index.html"
 
 services_web_origin_health_path: /healthz
@@ -15,11 +15,11 @@ services_web_origin_health_check_host: "{{ '127.0.0.1' if services_web_origin_li
 services_web_origin_health_check_url: "http://{{ services_web_origin_health_check_host }}:{{ services_web_origin_port }}{{ services_web_origin_health_path }}"
 services_web_origin_cloudflare_service_url: "http://{{ services_web_origin_listen_address }}:{{ services_web_origin_port }}"
 
-services_web_origin_nginx_site_name: daedalus-origin
+services_web_origin_nginx_site_name: alflag-origin
 services_web_origin_nginx_available_dir: /etc/nginx/sites-available
 services_web_origin_nginx_enabled_dir: /etc/nginx/sites-enabled
 services_web_origin_nginx_available_path: "{{ services_web_origin_nginx_available_dir }}/{{ services_web_origin_nginx_site_name }}.conf"
 services_web_origin_nginx_enabled_path: "{{ services_web_origin_nginx_enabled_dir }}/{{ services_web_origin_nginx_site_name }}.conf"
 services_web_origin_nginx_default_enabled_path: /etc/nginx/sites-enabled/default
 
-services_web_origin_page_title: Daedalus Web Origin
+services_web_origin_page_title: Alflag Web Origin

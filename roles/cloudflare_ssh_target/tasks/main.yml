@@ -5,7 +5,7 @@
       - cloudflare_ssh_mode in cloudflare_ssh_allowed_modes
     fail_msg: >-
       Unsupported cloudflare_ssh_mode={{ cloudflare_ssh_mode }}.
-      Daedalus currently manages only host-side SSH target state.
+      This repository currently manages only host-side SSH target state.
   when: cloudflare_ssh_enabled | bool
 
 - name: Ensure SSH server is present for Cloudflare SSH target
@@ -31,6 +31,6 @@
       Cloudflare SSH target {{ cloudflare_ssh_hostname | default(inventory_hostname, true) }}
       expects a dashboard, Access, or Terraform-managed route to
       {{ cloudflare_ssh_target_host }}:{{ cloudflare_ssh_target_port }}.
-      Daedalus does not call the Cloudflare API from this role.
+      This role does not call the Cloudflare API.
     verbosity: 1
   when: cloudflare_ssh_enabled | bool

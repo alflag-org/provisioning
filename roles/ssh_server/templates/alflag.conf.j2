@@ -1,6 +1,6 @@
-# Managed by Daedalus. Keep this drop-in conservative.
+# Managed by Alflag provisioning. Keep this drop-in conservative.
 PermitRootLogin {{ ssh_server_permit_root_login }}
 PasswordAuthentication {{ 'yes' if ssh_server_password_authentication else 'no' }}
 PubkeyAuthentication {{ 'yes' if ssh_server_pubkey_authentication else 'no' }}
-AllowTcpForwarding {{ {'disabled': 'no', 'local': 'local', 'enabled': 'yes'}[ssh_server_allow_tcp_forwarding_policy] }}
+AllowTcpForwarding {{ ssh_server_allow_tcp_forwarding }}
 X11Forwarding {{ 'yes' if ssh_server_x11_forwarding else 'no' }}

@@ -5,7 +5,7 @@ server {
     root {{ services_web_origin_document_root }};
     index index.html;
 
-    add_header X-Daedalus-Origin "{{ inventory_hostname }}" always;
+    add_header X-Alflag-Origin "{{ inventory_hostname }}" always;
 
     location = {{ services_web_origin_health_path }} {
         access_log off;

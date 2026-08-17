@@ -23,7 +23,7 @@
 
 - name: Render recursive DNS configuration
   ansible.builtin.template:
-    src: daedalus-recursive.conf.j2
+    src: alflag-recursive.conf.j2
     dest: "{{ dns_recursor_config_path }}"
     owner: root
     group: root

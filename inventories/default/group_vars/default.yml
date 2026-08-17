@@ -5,8 +5,6 @@ site_short_name: default
 ansible_user: ops
 ansible_become: true
 
-monitoring_enabled: true
-retired_monitoring_cleanup_enabled: true
 node_exporter_enabled: true
 node_exporter_listen_address: 0.0.0.0
 node_exporter_listen_port: 9100

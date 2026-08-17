@@ -16,7 +16,7 @@
 
 - name: Render systemd-resolved DNS policy
   ansible.builtin.template:
-    src: daedalus.conf.j2
+    src: alflag.conf.j2
     dest: "{{ systemd_resolved_config_path }}"
     owner: root
     group: root
