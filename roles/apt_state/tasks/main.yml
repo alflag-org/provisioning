@@ -8,7 +8,7 @@
 
 - name: Check requested apt packages
   ansible.builtin.command:
-    argv: "{{ ['dpkg-query', '-W', '-f=${binary:Package}\\n'] + apt_state_package_list }}"
+    argv: "{{ ['dpkg-query', '-W', '-f=${binary:Package}\\t${db:Status-Status}\\n'] + apt_state_package_list }}"
   vars:
     apt_state_package_list: >-
       {{ [apt_state_packages] if apt_state_packages is string else apt_state_packages }}
@@ -29,11 +29,18 @@
   vars:
     apt_state_package_list: >-
       {{ [apt_state_packages] if apt_state_packages is string else apt_state_packages }}
+    apt_state_installed_package_count: >-
+      {{
+        apt_state_query.stdout_lines | default([])
+        | select('match', '^[^\t]+\tinstalled$')
+        | list
+        | length
+      }}
   become: "{{ apt_state_become | default(true) }}"
   when:
     - apt_state_package_list | length > 0
     - apt_state_state | default('present') == 'present'
-    - apt_state_query.rc | default(1) != 0
+    - apt_state_installed_package_count | int != apt_state_package_list | length
 
 - name: Remove installed apt packages
   ansible.builtin.apt:
