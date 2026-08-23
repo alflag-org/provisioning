@@ -1,0 +1,57 @@
+---
+- name: Check managed authoritative DNS zone file
+  ansible.builtin.stat:
+    path: >-
+      {{ dns_authoritative_managed_zone.file
+         | default(dns_authoritative_zone_dir ~ '/' ~ dns_authoritative_managed_zone.name ~ '.zone') }}
+  register: dns_authoritative_managed_zone_stat
+
+- name: Read current managed authoritative DNS zone
+  ansible.builtin.slurp:
+    path: "{{ dns_authoritative_managed_zone_stat.stat.path }}"
+  register: dns_authoritative_managed_zone_current
+  when: dns_authoritative_managed_zone_stat.stat.exists
+
+- name: Render managed authoritative DNS zone candidate
+  ansible.builtin.set_fact:
+    dns_authoritative_managed_zone_candidate: >-
+      {{
+        lookup(
+          'ansible.builtin.template',
+          role_path ~ '/templates/zone.j2',
+          template_vars={
+            'dns_authoritative_zone': dns_authoritative_managed_zone,
+            'dns_authoritative_zone_serial': dns_authoritative_initial_serial
+          }
+        )
+      }}
+
+- name: Select managed authoritative DNS zone serial
+  ansible.builtin.set_fact:
+    dns_authoritative_managed_zone_serial: >-
+      {{
+        (
+          dns_authoritative_managed_zone_current.content | b64decode
+          if dns_authoritative_managed_zone_current.content is defined
+          else none
+        )
+        | dns_authoritative_soa_serial(
+          dns_authoritative_managed_zone_candidate,
+          dns_authoritative_initial_serial
+        )
+      }}
+
+- name: Write managed authoritative DNS zone
+  ansible.builtin.template:
+    src: zone.j2
+    dest: >-
+      {{ dns_authoritative_managed_zone.file
+         | default(dns_authoritative_zone_dir ~ '/' ~ dns_authoritative_managed_zone.name ~ '.zone') }}
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nsd-checkzone {{ dns_authoritative_managed_zone.name }} %s"
+  vars:
+    dns_authoritative_zone: "{{ dns_authoritative_managed_zone }}"
+    dns_authoritative_zone_serial: "{{ dns_authoritative_managed_zone_serial }}"
+  notify: Restart nsd

@@ -10,6 +10,8 @@ ansible.cfg
 inventories/default/
 playbooks/
 roles/
+scripts/
+tests/
 collections/requirements.yml
 mise.toml
 mise.lock
@@ -30,8 +32,8 @@ mise run check
 `mise run setup` creates `.venv`, installs the validation tools from `requirements-dev.txt`, and
 installs the collections declared in `collections/requirements.yml`.
 
-`mise run check` runs YAML lint, Ansible lint, and syntax checks for `site.yml`, `bootstrap.yml`,
-and `cloudflare.yml`. These checks do not connect to managed hosts.
+`mise run check` runs YAML lint, Ansible lint, playbook syntax checks, repository unit tests, and
+inventory-derived DNS identity validation. These checks do not connect to managed hosts.
 
 ## Playbooks
 
@@ -80,7 +82,7 @@ Cloudflare or public DNS. NetBox is installed from the pinned native release `4.
 managed by systemd.
 
 The internal HTTP endpoint is available as `http://inventory01/`,
-`http://mgmt-inventory-01.srv.alflag.internal/`, or `http://10.10.10.210/`.
+`http://inventory01.srv.alflag.internal/`, or `http://10.10.10.210/`.
 
 HTTP frontend standard: new HTTP services use the reusable `roles/components/caddy/` component.
 The existing `services/web` nginx workload is intentionally unchanged; its migration is a separate

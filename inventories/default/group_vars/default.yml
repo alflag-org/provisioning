@@ -5,6 +5,8 @@ site_short_name: default
 ansible_user: ops
 ansible_become: true
 
+network_primary_fqdn: "{{ inventory_hostname }}.srv.alflag.internal"
+
 node_exporter_enabled: true
 node_exporter_listen_address: 0.0.0.0
 node_exporter_listen_port: 9100

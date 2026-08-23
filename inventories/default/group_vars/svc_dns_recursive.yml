@@ -16,7 +16,7 @@ dns_recursor_stub_zones:
 dns_recursor_validation_queries:
   - name: alflag.internal
     type: SOA
-  - name: mgmt-monitor-01.srv.alflag.internal
+  - name: monitor01.srv.alflag.internal
     type: A
   - name: web.access.internal
     type: A

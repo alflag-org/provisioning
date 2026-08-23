@@ -2,7 +2,6 @@
 ansible_user: ops
 ansible_become: true
 
-hostname: web01
 zone: dmz
 role: web
 virtualization_type: vm
@@ -16,7 +15,6 @@ network_gateway: 10.10.30.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: dmz-web-01.srv.alflag.internal
 network_service_aliases:
   - web.access.internal
 

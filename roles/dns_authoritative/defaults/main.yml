@@ -8,6 +8,9 @@ dns_authoritative_zone_dir: /etc/nsd/zones
 dns_authoritative_listen_addresses:
   - "127.0.0.1"
 dns_authoritative_default_ttl: 300
+dns_authoritative_initial_serial: 1
+dns_authoritative_soa: {}
+dns_authoritative_nameservers: []
 dns_authoritative_record_source_group: default
 dns_authoritative_server_identity_zone: srv.alflag.internal
 dns_authoritative_access_zone: access.internal
