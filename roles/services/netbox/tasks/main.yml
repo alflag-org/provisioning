@@ -83,6 +83,8 @@
 - name: Apply pending Caddy configuration handlers
   ansible.builtin.meta: flush_handlers
 
+# Initial administrator creation remains an explicit operator action because this role does not
+# manage interactive credentials.
 - name: Validate the complete NetBox deployment
   ansible.builtin.include_tasks:
     file: validation.yml
