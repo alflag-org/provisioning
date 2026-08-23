@@ -68,6 +68,7 @@
 - name: Reuse the generic Caddy component
   ansible.builtin.include_role:
     name: components/caddy  # noqa role-name[path]
+    public: true
 
 - name: Render the NetBox Caddy fragment
   ansible.builtin.template:
