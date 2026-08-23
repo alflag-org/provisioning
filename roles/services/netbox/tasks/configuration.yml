@@ -6,7 +6,7 @@
     owner: root
     group: "{{ services_netbox_group }}"
     mode: "0640"
-    diff: false
+  diff: false
   no_log: true
   notify: Restart NetBox services
   when: not ansible_check_mode
