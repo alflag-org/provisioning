@@ -34,6 +34,7 @@
   retries: 15
   delay: 1
   become: "{{ atlas_become_root }}"
+  when: not ansible_check_mode
 
 - name: Require legacy Atlas runner processes to be stopped
   ansible.builtin.assert:
@@ -41,6 +42,7 @@
       - atlas_legacy_processes_remaining.rc == 1
     fail_msg: >-
       Legacy Atlas runner processes are still active; refusing to remove their runtime.
+  when: not ansible_check_mode
 
 - name: Remove legacy Atlas directories
   ansible.builtin.file:
