@@ -6,9 +6,9 @@
   roles:
     - role: foundation/bootstrap  # noqa role-name[path]
 
-- name: Bootstrap Atlas runtime hosts
-  hosts: cap_atlas_host
+- name: Bootstrap Atlas runtime on managed hosts
+  hosts: default
   gather_facts: true
 
   roles:
-    - role: control/atlas_host  # noqa role-name[path]
+    - role: atlas_host

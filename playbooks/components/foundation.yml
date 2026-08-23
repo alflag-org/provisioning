@@ -8,6 +8,7 @@
       when: "'platform_vm' in group_names"
     - role: foundation/platform_lxc  # noqa role-name[path]
       when: "'platform_lxc' in group_names"
+    - role: atlas_host
     - role: ssh_server
       when: ssh_server_enabled | default(false)
     - role: systemd_resolved

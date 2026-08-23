@@ -1,7 +1,8 @@
 ---
-- name: Converge Atlas-managed control plane
-  hosts: cap_atlas_host
-  gather_facts: true
+- name: Preserve the control-plane lifecycle boundary
+  hosts: cap_control_node
+  gather_facts: false
 
-  roles:
-    - role: control/atlas_host  # noqa role-name[path]
+  tasks:
+    - name: Preserve the control-plane lifecycle boundary
+      ansible.builtin.meta: noop
