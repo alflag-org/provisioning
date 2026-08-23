@@ -1,0 +1,91 @@
+---
+- name: Validate the complete Caddy configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ caddy_binary }}"
+      - validate
+      - --config
+      - "{{ caddy_config_path }}"
+      - --adapter
+      - caddyfile
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when: not ansible_check_mode
+
+- name: Require NetBox dependency and frontend services to be running and enabled
+  ansible.builtin.assert:
+    that:
+      - item in ansible_facts.services
+      - ansible_facts.services[item].state == 'running'
+      - ansible_facts.services[item].status in ['enabled', 'enabled-runtime']
+    fail_msg: "{{ item }} is not running and enabled."
+  loop: "{{ netbox_required_services + [caddy_service_name ~ '.service'] }}"
+  when: not ansible_check_mode
+
+- name: Verify Gunicorn listens only on the loopback address
+  ansible.builtin.command: ss -ltn
+  register: netbox_listening_sockets
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Require the loopback Gunicorn listener
+  ansible.builtin.assert:
+    that:
+      - netbox_listening_sockets.stdout is search('127\\.0\\.0\\.1:' ~ (netbox_gunicorn_port | string))
+    fail_msg: >-
+      Gunicorn is not listening on the required loopback address
+      127.0.0.1:{{ netbox_gunicorn_port }}.
+  when: not ansible_check_mode
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  when: not ansible_check_mode
+
+- name: Require nginx to be absent from the NetBox host
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.packages.keys()
+        | select('match', '^nginx($|-)')
+        | list
+        | length == 0
+    fail_msg: "nginx packages are installed on the NetBox host."
+  when: not ansible_check_mode
+
+- name: Verify the NetBox login page through Caddy
+  ansible.builtin.uri:
+    url: "http://{{ netbox_frontend_health_address }}{{ netbox_health_path }}"
+    headers:
+      Host: "{{ netbox_caddy_site_addresses[0] }}"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: netbox_frontend_health_check
+  changed_when: false
+  check_mode: false
+  retries: "{{ netbox_health_retries }}"
+  delay: "{{ netbox_health_delay }}"
+  until: netbox_frontend_health_check.status | default(0) == 200
+  when: not ansible_check_mode
+
+- name: Verify NetBox static files through Caddy
+  ansible.builtin.uri:
+    url: "http://{{ netbox_frontend_health_address }}{{ netbox_caddy_static_path }}"
+    headers:
+      Host: "{{ netbox_caddy_site_addresses[0] }}"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: netbox_static_health_check
+  changed_when: false
+  check_mode: false
+  retries: "{{ netbox_health_retries }}"
+  delay: "{{ netbox_health_delay }}"
+  until: netbox_static_health_check.status | default(0) == 200
+  when: not ansible_check_mode

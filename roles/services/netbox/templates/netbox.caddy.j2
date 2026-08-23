@@ -1,0 +1,8 @@
+{% for address in netbox_caddy_site_addresses %}http://{{ address }}{% if not loop.last %}, {% endif %}{% endfor %} {
+    handle_path /static/* {
+        root * {{ netbox_static_path }}
+        file_server
+    }
+
+    reverse_proxy {{ netbox_gunicorn_bind_address }}:{{ netbox_gunicorn_port }}
+}

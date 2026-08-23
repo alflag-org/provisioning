@@ -1,0 +1,83 @@
+---
+- name: Validate required NetBox secret inputs
+  ansible.builtin.assert:
+    that:
+      - netbox_secret_key is defined and netbox_secret_key | string | length > 0
+      - netbox_api_token_pepper is defined and netbox_api_token_pepper | string | length > 0
+      - netbox_postgres_password is defined and netbox_postgres_password | string | length > 0
+      - netbox_redis_password is defined and netbox_redis_password | string | length > 0
+    fail_msg: >-
+      Define netbox_secret_key, netbox_api_token_pepper, netbox_postgres_password, and
+      netbox_redis_password in the ignored NetBox secret input before converging svc_netbox.
+
+- name: Validate NetBox frontend inputs
+  ansible.builtin.assert:
+    that:
+      - netbox_frontend_health_address is string
+      - netbox_frontend_health_address | length > 0
+      - netbox_caddy_site_addresses is sequence
+      - netbox_caddy_site_addresses | length > 0
+      - netbox_gunicorn_bind_address == '127.0.0.1'
+      - netbox_gunicorn_port | int > 0
+    fail_msg: >-
+      NetBox requires internal Caddy site addresses and a loopback-only Gunicorn bind.
+
+- name: Install NetBox native dependencies
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ netbox_system_packages }}"
+
+- name: Enable and start PostgreSQL
+  ansible.builtin.systemd_service:
+    name: "{{ netbox_postgresql_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Enable and start Redis
+  ansible.builtin.systemd_service:
+    name: "{{ netbox_redis_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Configure PostgreSQL and Redis
+  ansible.builtin.include_tasks:
+    file: database.yml
+
+- name: Apply PostgreSQL and Redis configuration handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Install the NetBox release and virtual environment
+  ansible.builtin.include_tasks:
+    file: release.yml
+
+- name: Render NetBox application configuration
+  ansible.builtin.include_tasks:
+    file: configuration.yml
+
+- name: Configure and start NetBox services
+  ansible.builtin.include_tasks:
+    file: services.yml
+
+- name: Reuse the generic Caddy component
+  ansible.builtin.include_role:
+    name: components/caddy  # noqa role-name[path]
+
+- name: Render the NetBox Caddy fragment
+  ansible.builtin.template:
+    src: netbox.caddy.j2
+    dest: "{{ caddy_fragment_dir }}/{{ netbox_caddy_fragment_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: caddy configuration changed
+  when: not ansible_check_mode
+
+- name: Apply pending Caddy configuration handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Validate the complete NetBox deployment
+  ansible.builtin.include_tasks:
+    file: validation.yml

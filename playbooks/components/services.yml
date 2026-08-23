@@ -10,3 +10,6 @@
 
 - name: Converge monitoring services
   ansible.builtin.import_playbook: services/monitoring.yml
+
+- name: Converge NetBox service
+  ansible.builtin.import_playbook: services/netbox.yml

@@ -26,5 +26,5 @@
   ansible.builtin.include_role:
     name: apt_state
   vars:
-    apt_state_packages: caddy
+    apt_state_packages: "{{ caddy_package }}"
     apt_state_force_update_cache: "{{ caddy_repository.changed | default(false) }}"

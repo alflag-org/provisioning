@@ -1,0 +1,113 @@
+---
+- name: Check the current NetBox path
+  ansible.builtin.stat:
+    path: "{{ netbox_root }}"
+    follow: false
+  register: netbox_root_stat
+
+- name: Refuse to replace an existing non-symlink NetBox path
+  ansible.builtin.assert:
+    that:
+      - not netbox_root_stat.stat.exists or netbox_root_stat.stat.islnk
+    fail_msg: >-
+      {{ netbox_root }} already exists as a directory or regular file. Refusing to replace it
+      automatically; inspect the existing deployment before switching to native NetBox.
+
+- name: Ensure the NetBox system group exists
+  ansible.builtin.group:
+    name: "{{ netbox_group }}"
+    system: true
+
+- name: Ensure the NetBox system user exists
+  ansible.builtin.user:
+    name: "{{ netbox_user }}"
+    group: "{{ netbox_group }}"
+    home: "{{ netbox_root }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure the versioned NetBox release directory exists
+  ansible.builtin.file:
+    path: "{{ netbox_release_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not ansible_check_mode
+
+- name: Download the pinned NetBox release archive
+  ansible.builtin.get_url:
+    url: "{{ netbox_release_url }}"
+    dest: "{{ netbox_release_archive_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: not ansible_check_mode
+
+- name: Extract the pinned NetBox release
+  ansible.builtin.unarchive:
+    src: "{{ netbox_release_archive_path }}"
+    dest: "{{ netbox_release_dir }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    creates: "{{ netbox_release_dir }}/upgrade.sh"
+  when: not ansible_check_mode
+
+- name: Point the stable NetBox path at the pinned release
+  ansible.builtin.file:
+    src: "{{ netbox_release_dir }}"
+    dest: "{{ netbox_root }}"
+    state: link
+    owner: root
+    group: root
+    force: false
+  register: netbox_current_link
+  when: not ansible_check_mode
+
+- name: Ensure NetBox writable directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ netbox_user }}"
+    group: "{{ netbox_group }}"
+    mode: "0755"
+  loop:
+    - "{{ netbox_media_path }}"
+    - "{{ netbox_reports_path }}"
+    - "{{ netbox_scripts_path }}"
+    - "{{ netbox_static_path }}"
+  when: not ansible_check_mode
+
+- name: Check for an existing NetBox virtual environment
+  ansible.builtin.stat:
+    path: "{{ netbox_venv_path }}/bin/python"
+  register: netbox_venv_stat
+
+- name: Run the official NetBox upgrade script
+  ansible.builtin.command:
+    cmd: "{{ netbox_root }}/upgrade.sh"
+    chdir: "{{ netbox_root }}"
+  environment:
+    PYTHON: "{{ netbox_python_binary }}"
+  register: netbox_upgrade_result
+  changed_when: true
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - netbox_current_link.changed | default(false) or not (netbox_venv_stat.stat.exists | default(false))
+
+- name: Restore ownership of NetBox writable directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ netbox_user }}"
+    group: "{{ netbox_group }}"
+    mode: "0755"
+  loop:
+    - "{{ netbox_media_path }}"
+    - "{{ netbox_reports_path }}"
+    - "{{ netbox_scripts_path }}"
+    - "{{ netbox_static_path }}"
+  when: not ansible_check_mode

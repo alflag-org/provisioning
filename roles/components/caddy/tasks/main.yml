@@ -1,4 +1,47 @@
 ---
-- name: install caddy
+- name: Install Caddy package
   ansible.builtin.include_tasks:
     file: install.yml
+
+- name: Check Caddy configuration directory
+  ansible.builtin.stat:
+    path: "{{ caddy_config_dir }}"
+  register: caddy_config_dir_stat
+
+- name: Ensure Caddy fragment directory exists
+  ansible.builtin.file:
+    path: "{{ caddy_fragment_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not ansible_check_mode
+
+- name: Render main Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "{{ caddy_binary }} validate --config %s --adapter caddyfile"
+  notify: caddy configuration changed
+  when: not ansible_check_mode
+
+- name: Render main Caddyfile in check mode
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - ansible_check_mode
+    - caddy_config_dir_stat.stat.isdir | default(false)
+
+- name: Enable and start official Caddy service
+  ansible.builtin.systemd_service:
+    name: "{{ caddy_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode

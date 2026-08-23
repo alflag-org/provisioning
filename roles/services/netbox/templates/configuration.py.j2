@@ -1,0 +1,37 @@
+"""Provisioning-owned NetBox configuration."""
+
+ALLOWED_HOSTS = {{ netbox_allowed_hosts | to_json }}
+API_TOKEN_PEPPERS = {
+    1: {{ netbox_api_token_pepper | to_json }},
+}
+
+DATABASES = {
+    "default": {
+        "NAME": {{ netbox_postgres_database | to_json }},
+        "USER": {{ netbox_postgres_user | to_json }},
+        "PASSWORD": {{ netbox_postgres_password | to_json }},
+        "HOST": {{ netbox_postgres_host | to_json }},
+        "PORT": {{ netbox_postgres_port | int }},
+        "CONN_MAX_AGE": 300,
+    },
+}
+
+REDIS = {
+    "tasks": {
+        "HOST": {{ netbox_redis_host | to_json }},
+        "PORT": {{ netbox_redis_port | int }},
+        "PASSWORD": {{ netbox_redis_password | to_json }},
+        "DATABASE": {{ netbox_redis_database | int }},
+        "SSL": False,
+    },
+    "caching": {
+        "HOST": {{ netbox_redis_host | to_json }},
+        "PORT": {{ netbox_redis_port | int }},
+        "PASSWORD": {{ netbox_redis_password | to_json }},
+        "DATABASE": {{ netbox_redis_cache_database | int }},
+        "SSL": False,
+    },
+}
+
+SECRET_KEY = {{ netbox_secret_key | to_json }}
+TIME_ZONE = {{ netbox_timezone | to_json }}

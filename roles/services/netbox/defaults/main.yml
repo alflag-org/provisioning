@@ -1,0 +1,86 @@
+---
+netbox_version: "4.6.7"
+netbox_root: /opt/netbox
+netbox_release_dir: "/opt/netbox-{{ netbox_version }}"
+netbox_release_archive_path: "/var/cache/netbox-{{ netbox_version }}.tar.gz"
+netbox_release_url: "https://github.com/netbox-community/netbox/archive/refs/tags/v{{ netbox_version }}.tar.gz"
+
+netbox_user: netbox
+netbox_group: netbox
+netbox_python_binary: /usr/bin/python3
+netbox_venv_path: "{{ netbox_root }}/venv"
+netbox_configuration_path: "{{ netbox_root }}/netbox/netbox/configuration.py"
+netbox_gunicorn_config_path: "{{ netbox_root }}/gunicorn.py"
+netbox_static_path: "{{ netbox_root }}/netbox/static"
+netbox_media_path: "{{ netbox_root }}/netbox/media"
+netbox_reports_path: "{{ netbox_root }}/netbox/reports"
+netbox_scripts_path: "{{ netbox_root }}/netbox/scripts"
+
+netbox_gunicorn_bind_address: 127.0.0.1
+netbox_gunicorn_port: 8001
+netbox_gunicorn_workers: 5
+netbox_gunicorn_threads: 3
+netbox_gunicorn_timeout: 120
+netbox_gunicorn_max_requests: 5000
+netbox_gunicorn_max_requests_jitter: 500
+
+netbox_service_name: netbox.service
+netbox_worker_service_name: netbox-rq.service
+netbox_required_services:
+  - postgresql.service
+  - redis-server.service
+  - "{{ netbox_service_name }}"
+  - "{{ netbox_worker_service_name }}"
+
+netbox_postgresql_package: postgresql
+netbox_postgresql_service_name: postgresql
+netbox_postgresql_hba_path: ""
+netbox_postgres_host: 127.0.0.1
+netbox_postgres_port: 5432
+netbox_postgres_database: netbox
+netbox_postgres_user: netbox
+
+netbox_redis_package: redis-server
+netbox_redis_service_name: redis-server
+netbox_redis_config_path: /etc/redis/redis.conf
+netbox_redis_host: 127.0.0.1
+netbox_redis_port: 6379
+netbox_redis_database: 0
+netbox_redis_cache_database: 1
+netbox_redis_bind: "127.0.0.1 ::1"
+
+netbox_system_packages:
+  - build-essential
+  - ca-certificates
+  - libffi-dev
+  - libpq-dev
+  - libssl-dev
+  - libxml2-dev
+  - libxslt1-dev
+  - "{{ netbox_postgresql_package }}"
+  - python3
+  - python3-dev
+  - python3-pip
+  - python3-psycopg2
+  - python3-venv
+  - "{{ netbox_redis_package }}"
+  - zlib1g-dev
+
+netbox_timezone: Asia/Tokyo
+netbox_allowed_hosts:
+  - "{{ network_primary_fqdn | default(inventory_hostname) }}"
+  - "{{ inventory_hostname }}"
+  - "{{ network_ipv4_address | default(ansible_host) }}"
+  - localhost
+  - 127.0.0.1
+
+netbox_caddy_fragment_name: netbox.caddy
+netbox_caddy_site_addresses:
+  - "{{ network_primary_fqdn | default(inventory_hostname) }}"
+  - "{{ inventory_hostname }}"
+  - "{{ network_ipv4_address | default(ansible_host) }}"
+netbox_caddy_static_path: /static/netbox.js
+netbox_frontend_health_address: "{{ network_ipv4_address | default(ansible_host) }}"
+netbox_health_path: /login/
+netbox_health_retries: 60
+netbox_health_delay: 5

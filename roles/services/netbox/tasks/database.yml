@@ -1,0 +1,80 @@
+---
+- name: Configure Redis to listen only on local addresses
+  ansible.builtin.lineinfile:
+    path: "{{ netbox_redis_config_path }}"
+    regexp: '^\s*bind\s+'
+    line: "bind {{ netbox_redis_bind }}"
+  notify: Restart Redis
+  when: not ansible_check_mode
+
+- name: Configure the Redis password
+  ansible.builtin.lineinfile:
+    path: "{{ netbox_redis_config_path }}"
+    regexp: '^\s*#?\s*requirepass\s+'
+    line: "requirepass {{ netbox_redis_password }}"
+  no_log: true
+  notify: Restart Redis
+  when: not ansible_check_mode
+
+- name: Find the PostgreSQL host authentication file
+  ansible.builtin.find:
+    paths: /etc/postgresql
+    patterns: pg_hba.conf
+    file_type: file
+    recurse: true
+  register: netbox_postgresql_hba_files
+  when: not ansible_check_mode
+
+- name: Require one PostgreSQL host authentication file
+  ansible.builtin.assert:
+    that:
+      - netbox_postgresql_hba_files.files | length == 1
+    fail_msg: >-
+      Expected exactly one PostgreSQL pg_hba.conf under /etc/postgresql, found
+      {{ netbox_postgresql_hba_files.files | length }}.
+  when: not ansible_check_mode
+
+- name: Resolve the PostgreSQL host authentication path
+  ansible.builtin.set_fact:
+    netbox_postgresql_hba_path: >-
+      {{ netbox_postgresql_hba_path
+         if netbox_postgresql_hba_path | length > 0
+         else netbox_postgresql_hba_files.files[0].path }}
+  when: not ansible_check_mode
+
+- name: Allow NetBox password authentication from localhost
+  community.postgresql.postgresql_pg_hba:
+    dest: "{{ netbox_postgresql_hba_path }}"
+    contype: host
+    databases: "{{ netbox_postgres_database }}"
+    users: "{{ netbox_postgres_user }}"
+    address: 127.0.0.1/32
+    method: scram-sha-256
+    state: present
+  become: true
+  become_user: postgres
+  notify: Reload PostgreSQL
+  when: not ansible_check_mode
+
+- name: Create the NetBox PostgreSQL role
+  community.postgresql.postgresql_user:
+    login_db: postgres
+    name: "{{ netbox_postgres_user }}"
+    password: "{{ netbox_postgres_password }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE
+    state: present
+  become: true
+  become_user: postgres
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Create the NetBox PostgreSQL database
+  community.postgresql.postgresql_db:
+    maintenance_db: postgres
+    name: "{{ netbox_postgres_database }}"
+    owner: "{{ netbox_postgres_user }}"
+    encoding: UTF-8
+    state: present
+  become: true
+  become_user: postgres
+  when: not ansible_check_mode

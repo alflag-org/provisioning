@@ -1,0 +1,7 @@
+---
+- name: Converge NetBox service
+  hosts: svc_netbox
+  gather_facts: true
+
+  roles:
+    - role: services/netbox  # noqa role-name[path]

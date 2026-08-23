@@ -1,0 +1,20 @@
+---
+- name: Validate Caddy configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ caddy_binary }}"
+      - validate
+      - --config
+      - "{{ caddy_config_path }}"
+      - --adapter
+      - caddyfile
+  changed_when: false
+  listen: caddy configuration changed
+  when: not ansible_check_mode
+
+- name: Reload Caddy
+  ansible.builtin.systemd_service:
+    name: "{{ caddy_service_name }}"
+    state: reloaded
+  listen: caddy configuration changed
+  when: not ansible_check_mode

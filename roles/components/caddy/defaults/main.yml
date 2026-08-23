@@ -1,0 +1,9 @@
+---
+caddy_binary: /usr/bin/caddy
+caddy_package: caddy
+caddy_service_name: caddy
+
+caddy_config_dir: /etc/caddy
+caddy_config_path: "{{ caddy_config_dir }}/Caddyfile"
+caddy_fragment_dir: "{{ caddy_config_dir }}/conf.d"
+caddy_fragment_glob: "{{ caddy_fragment_dir }}/*.caddy"
