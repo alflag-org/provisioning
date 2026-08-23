@@ -5,4 +5,13 @@ mysql_service_intended_components:
 mysql_server_enabled: true
 mysql_server_bind_address: "{{ network_ipv4_address | default(ansible_host) }}"
 mysql_server_databases: []
-mysql_server_users: []
+mysql_server_users:
+  - name: zabbix
+    host: localhost
+    plugin: auth_socket
+    priv: "*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW"
+    state: present
+
+zabbix_mysql_monitoring_dsn: unix:/var/run/mysqld/mysqld.sock
+zabbix_mysql_monitoring_user: zabbix
+zabbix_mysql_monitoring_password: ""

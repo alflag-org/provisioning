@@ -1,0 +1,249 @@
+---
+- name: Log in to Zabbix with the configured Admin password
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.login
+      params:
+        username: "{{ services_monitoring_admin_user }}"
+        password: "{{ services_monitoring_admin_password }}"
+      id: 1
+  register: services_monitoring_login_configured
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Log in to Zabbix with the package default Admin password
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.login
+      params:
+        username: "{{ services_monitoring_admin_user }}"
+        password: "{{ services_monitoring_initial_admin_password }}"
+        userData: true
+      id: 1
+  register: services_monitoring_login_initial
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: services_monitoring_login_configured.json.result is not defined
+
+- name: Require Zabbix Admin authentication
+  ansible.builtin.assert:
+    that:
+      - >-
+        services_monitoring_login_configured.json.result is defined
+        or services_monitoring_login_initial.json.result is defined
+    fail_msg: Unable to authenticate to the Zabbix API with the configured or initial Admin password.
+  no_log: true
+
+- name: Rotate the initial Zabbix Admin password
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.update
+      params:
+        userid: "{{ services_monitoring_login_initial.json.result.userid }}"
+        passwd: "{{ services_monitoring_admin_password }}"
+        current_passwd: "{{ services_monitoring_initial_admin_password }}"
+      auth: "{{ services_monitoring_login_initial.json.result.sessionid }}"
+      id: 1
+  register: services_monitoring_password_update
+  changed_when: true
+  failed_when: services_monitoring_password_update.json.error is defined
+  no_log: true
+  when: services_monitoring_login_configured.json.result is not defined
+
+- name: Log in to Zabbix after Admin password rotation
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.login
+      params:
+        username: "{{ services_monitoring_admin_user }}"
+        password: "{{ services_monitoring_admin_password }}"
+      id: 1
+  register: services_monitoring_login_rotated
+  changed_when: false
+  failed_when: services_monitoring_login_rotated.json.error is defined
+  no_log: true
+  when: services_monitoring_login_configured.json.result is not defined
+
+- name: Resolve Zabbix API authentication token
+  ansible.builtin.set_fact:
+    services_monitoring_zabbix_auth: >-
+      {{
+        services_monitoring_login_configured.json.result
+        if services_monitoring_login_configured.json.result is defined
+        else services_monitoring_login_rotated.json.result
+      }}
+  no_log: true
+
+- name: Query managed Zabbix host groups
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: hostgroup.get
+      params:
+        output:
+          - groupid
+          - name
+        filter:
+          name:
+            - "{{ services_monitoring_managed_group_name }}"
+            - "{{ services_monitoring_zone_group_prefix }}MGMT"
+            - "{{ services_monitoring_zone_group_prefix }}DMZ"
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  register: services_monitoring_group_query
+  changed_when: false
+  failed_when: services_monitoring_group_query.json.error is defined
+
+- name: Create missing managed Zabbix host groups
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: hostgroup.create
+      params:
+        name: "{{ item }}"
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  loop:
+    - "{{ services_monitoring_managed_group_name }}"
+    - "{{ services_monitoring_zone_group_prefix }}MGMT"
+    - "{{ services_monitoring_zone_group_prefix }}DMZ"
+  register: services_monitoring_group_create
+  changed_when: true
+  failed_when: services_monitoring_group_create.json.error is defined
+  when: item not in (services_monitoring_group_query.json.result | map(attribute='name') | list)
+
+- name: Refresh managed Zabbix host groups
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: hostgroup.get
+      params:
+        output:
+          - groupid
+          - name
+        filter:
+          name:
+            - "{{ services_monitoring_managed_group_name }}"
+            - "{{ services_monitoring_zone_group_prefix }}MGMT"
+            - "{{ services_monitoring_zone_group_prefix }}DMZ"
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  register: services_monitoring_group_refresh
+  changed_when: false
+  failed_when: services_monitoring_group_refresh.json.error is defined
+
+- name: Resolve managed Zabbix host groups
+  ansible.builtin.set_fact:
+    services_monitoring_zabbix_groups: "{{ services_monitoring_group_refresh.json.result }}"
+
+- name: Query required Zabbix templates
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: template.get
+      params:
+        output:
+          - templateid
+          - host
+        filter:
+          host:
+            - "{{ services_monitoring_linux_template_name }}"
+            - "{{ services_monitoring_mysql_template_name }}"
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  register: services_monitoring_template_query
+  changed_when: false
+  failed_when: services_monitoring_template_query.json.error is defined
+
+- name: Require standard Zabbix templates
+  ansible.builtin.assert:
+    that:
+      - services_monitoring_linux_template_name in (services_monitoring_template_query.json.result | map(attribute='host') | list)
+      - >-
+        groups.get('svc_mysql', []) | length == 0
+        or services_monitoring_mysql_template_name in
+           (services_monitoring_template_query.json.result | map(attribute='host') | list)
+    fail_msg: Required standard Zabbix templates are missing from the server.
+
+- name: Resolve Zabbix templates
+  ansible.builtin.set_fact:
+    services_monitoring_zabbix_templates: "{{ services_monitoring_template_query.json.result }}"
+
+- name: Reconcile managed hosts into Zabbix
+  ansible.builtin.include_tasks: sync_host.yml
+  loop: "{{ groups.get('default', []) }}"
+  loop_control:
+    loop_var: zabbix_sync_host
+    label: "{{ zabbix_sync_host }}"
+
+- name: Log out of the Zabbix API
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.logout
+      params: []
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  changed_when: false
+  failed_when: false
+  no_log: true

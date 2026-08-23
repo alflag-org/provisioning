@@ -1,0 +1,56 @@
+---
+- name: Purge retired host monitoring agents
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ zabbix_agent_retired_packages }}"
+    apt_state_state: absent
+    apt_state_purge: true
+    apt_state_autoremove: true
+
+- name: Configure the Zabbix package repository
+  ansible.builtin.include_role:
+    name: components/zabbix_repository  # noqa role-name[path]
+
+- name: Install Zabbix Agent 2
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ zabbix_agent_package }}"
+    apt_state_force_update_cache: true
+  when:
+    - not ansible_check_mode or zabbix_repository_query.rc == 0
+
+- name: Inspect the Zabbix Agent configuration directory
+  ansible.builtin.stat:
+    path: "{{ zabbix_agent_config_dir }}"
+  register: zabbix_agent_config_dir_stat
+
+- name: Render Zabbix Agent 2 configuration
+  ansible.builtin.template:
+    src: zabbix_agent2.conf.j2
+    dest: "{{ zabbix_agent_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Zabbix Agent 2
+  when:
+    - not ansible_check_mode or zabbix_agent_config_dir_stat.stat.isdir | default(false)
+
+- name: Enable and start Zabbix Agent 2
+  ansible.builtin.systemd_service:
+    name: "{{ zabbix_agent_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Apply pending Zabbix Agent 2 handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Validate Zabbix Agent 2 listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ zabbix_agent_listen_port }}"
+    timeout: 5
+    state: started
+  when: not ansible_check_mode

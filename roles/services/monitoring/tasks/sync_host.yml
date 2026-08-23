@@ -1,0 +1,193 @@
+---
+- name: Resolve Zabbix host synchronization metadata
+  ansible.builtin.set_fact:
+    zabbix_sync_ip: "{{ hostvars[zabbix_sync_host].ansible_host }}"
+    zabbix_sync_zone: >-
+      {{ 'MGMT'
+         if zabbix_sync_host in groups.get('mgmt', [])
+         else ('DMZ' if zabbix_sync_host in groups.get('dmz', []) else 'UNCLASSIFIED') }}
+    zabbix_sync_is_mysql: "{{ zabbix_sync_host in groups.get('svc_mysql', []) }}"
+
+- name: Require a supported Zabbix host zone
+  ansible.builtin.assert:
+    that:
+      - zabbix_sync_zone in ['MGMT', 'DMZ']
+    fail_msg: "Cannot map {{ zabbix_sync_host }} to a managed Zabbix zone."
+
+- name: Resolve Zabbix group and template payloads
+  ansible.builtin.set_fact:
+    zabbix_sync_group_payload: >-
+      {{
+        [
+          {
+            'groupid': (
+              services_monitoring_zabbix_groups
+              | selectattr('name', 'equalto', services_monitoring_managed_group_name)
+              | map(attribute='groupid') | first
+            )
+          },
+          {
+            'groupid': (
+              services_monitoring_zabbix_groups
+              | selectattr('name', 'equalto', services_monitoring_zone_group_prefix ~ zabbix_sync_zone)
+              | map(attribute='groupid') | first
+            )
+          }
+        ]
+      }}
+    zabbix_sync_template_payload: >-
+      {{
+        [
+          {
+            'templateid': (
+              services_monitoring_zabbix_templates
+              | selectattr('host', 'equalto', services_monitoring_linux_template_name)
+              | map(attribute='templateid') | first
+            )
+          }
+        ]
+        + (
+          [
+            {
+              'templateid': (
+                services_monitoring_zabbix_templates
+                | selectattr('host', 'equalto', services_monitoring_mysql_template_name)
+                | map(attribute='templateid') | first
+              )
+            }
+          ]
+          if zabbix_sync_is_mysql else []
+        )
+      }}
+    zabbix_sync_macro_payload: >-
+      {{
+        [
+          {'macro': '{$MYSQL.DSN}', 'value': hostvars[zabbix_sync_host].zabbix_mysql_monitoring_dsn},
+          {'macro': '{$MYSQL.USER}', 'value': hostvars[zabbix_sync_host].zabbix_mysql_monitoring_user},
+          {'macro': '{$MYSQL.PASSWORD}', 'value': hostvars[zabbix_sync_host].zabbix_mysql_monitoring_password}
+        ]
+        if zabbix_sync_is_mysql else []
+      }}
+    zabbix_sync_tag_payload:
+      - tag: managed-by
+        value: provisioning
+      - tag: zone
+        value: "{{ zabbix_sync_zone | lower }}"
+
+- name: Query Zabbix host
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: host.get
+      params:
+        output:
+          - hostid
+          - host
+        selectInterfaces:
+          - interfaceid
+          - type
+          - main
+          - useip
+          - ip
+          - dns
+          - port
+        filter:
+          host:
+            - "{{ zabbix_sync_host }}"
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  register: zabbix_sync_host_query
+  changed_when: false
+  failed_when: zabbix_sync_host_query.json.error is defined
+
+- name: Resolve existing Zabbix host and interface
+  ansible.builtin.set_fact:
+    zabbix_sync_existing_host: "{{ zabbix_sync_host_query.json.result | first | default({}) }}"
+
+- name: Resolve existing Zabbix agent interface
+  ansible.builtin.set_fact:
+    zabbix_sync_existing_interface: >-
+      {{
+        zabbix_sync_existing_host.interfaces | default([])
+        | selectattr('type', 'equalto', '1')
+        | list | first | default({})
+      }}
+
+- name: Build Zabbix agent interface payload
+  ansible.builtin.set_fact:
+    zabbix_sync_interface_payload: >-
+      {{
+        {
+          'type': 1,
+          'main': 1,
+          'useip': 1,
+          'ip': zabbix_sync_ip,
+          'dns': '',
+          'port': '10050'
+        }
+        | combine(
+            {'interfaceid': zabbix_sync_existing_interface.interfaceid}
+            if zabbix_sync_existing_interface.interfaceid is defined else {}
+          )
+      }}
+
+- name: Create Zabbix host
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: host.create
+      params:
+        host: "{{ zabbix_sync_host }}"
+        name: "{{ zabbix_sync_host }}"
+        interfaces: "{{ [zabbix_sync_interface_payload] }}"
+        groups: "{{ zabbix_sync_group_payload }}"
+        templates: "{{ zabbix_sync_template_payload }}"
+        macros: "{{ zabbix_sync_macro_payload }}"
+        tags: "{{ zabbix_sync_tag_payload }}"
+        inventory_mode: 1
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  register: zabbix_sync_host_create
+  changed_when: true
+  failed_when: zabbix_sync_host_create.json.error is defined
+  when: zabbix_sync_existing_host.hostid is not defined
+
+- name: Reconcile Zabbix host
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: host.update
+      params:
+        hostid: "{{ zabbix_sync_existing_host.hostid }}"
+        host: "{{ zabbix_sync_host }}"
+        name: "{{ zabbix_sync_host }}"
+        interfaces: "{{ [zabbix_sync_interface_payload] }}"
+        groups: "{{ zabbix_sync_group_payload }}"
+        templates: "{{ zabbix_sync_template_payload }}"
+        macros: "{{ zabbix_sync_macro_payload }}"
+        tags: "{{ zabbix_sync_tag_payload }}"
+        inventory_mode: 1
+      auth: "{{ services_monitoring_zabbix_auth }}"
+      id: 1
+  register: zabbix_sync_host_update
+  changed_when: false
+  failed_when: zabbix_sync_host_update.json.error is defined
+  when: zabbix_sync_existing_host.hostid is defined

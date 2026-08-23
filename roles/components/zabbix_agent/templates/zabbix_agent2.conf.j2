@@ -1,0 +1,14 @@
+# Managed by provisioning.
+PidFile={{ zabbix_agent_pid_path }}
+LogType=file
+LogFile={{ zabbix_agent_log_path }}
+LogFileSize=0
+
+Server={{ zabbix_agent_server }}
+ServerActive={{ zabbix_agent_server_active }}
+Hostname={{ zabbix_agent_hostname }}
+
+ListenIP={{ zabbix_agent_listen_ip }}
+ListenPort={{ zabbix_agent_listen_port }}
+
+Include={{ zabbix_agent_config_dir }}/zabbix_agent2.d/*.conf

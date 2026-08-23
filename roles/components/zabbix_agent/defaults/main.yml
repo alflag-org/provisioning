@@ -1,0 +1,16 @@
+---
+zabbix_agent_package: zabbix-agent2
+zabbix_agent_service_name: zabbix-agent2
+zabbix_agent_config_dir: /etc/zabbix
+zabbix_agent_config_path: /etc/zabbix/zabbix_agent2.conf
+zabbix_agent_log_path: /var/log/zabbix/zabbix_agent2.log
+zabbix_agent_pid_path: /run/zabbix/zabbix_agent2.pid
+
+zabbix_agent_server: 127.0.0.1
+zabbix_agent_server_active: "{{ zabbix_agent_server }}"
+zabbix_agent_hostname: "{{ inventory_hostname }}"
+zabbix_agent_listen_ip: 0.0.0.0
+zabbix_agent_listen_port: 10050
+
+zabbix_agent_retired_packages:
+  - prometheus-node-exporter

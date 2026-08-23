@@ -1,0 +1,18 @@
+<?php
+// Managed by provisioning.
+global $DB;
+
+$DB['TYPE'] = 'POSTGRESQL';
+$DB['SERVER'] = {{ services_monitoring_database_host | to_json }};
+$DB['PORT'] = {{ services_monitoring_database_port | string | to_json }};
+$DB['DATABASE'] = {{ services_monitoring_database_name | to_json }};
+$DB['USER'] = {{ services_monitoring_database_user | to_json }};
+$DB['PASSWORD'] = {{ services_monitoring_database_password | to_json }};
+$DB['SCHEMA'] = '';
+$DB['DOUBLE_IEEE754'] = true;
+
+$ZBX_SERVER = '127.0.0.1';
+$ZBX_SERVER_PORT = '10051';
+$ZBX_SERVER_NAME = {{ services_monitoring_server_name | to_json }};
+
+$IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;

@@ -1,0 +1,20 @@
+---
+- name: Restart Zabbix server
+  ansible.builtin.systemd_service:
+    name: "{{ services_monitoring_zabbix_server_service_name }}"
+    state: restarted
+  when: not ansible_check_mode
+
+- name: Reload PostgreSQL
+  ansible.builtin.systemd_service:
+    name: "{{ services_monitoring_postgresql_service_name }}"
+    state: reloaded
+  when: not ansible_check_mode
+
+- name: Restart PHP-FPM
+  ansible.builtin.systemd_service:
+    name: "{{ services_monitoring_php_fpm_service_name }}"
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - services_monitoring_php_fpm_service_name is defined

@@ -5,9 +5,13 @@ site_short_name: default
 ansible_user: ops
 ansible_become: true
 
-node_exporter_enabled: true
-node_exporter_listen_address: 0.0.0.0
-node_exporter_listen_port: 9100
+# Zabbix Agent 2 is the only host monitoring agent.
+zabbix_agent_enabled: true
+zabbix_agent_server: 10.10.10.250
+zabbix_agent_server_active: 10.10.10.250
+zabbix_agent_hostname: "{{ hostname | default(inventory_hostname) }}"
+zabbix_agent_listen_ip: 0.0.0.0
+zabbix_agent_listen_port: 10050
 
 # Atlas is a required part of every managed host's foundation.
 atlas_validate_runtime: true

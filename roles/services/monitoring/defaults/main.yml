@@ -1,0 +1,56 @@
+---
+services_monitoring_retired_packages:
+  - prometheus-node-exporter
+  - prometheus
+  - prometheus-alertmanager
+  - prometheus-blackbox-exporter
+  - grafana
+services_monitoring_retired_paths:
+  - /etc/prometheus
+  - /var/lib/prometheus
+  - /etc/grafana
+  - /var/lib/grafana
+  - /etc/apt/sources.list.d/grafana.sources
+  - /etc/apt/keyrings/grafana.asc
+  - /etc/apt/keyrings/grafana.gpg
+
+services_monitoring_packages:
+  - postgresql
+  - python3-psycopg2
+  - php-fpm
+  - php-pgsql
+  - zabbix-server-pgsql
+  - zabbix-frontend-php
+  - zabbix-sql-scripts
+
+services_monitoring_postgresql_service_name: postgresql
+services_monitoring_database_name: zabbix
+services_monitoring_database_user: zabbix
+services_monitoring_database_host: 127.0.0.1
+services_monitoring_database_port: 5432
+services_monitoring_postgresql_hba_path: ""
+services_monitoring_schema_path: /usr/share/zabbix-sql-scripts/postgresql/server.sql.gz
+
+services_monitoring_zabbix_server_service_name: zabbix-server
+services_monitoring_zabbix_server_config_path: /etc/zabbix/zabbix_server.conf
+services_monitoring_frontend_config_path: /etc/zabbix/web/zabbix.conf.php
+services_monitoring_frontend_root: /usr/share/zabbix
+services_monitoring_server_name: Alflag
+services_monitoring_timezone: Asia/Tokyo
+
+services_monitoring_caddy_fragment_name: zabbix.caddy
+services_monitoring_caddy_fragment_path: "{{ caddy_fragment_dir }}/{{ services_monitoring_caddy_fragment_name }}"
+services_monitoring_caddy_site_addresses:
+  - http://monitor01
+  - "http://{{ network_primary_fqdn }}"
+  - http://zabbix.access.internal
+  - "http://{{ network_ipv4_address }}"
+
+services_monitoring_api_url: "http://{{ network_ipv4_address }}/api_jsonrpc.php"
+services_monitoring_admin_user: Admin
+services_monitoring_initial_admin_password: zabbix
+
+services_monitoring_managed_group_name: Provisioning/Managed
+services_monitoring_zone_group_prefix: Provisioning/
+services_monitoring_linux_template_name: Linux by Zabbix agent
+services_monitoring_mysql_template_name: MySQL by Zabbix agent 2

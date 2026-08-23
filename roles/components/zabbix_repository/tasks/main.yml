@@ -1,0 +1,45 @@
+---
+- name: Validate Zabbix repository platform
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "Ubuntu"
+      - ansible_distribution_version is defined
+    fail_msg: Zabbix repository management currently supports Ubuntu only.
+
+- name: Inspect installed Zabbix repository package
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - "-f=${Version}"
+      - zabbix-release
+  register: zabbix_repository_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Download Zabbix repository package
+  ansible.builtin.get_url:
+    url: "{{ zabbix_repository_package_url }}"
+    dest: "{{ zabbix_repository_package_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - not ansible_check_mode
+    - zabbix_repository_query.rc != 0 or zabbix_repository_series not in zabbix_repository_query.stdout
+
+- name: Install Zabbix repository package
+  ansible.builtin.apt:
+    deb: "{{ zabbix_repository_package_path }}"
+    state: present
+  become: true
+  when:
+    - not ansible_check_mode
+    - zabbix_repository_query.rc != 0 or zabbix_repository_series not in zabbix_repository_query.stdout
+
+- name: Remove downloaded Zabbix repository package
+  ansible.builtin.file:
+    path: "{{ zabbix_repository_package_path }}"
+    state: absent
+  when: not ansible_check_mode

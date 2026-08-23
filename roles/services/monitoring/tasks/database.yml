@@ -1,0 +1,90 @@
+---
+- name: Find the PostgreSQL host authentication file
+  ansible.builtin.find:
+    paths: /etc/postgresql
+    patterns: pg_hba.conf
+    file_type: file
+    recurse: true
+  register: services_monitoring_postgresql_hba_files
+  when: not ansible_check_mode
+
+- name: Require a PostgreSQL host authentication file
+  ansible.builtin.assert:
+    that:
+      - services_monitoring_postgresql_hba_files.files | length >= 1
+    fail_msg: No PostgreSQL pg_hba.conf was found under /etc/postgresql.
+  when: not ansible_check_mode
+
+- name: Resolve the PostgreSQL host authentication path
+  ansible.builtin.set_fact:
+    services_monitoring_postgresql_hba_resolved_path: >-
+      {{ services_monitoring_postgresql_hba_path
+         if services_monitoring_postgresql_hba_path | length > 0
+         else (services_monitoring_postgresql_hba_files.files | sort(attribute='path') | last).path }}
+  when: not ansible_check_mode
+
+- name: Allow Zabbix password authentication from localhost
+  community.postgresql.postgresql_pg_hba:
+    dest: "{{ services_monitoring_postgresql_hba_resolved_path }}"
+    contype: host
+    databases: "{{ services_monitoring_database_name }}"
+    users: "{{ services_monitoring_database_user }}"
+    address: 127.0.0.1/32
+    method: scram-sha-256
+    state: present
+  become: true
+  become_user: postgres
+  notify: Reload PostgreSQL
+  when: not ansible_check_mode
+
+- name: Create the Zabbix PostgreSQL role
+  community.postgresql.postgresql_user:
+    login_db: postgres
+    name: "{{ services_monitoring_database_user }}"
+    password: "{{ services_monitoring_database_password }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE
+    state: present
+  become: true
+  become_user: postgres
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Create the Zabbix PostgreSQL database
+  community.postgresql.postgresql_db:
+    maintenance_db: postgres
+    name: "{{ services_monitoring_database_name }}"
+    owner: "{{ services_monitoring_database_user }}"
+    encoding: UTF-8
+    state: present
+  become: true
+  become_user: postgres
+  when: not ansible_check_mode
+
+- name: Check whether the Zabbix schema is initialized
+  community.postgresql.postgresql_query:
+    login_db: "{{ services_monitoring_database_name }}"
+    query: >-
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'dbversion'
+      ) AS initialized
+  become: true
+  become_user: postgres
+  register: services_monitoring_schema_query
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Import the initial Zabbix PostgreSQL schema
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    zcat {{ services_monitoring_schema_path | quote }} |
+    psql {{ services_monitoring_database_name | quote }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: zabbix
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - not (services_monitoring_schema_query.query_result[0].initialized | bool)

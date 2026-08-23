@@ -1,0 +1,90 @@
+---
+- name: Find PHP-FPM pool configuration
+  ansible.builtin.find:
+    paths: /etc/php
+    patterns: www.conf
+    file_type: file
+    recurse: true
+  register: services_monitoring_php_fpm_pool_files
+  when: not ansible_check_mode
+
+- name: Require a PHP-FPM pool
+  ansible.builtin.assert:
+    that:
+      - services_monitoring_php_fpm_pool_files.files | length >= 1
+    fail_msg: No PHP-FPM www.conf was found under /etc/php.
+  when: not ansible_check_mode
+
+- name: Resolve PHP-FPM version
+  ansible.builtin.set_fact:
+    services_monitoring_php_fpm_pool_path: >-
+      {{ (services_monitoring_php_fpm_pool_files.files | sort(attribute='path') | last).path }}
+    services_monitoring_php_version: >-
+      {{ (services_monitoring_php_fpm_pool_files.files | sort(attribute='path') | last).path.split('/')[3] }}
+  when: not ansible_check_mode
+
+- name: Resolve PHP-FPM service name
+  ansible.builtin.set_fact:
+    services_monitoring_php_fpm_service_name: "php{{ services_monitoring_php_version }}-fpm"
+  when: not ansible_check_mode
+
+- name: Configure PHP for Zabbix
+  ansible.builtin.copy:
+    dest: "/etc/php/{{ services_monitoring_php_version }}/fpm/conf.d/99-zabbix.ini"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      date.timezone = {{ services_monitoring_timezone }}
+      memory_limit = 256M
+      upload_max_filesize = 16M
+      post_max_size = 16M
+      max_execution_time = 300
+      max_input_time = 300
+      max_input_vars = 10000
+  notify: Restart PHP-FPM
+  when: not ansible_check_mode
+
+- name: Enable and start PHP-FPM
+  ansible.builtin.systemd_service:
+    name: "{{ services_monitoring_php_fpm_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Ensure Zabbix frontend configuration directory exists
+  ansible.builtin.file:
+    path: "{{ services_monitoring_frontend_config_path | dirname }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0750"
+  when: not ansible_check_mode
+
+- name: Render Zabbix frontend configuration
+  ansible.builtin.template:
+    src: zabbix.conf.php.j2
+    dest: "{{ services_monitoring_frontend_config_path }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Configure Caddy for Zabbix
+  ansible.builtin.include_role:
+    name: components/caddy  # noqa role-name[path]
+    public: true
+
+- name: Render Zabbix Caddy fragment
+  ansible.builtin.template:
+    src: zabbix.caddy.j2
+    dest: "{{ services_monitoring_caddy_fragment_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: caddy configuration changed
+  when: not ansible_check_mode
+
+- name: Apply pending frontend handlers
+  ansible.builtin.meta: flush_handlers

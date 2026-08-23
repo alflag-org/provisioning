@@ -1,0 +1,7 @@
+---
+zabbix_repository_series: "7.0"
+zabbix_repository_package_path: /tmp/zabbix-release.deb
+zabbix_repository_package_url: >-
+  {{ 'https://repo.zabbix.com/zabbix/' ~ zabbix_repository_series
+     ~ '/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_'
+     ~ zabbix_repository_series ~ '+ubuntu' ~ ansible_distribution_version ~ '_all.deb' }}

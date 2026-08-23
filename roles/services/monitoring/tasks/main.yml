@@ -1,20 +1,119 @@
 ---
-- name: Apply Prometheus  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: components/prometheus
-  when: prometheus_enabled | default(false)
+- name: Validate Zabbix monitoring secrets
+  ansible.builtin.assert:
+    that:
+      - services_monitoring_database_password is defined
+      - services_monitoring_database_password is string
+      - services_monitoring_database_password is match('^[A-Za-z0-9_-]{16,}$')
+      - services_monitoring_admin_password is defined
+      - services_monitoring_admin_password is string
+      - services_monitoring_admin_password | length >= 12
+      - services_monitoring_admin_password != services_monitoring_initial_admin_password
+    fail_msg: Define strong services_monitoring_database_password and services_monitoring_admin_password secrets.
+  no_log: true
 
-- name: Apply Alertmanager  # noqa role-name[path]
+- name: Purge retired monitoring packages
   ansible.builtin.include_role:
-    name: components/alertmanager
-  when: alertmanager_enabled | default(false)
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ services_monitoring_retired_packages }}"
+    apt_state_state: absent
+    apt_state_purge: true
+    apt_state_autoremove: true
 
-- name: Apply Grafana  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: components/grafana
-  when: grafana_enabled | default(false)
+- name: Remove retired monitoring files and repositories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ services_monitoring_retired_paths }}"
+  when: not ansible_check_mode
 
-- name: Apply blackbox exporter  # noqa role-name[path]
+- name: Configure the Zabbix package repository
   ansible.builtin.include_role:
-    name: components/blackbox_exporter
-  when: blackbox_exporter_enabled | default(false)
+    name: components/zabbix_repository  # noqa role-name[path]
+
+- name: Install Zabbix server prerequisites and packages
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ services_monitoring_packages }}"
+    apt_state_force_update_cache: true
+    apt_state_policy_rc_d: 101
+  when:
+    - >-
+      not ansible_check_mode
+      or (
+        zabbix_repository_query.rc == 0
+        and zabbix_repository_series in zabbix_repository_query.stdout
+      )
+
+- name: Enable and start PostgreSQL
+  ansible.builtin.systemd_service:
+    name: "{{ services_monitoring_postgresql_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Configure the Zabbix database
+  ansible.builtin.include_tasks: database.yml
+
+- name: Apply pending database handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Render Zabbix server configuration
+  ansible.builtin.template:
+    src: zabbix_server.conf.j2
+    dest: "{{ services_monitoring_zabbix_server_config_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  notify: Restart Zabbix server
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Configure the Zabbix frontend
+  ansible.builtin.include_tasks: frontend.yml
+
+- name: Enable and start the Zabbix server
+  ansible.builtin.systemd_service:
+    name: "{{ services_monitoring_zabbix_server_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Apply pending Zabbix server handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the Zabbix server
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 10051
+    timeout: 30
+    state: started
+  when: not ansible_check_mode
+
+- name: Wait for the Zabbix API
+  ansible.builtin.uri:
+    url: "{{ services_monitoring_api_url }}"
+    method: POST
+    body_format: json
+    return_content: true
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: apiinfo.version
+      params: {}
+      id: 1
+    status_code: 200
+  register: services_monitoring_api_health
+  retries: 15
+  delay: 2
+  until:
+    - services_monitoring_api_health.json.result is defined
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Reconcile Zabbix inventory and templates
+  ansible.builtin.include_tasks: api.yml
+  when: not ansible_check_mode

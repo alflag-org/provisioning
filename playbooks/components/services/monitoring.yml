@@ -1,8 +1,8 @@
 ---
-- name: Converge monitoring service hosts
+- name: Converge Zabbix monitoring service
   hosts: svc_monitoring
   gather_facts: true
 
   roles:
     - role: services/monitoring  # noqa role-name[path]
-      when: monitoring_stack_enabled | default(false)
+      when: services_monitoring_enabled | default(false)

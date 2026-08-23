@@ -15,9 +15,7 @@ network_dns_resolvers:
   - 10.10.10.241
 network_primary_fqdn: mgmt-monitor-01.srv.alflag.internal
 network_service_aliases:
-  - prometheus.access.internal
-  - grafana.access.internal
-  - alertmanager.access.internal
+  - zabbix.access.internal
 
 systemd_resolved_dns:
   - 10.10.10.240
@@ -29,10 +27,4 @@ systemd_resolved_domains:
 ssh_server_enabled: true
 systemd_resolved_enabled: true
 
-node_exporter_enabled: true
-
-monitoring_stack_enabled: true
-prometheus_enabled: true
-alertmanager_enabled: true
-grafana_enabled: true
-blackbox_exporter_enabled: true
+services_monitoring_enabled: true

@@ -1,0 +1,5 @@
+{{ services_monitoring_caddy_site_addresses | join(', ') }} {
+    root * {{ services_monitoring_frontend_root }}
+    php_fastcgi unix//run/php/php{{ services_monitoring_php_version }}-fpm.sock
+    file_server
+}
