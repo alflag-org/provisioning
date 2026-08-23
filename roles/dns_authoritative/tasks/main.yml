@@ -69,18 +69,14 @@
     - not ansible_check_mode or dns_authoritative_zone_dir_stat.stat.exists
 
 - name: Render managed authoritative DNS zones
-  ansible.builtin.template:
-    src: zone.j2
-    dest: "{{ item.file | default(dns_authoritative_zone_dir ~ '/' ~ item.name ~ '.zone') }}"
-    owner: root
-    group: root
-    mode: "0644"
-    validate: "nsd-checkzone {{ item.name }} %s"
+  ansible.builtin.include_tasks:
+    file: managed_zone.yml
   loop: "{{ dns_authoritative_zones }}"
-  notify: Restart nsd
+  loop_control:
+    loop_var: dns_authoritative_managed_zone
   when:
     - dns_authoritative_enabled | bool
-    - item.managed | default(false) | bool
+    - dns_authoritative_managed_zone.managed | default(false) | bool
     - not ansible_check_mode or dns_authoritative_zone_dir_stat.stat.exists
 
 - name: Render authoritative DNS configuration

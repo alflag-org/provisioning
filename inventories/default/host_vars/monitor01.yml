@@ -1,5 +1,4 @@
 ---
-hostname: monitor01
 zone: mgmt
 role: monitor
 virtualization_type: vm
@@ -13,7 +12,6 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: mgmt-monitor-01.srv.alflag.internal
 network_service_aliases:
   - prometheus.access.internal
   - grafana.access.internal

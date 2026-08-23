@@ -28,13 +28,17 @@ PATH="$PWD/.venv/bin:$PATH" ansible-lint \
 """
 
 [tasks.syntax]
-description = "Check public playbook syntax"
+description = "Check playbook syntax"
 run = """
 .venv/bin/ansible-playbook --syntax-check playbooks/site.yml
 .venv/bin/ansible-playbook --syntax-check playbooks/bootstrap.yml
 .venv/bin/ansible-playbook --syntax-check playbooks/cloudflare.yml
 """
 
+[tasks.test]
+description = "Run repository unit tests"
+run = ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
+
 [tasks.check]
-description = "Run lint and syntax validation"
-depends = ["lint", "syntax"]
+description = "Run repository validation"
+depends = ["lint", "syntax", "test"]

@@ -1,5 +1,4 @@
 ---
-hostname: inventory01
 zone: mgmt
 role: inventory
 services_netbox_enabled: true
@@ -14,8 +13,6 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: mgmt-inventory-01.srv.alflag.internal
-
 systemd_resolved_dns:
   - 10.10.10.240
   - 10.10.10.241

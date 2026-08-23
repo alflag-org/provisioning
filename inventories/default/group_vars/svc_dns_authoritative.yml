@@ -1,92 +1,31 @@
 ---
 dns_authoritative_enabled: true
-dns_authoritative_default_ttl: 300
+dns_authoritative_soa:
+  mname: dns-authoritative01.srv.alflag.internal.
+  rname: hostmaster.alflag.internal.
+  refresh: 3600
+  retry: 900
+  expire: 604800
+  minimum: 300
+dns_authoritative_nameservers:
+  - dns-authoritative01.srv.alflag.internal.
+  - dns-authoritative02.srv.alflag.internal.
 dns_authoritative_zones:
   - name: alflag.internal
-    file: /etc/nsd/zones/alflag.internal.zone
     managed: true
-    ttl: 300
-    serial: 2026062901
-    soa:
-      mname: mgmt-authdns-01.srv.alflag.internal.
-      rname: hostmaster.alflag.internal.
-      refresh: 3600
-      retry: 900
-      expire: 604800
-      minimum: 300
-    ns:
-      - mgmt-authdns-01.srv.alflag.internal.
-      - mgmt-authdns-02.srv.alflag.internal.
-    records: []
 
   - name: srv.alflag.internal
-    file: /etc/nsd/zones/srv.alflag.internal.zone
     managed: true
     inventory_records: server_identity
-    ttl: 300
-    serial: 2026062901
-    soa:
-      mname: mgmt-authdns-01.srv.alflag.internal.
-      rname: hostmaster.alflag.internal.
-      refresh: 3600
-      retry: 900
-      expire: 604800
-      minimum: 300
-    ns:
-      - mgmt-authdns-01.srv.alflag.internal.
-      - mgmt-authdns-02.srv.alflag.internal.
-    records: []
 
   - name: access.internal
-    file: /etc/nsd/zones/access.internal.zone
     managed: true
     inventory_records: access_aliases
-    ttl: 300
-    serial: 2026062901
-    soa:
-      mname: mgmt-authdns-01.srv.alflag.internal.
-      rname: hostmaster.alflag.internal.
-      refresh: 3600
-      retry: 900
-      expire: 604800
-      minimum: 300
-    ns:
-      - mgmt-authdns-01.srv.alflag.internal.
-      - mgmt-authdns-02.srv.alflag.internal.
-    records: []
 
   - name: 10.10.10.in-addr.arpa
-    file: /etc/nsd/zones/10.10.10.in-addr.arpa.zone
     managed: true
     inventory_records: reverse_ptr
-    ttl: 300
-    serial: 2026062901
-    soa:
-      mname: mgmt-authdns-01.srv.alflag.internal.
-      rname: hostmaster.alflag.internal.
-      refresh: 3600
-      retry: 900
-      expire: 604800
-      minimum: 300
-    ns:
-      - mgmt-authdns-01.srv.alflag.internal.
-      - mgmt-authdns-02.srv.alflag.internal.
-    records: []
 
   - name: 10.10.30.in-addr.arpa
-    file: /etc/nsd/zones/10.10.30.in-addr.arpa.zone
     managed: true
     inventory_records: reverse_ptr
-    ttl: 300
-    serial: 2026062901
-    soa:
-      mname: mgmt-authdns-01.srv.alflag.internal.
-      rname: hostmaster.alflag.internal.
-      refresh: 3600
-      retry: 900
-      expire: 604800
-      minimum: 300
-    ns:
-      - mgmt-authdns-01.srv.alflag.internal.
-      - mgmt-authdns-02.srv.alflag.internal.
-    records: []

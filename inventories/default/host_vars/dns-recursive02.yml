@@ -2,7 +2,6 @@
 ansible_user: root
 ansible_become: false
 
-hostname: dns-recursive02
 zone: mgmt
 role: dns_recursive
 virtualization_type: lxc
@@ -16,8 +15,6 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_primary_fqdn: mgmt-recdns-02.srv.alflag.internal
-
 dns_recursor_enabled: true
 dns_recursor_listen_addresses:
   - "127.0.0.1"
