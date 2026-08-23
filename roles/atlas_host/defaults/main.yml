@@ -9,7 +9,6 @@ atlas_remove_legacy_installation: true
 atlas_legacy_runner_pattern: "{{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-playbook"
 atlas_legacy_installation_paths:
   - "{{ atlas_home }}/bin"
-  - "{{ atlas_home }}/launchers"
   - "{{ atlas_home }}/lib"
   - "{{ atlas_home }}/runtime"
   - "{{ atlas_home }}/scripts"
