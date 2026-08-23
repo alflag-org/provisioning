@@ -2,6 +2,10 @@
 - name: Check host management prerequisites
   ansible.builtin.import_tasks: preflight.yml
 
+- name: Remove the legacy Atlas installation
+  ansible.builtin.import_tasks: cleanup.yml
+  when: atlas_remove_legacy_installation | bool
+
 - name: Install packages
   ansible.builtin.import_tasks: packages.yml
 

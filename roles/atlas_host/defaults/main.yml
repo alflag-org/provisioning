@@ -5,6 +5,17 @@ atlas_var_dir: /var/lib/atlas
 atlas_tmp_dir: "{{ atlas_home }}/tmp"
 atlas_python_build_cache_path: "{{ atlas_var_dir }}/cache/python-build"
 
+atlas_remove_legacy_installation: true
+atlas_legacy_runner_pattern: "{{ atlas_home }}/runtime/python/envs/scripts/bin/ansible-playbook"
+atlas_legacy_installation_paths:
+  - "{{ atlas_home }}/bin"
+  - "{{ atlas_home }}/launchers"
+  - "{{ atlas_home }}/lib"
+  - "{{ atlas_home }}/runtime"
+  - "{{ atlas_home }}/scripts"
+atlas_legacy_provisioning_clone_path: /home/ops/provisioning
+atlas_remove_legacy_provisioning_clone: false
+
 atlas_operator_user: ops
 atlas_operator_group: "{{ atlas_operator_user }}"
 atlas_operator_home: "/home/{{ atlas_operator_user }}"

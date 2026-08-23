@@ -1,0 +1,57 @@
+---
+- name: Find legacy Atlas runner processes
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -f
+      - "{{ atlas_legacy_runner_pattern }}"
+  register: atlas_legacy_processes
+  changed_when: false
+  failed_when: atlas_legacy_processes.rc not in [0, 1]
+  become: "{{ atlas_become_root }}"
+
+- name: Stop legacy Atlas runner processes
+  ansible.builtin.command:
+    argv:
+      - kill
+      - -TERM
+      - "{{ item }}"
+  loop: "{{ atlas_legacy_processes.stdout_lines | default([]) }}"
+  when: atlas_legacy_processes.rc == 0
+  changed_when: atlas_legacy_processes.rc == 0
+  become: "{{ atlas_become_root }}"
+
+- name: Wait for legacy Atlas runner processes to exit
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -f
+      - "{{ atlas_legacy_runner_pattern }}"
+  register: atlas_legacy_processes_remaining
+  changed_when: false
+  failed_when: false
+  until: atlas_legacy_processes_remaining.rc == 1
+  retries: 15
+  delay: 1
+  become: "{{ atlas_become_root }}"
+
+- name: Require legacy Atlas runner processes to be stopped
+  ansible.builtin.assert:
+    that:
+      - atlas_legacy_processes_remaining.rc == 1
+    fail_msg: >-
+      Legacy Atlas runner processes are still active; refusing to remove their runtime.
+
+- name: Remove legacy Atlas directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ atlas_legacy_installation_paths }}"
+  become: "{{ atlas_become_root }}"
+
+- name: Remove the legacy provisioning checkout
+  ansible.builtin.file:
+    path: "{{ atlas_legacy_provisioning_clone_path }}"
+    state: absent
+  when: atlas_remove_legacy_provisioning_clone | bool
+  become: "{{ atlas_become_root }}"
