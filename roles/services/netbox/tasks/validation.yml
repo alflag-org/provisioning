@@ -12,18 +12,52 @@
   check_mode: false
   when: not ansible_check_mode
 
-- name: Gather service facts
-  ansible.builtin.service_facts:
+- name: Check NetBox dependency and frontend service activity
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ item }}"
+  loop: "{{ services_netbox_required_services + [caddy_service_name ~ '.service'] }}"
+  register: services_netbox_service_activity
+  changed_when: false
+  check_mode: false
+  failed_when: false
   when: not ansible_check_mode
 
-- name: Require NetBox dependency and frontend services to be running and enabled
+- name: Require NetBox dependency and frontend services to be active
   ansible.builtin.assert:
     that:
-      - item in ansible_facts.services
-      - ansible_facts.services[item].state == 'running'
-      - ansible_facts.services[item].status in ['enabled', 'enabled-runtime']
-    fail_msg: "{{ item }} is not running and enabled."
+      - item.rc == 0
+      - item.stdout | trim == 'active'
+    fail_msg: "{{ item.item }} is not active."
+  loop: "{{ services_netbox_service_activity.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not ansible_check_mode
+
+- name: Check NetBox dependency and frontend service enablement
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-enabled
+      - "{{ item }}"
   loop: "{{ services_netbox_required_services + [caddy_service_name ~ '.service'] }}"
+  register: services_netbox_service_enablement
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Require NetBox dependency and frontend services to be enabled
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout | trim in ['enabled', 'enabled-runtime']
+    fail_msg: "{{ item.item }} is not enabled."
+  loop: "{{ services_netbox_service_enablement.results }}"
+  loop_control:
+    label: "{{ item.item }}"
   when: not ansible_check_mode
 
 - name: Verify Gunicorn listens only on the loopback address
