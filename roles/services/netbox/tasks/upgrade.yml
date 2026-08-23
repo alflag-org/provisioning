@@ -1,0 +1,31 @@
+---
+- name: Check for a successful NetBox upgrade
+  ansible.builtin.stat:
+    path: "{{ services_netbox_upgrade_marker_path }}"
+  register: services_netbox_upgrade_marker
+
+- name: Run the official NetBox upgrade script
+  ansible.builtin.command:
+    cmd: "{{ services_netbox_root }}/upgrade.sh"
+    chdir: "{{ services_netbox_root }}"
+  environment:
+    PYTHON: "{{ services_netbox_python_binary }}"
+  register: services_netbox_upgrade_result
+  changed_when: true
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - services_netbox_current_link.changed | default(false) or not (services_netbox_upgrade_marker.stat.exists | default(false))
+
+- name: Record a successful NetBox upgrade
+  ansible.builtin.file:
+    path: "{{ services_netbox_upgrade_marker_path }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+  when:
+    - not ansible_check_mode
+    - services_netbox_upgrade_result is not skipped

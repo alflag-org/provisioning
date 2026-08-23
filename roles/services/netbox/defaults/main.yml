@@ -10,6 +10,7 @@ services_netbox_user: netbox
 services_netbox_group: netbox
 services_netbox_python_binary: /usr/bin/python3
 services_netbox_venv_path: "{{ services_netbox_root }}/venv"
+services_netbox_upgrade_marker_path: "{{ services_netbox_release_dir }}/.provisioning-upgrade-complete"
 services_netbox_configuration_path: "{{ services_netbox_root }}/netbox/netbox/configuration.py"
 services_netbox_gunicorn_config_path: "{{ services_netbox_root }}/gunicorn.py"
 services_netbox_static_path: "{{ services_netbox_root }}/netbox/static"
