@@ -70,44 +70,50 @@ prometheus_blackbox_http_targets:
 
 ## NetBox
 
-`netbox01` is a Proxmox VM on the MGMT network at `10.10.10.63`. Caddy accepts internal HTTP on
-port 80 and serves NetBox static files directly, while proxying application requests to the
+`inventory01` is a Proxmox VM on the MGMT network at `10.10.10.210`. Its host identity is
+independent of the current NetBox implementation; it belongs to `mgmt`, `provider_proxmox`,
+`platform_vm`, and `svc_netbox`. Caddy accepts internal HTTP on port 80 and serves NetBox static
+files directly, while proxying application requests to the
 loopback-only Gunicorn listener at `127.0.0.1:8001`. The service is not published through
 Cloudflare or public DNS. NetBox is installed from the pinned native release `4.6.7` under
 `/opt/netbox` with its Python virtual environment, PostgreSQL, Redis, Gunicorn, and RQ worker
 managed by systemd.
 
+The internal HTTP endpoint is available as `http://inventory01/`,
+`http://mgmt-inventory-01.srv.alflag.internal/`, or `http://10.10.10.210/`.
+
 HTTP frontend standard: new HTTP services use the reusable `roles/components/caddy/` component.
 The existing `services/web` nginx workload is intentionally unchanged; its migration is a separate
 task and is not a reason to add nginx to new service roles.
 
-Before converging `netbox01`, create the ignored local secret input file
+Before converging `inventory01`, create the ignored local secret input file
 `inventories/default/group_vars/all/secrets.yml` with these required variables:
 
 ```yaml
-netbox_secret_key: <generated value>
-netbox_api_token_pepper: <generated value>
-netbox_postgres_password: <generated value>
-netbox_redis_password: <generated value>
+services_netbox_secret_key: <generated value>
+services_netbox_api_token_pepper: <generated value>
+services_netbox_database_password: <generated value>
+services_netbox_redis_password: <generated value>
 ```
 
 Use check mode and then apply the bootstrap and service convergence explicitly:
 
 ```bash
-.venv/bin/ansible-playbook --check --diff playbooks/site.yml --limit netbox01
-.venv/bin/ansible-playbook playbooks/bootstrap.yml --limit netbox01
-.venv/bin/ansible-playbook playbooks/site.yml --limit netbox01
+.venv/bin/ansible-playbook --check --diff playbooks/site.yml --limit inventory01
+.venv/bin/ansible-playbook playbooks/bootstrap.yml --limit inventory01
+.venv/bin/ansible-playbook playbooks/site.yml --limit inventory01
 ```
 
-After the services are healthy, create the first administrator interactively on `netbox01`:
+After the services are healthy, create the first administrator interactively on `inventory01`:
 
 ```bash
 sudo -u netbox /opt/netbox/venv/bin/python \
   /opt/netbox/netbox/manage.py createsuperuser
 ```
 
-Open `http://10.10.10.63/` from the MGMT network. The role deliberately does not create a default
-administrator, API token, inventory objects, DNS records, or Cloudflare exposure.
+Open `http://10.10.10.210/` from the MGMT network. Register `10.10.10.210` in NetBox IPAM after
+the service is available. The role deliberately does not create a default administrator, API
+token, inventory objects, DNS records, or Cloudflare exposure.
 
 ## Secrets
 

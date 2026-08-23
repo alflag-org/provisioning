@@ -2,9 +2,9 @@
 - name: Render NetBox configuration
   ansible.builtin.template:
     src: configuration.py.j2
-    dest: "{{ netbox_configuration_path }}"
+    dest: "{{ services_netbox_configuration_path }}"
     owner: root
-    group: "{{ netbox_group }}"
+    group: "{{ services_netbox_group }}"
     mode: "0640"
     diff: false
   no_log: true
@@ -14,9 +14,9 @@
 - name: Render Gunicorn configuration
   ansible.builtin.template:
     src: gunicorn.py.j2
-    dest: "{{ netbox_gunicorn_config_path }}"
+    dest: "{{ services_netbox_gunicorn_config_path }}"
     owner: root
-    group: "{{ netbox_group }}"
+    group: "{{ services_netbox_group }}"
     mode: "0640"
   notify: Restart NetBox services
   when: not ansible_check_mode

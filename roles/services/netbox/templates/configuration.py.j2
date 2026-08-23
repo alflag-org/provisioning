@@ -1,37 +1,37 @@
 """Provisioning-owned NetBox configuration."""
 
-ALLOWED_HOSTS = {{ netbox_allowed_hosts | to_json }}
+ALLOWED_HOSTS = {{ services_netbox_allowed_hosts | to_json }}
 API_TOKEN_PEPPERS = {
-    1: {{ netbox_api_token_pepper | to_json }},
+    1: {{ services_netbox_api_token_pepper | to_json }},
 }
 
 DATABASES = {
     "default": {
-        "NAME": {{ netbox_postgres_database | to_json }},
-        "USER": {{ netbox_postgres_user | to_json }},
-        "PASSWORD": {{ netbox_postgres_password | to_json }},
-        "HOST": {{ netbox_postgres_host | to_json }},
-        "PORT": {{ netbox_postgres_port | int }},
+        "NAME": {{ services_netbox_database_name | to_json }},
+        "USER": {{ services_netbox_database_user | to_json }},
+        "PASSWORD": {{ services_netbox_database_password | to_json }},
+        "HOST": {{ services_netbox_database_host | to_json }},
+        "PORT": {{ services_netbox_database_port | int }},
         "CONN_MAX_AGE": 300,
     },
 }
 
 REDIS = {
     "tasks": {
-        "HOST": {{ netbox_redis_host | to_json }},
-        "PORT": {{ netbox_redis_port | int }},
-        "PASSWORD": {{ netbox_redis_password | to_json }},
-        "DATABASE": {{ netbox_redis_database | int }},
+        "HOST": {{ services_netbox_redis_host | to_json }},
+        "PORT": {{ services_netbox_redis_port | int }},
+        "PASSWORD": {{ services_netbox_redis_password | to_json }},
+        "DATABASE": {{ services_netbox_redis_database | int }},
         "SSL": False,
     },
     "caching": {
-        "HOST": {{ netbox_redis_host | to_json }},
-        "PORT": {{ netbox_redis_port | int }},
-        "PASSWORD": {{ netbox_redis_password | to_json }},
-        "DATABASE": {{ netbox_redis_cache_database | int }},
+        "HOST": {{ services_netbox_redis_host | to_json }},
+        "PORT": {{ services_netbox_redis_port | int }},
+        "PASSWORD": {{ services_netbox_redis_password | to_json }},
+        "DATABASE": {{ services_netbox_redis_cache_database | int }},
         "SSL": False,
     },
 }
 
-SECRET_KEY = {{ netbox_secret_key | to_json }}
-TIME_ZONE = {{ netbox_timezone | to_json }}
+SECRET_KEY = {{ services_netbox_secret_key | to_json }}
+TIME_ZONE = {{ services_netbox_timezone | to_json }}

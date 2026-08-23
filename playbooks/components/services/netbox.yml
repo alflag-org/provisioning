@@ -5,3 +5,4 @@
 
   roles:
     - role: services/netbox  # noqa role-name[path]
+      when: services_netbox_enabled | bool

@@ -1,15 +1,15 @@
 [Unit]
 Description=NetBox Request Queue Worker
 Documentation=https://docs.netbox.dev/
-After=network-online.target {{ netbox_postgresql_service_name }}.service {{ netbox_redis_service_name }}.service
+After=network-online.target {{ services_netbox_postgresql_service_name }}.service {{ services_netbox_redis_service_name }}.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User={{ netbox_user }}
-Group={{ netbox_group }}
-WorkingDirectory={{ netbox_root }}
-ExecStart={{ netbox_venv_path }}/bin/python3 {{ netbox_root }}/netbox/manage.py rqworker high default low
+User={{ services_netbox_user }}
+Group={{ services_netbox_group }}
+WorkingDirectory={{ services_netbox_root }}
+ExecStart={{ services_netbox_venv_path }}/bin/python3 {{ services_netbox_root }}/netbox/manage.py rqworker high default low
 Restart=on-failure
 RestartSec=30
 PrivateTmp=true

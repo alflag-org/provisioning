@@ -1,16 +1,16 @@
 [Unit]
 Description=NetBox WSGI Service
 Documentation=https://docs.netbox.dev/
-After=network-online.target {{ netbox_postgresql_service_name }}.service {{ netbox_redis_service_name }}.service
+After=network-online.target {{ services_netbox_postgresql_service_name }}.service {{ services_netbox_redis_service_name }}.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User={{ netbox_user }}
-Group={{ netbox_group }}
+User={{ services_netbox_user }}
+Group={{ services_netbox_group }}
 PIDFile=/var/tmp/netbox.pid
-WorkingDirectory={{ netbox_root }}
-ExecStart={{ netbox_venv_path }}/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath {{ netbox_root }}/netbox --config {{ netbox_gunicorn_config_path }} netbox.wsgi
+WorkingDirectory={{ services_netbox_root }}
+ExecStart={{ services_netbox_venv_path }}/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath {{ services_netbox_root }}/netbox --config {{ services_netbox_gunicorn_config_path }} netbox.wsgi
 Restart=on-failure
 RestartSec=30
 PrivateTmp=true

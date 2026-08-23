@@ -1,8 +1,8 @@
 # The IP address and port on which the NetBox WSGI process listens.
-bind = {{ (netbox_gunicorn_bind_address ~ ':' ~ (netbox_gunicorn_port | string)) | to_json }}
+bind = {{ (services_netbox_gunicorn_bind_address ~ ':' ~ (services_netbox_gunicorn_port | string)) | to_json }}
 
-workers = {{ netbox_gunicorn_workers | int }}
-threads = {{ netbox_gunicorn_threads | int }}
-timeout = {{ netbox_gunicorn_timeout | int }}
-max_requests = {{ netbox_gunicorn_max_requests | int }}
-max_requests_jitter = {{ netbox_gunicorn_max_requests_jitter | int }}
+workers = {{ services_netbox_gunicorn_workers | int }}
+threads = {{ services_netbox_gunicorn_threads | int }}
+timeout = {{ services_netbox_gunicorn_timeout | int }}
+max_requests = {{ services_netbox_gunicorn_max_requests | int }}
+max_requests_jitter = {{ services_netbox_gunicorn_max_requests_jitter | int }}

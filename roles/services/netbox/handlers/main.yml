@@ -1,13 +1,13 @@
 ---
 - name: Reload PostgreSQL
   ansible.builtin.systemd_service:
-    name: "{{ netbox_postgresql_service_name }}"
+    name: "{{ services_netbox_postgresql_service_name }}"
     state: reloaded
   when: not ansible_check_mode
 
 - name: Restart Redis
   ansible.builtin.systemd_service:
-    name: "{{ netbox_redis_service_name }}"
+    name: "{{ services_netbox_redis_service_name }}"
     state: restarted
     enabled: true
   when: not ansible_check_mode
@@ -19,6 +19,6 @@
     enabled: true
     daemon_reload: true
   loop:
-    - "{{ netbox_service_name }}"
-    - "{{ netbox_worker_service_name }}"
+    - "{{ services_netbox_service_name }}"
+    - "{{ services_netbox_worker_service_name }}"
   when: not ansible_check_mode
