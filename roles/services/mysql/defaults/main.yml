@@ -1,0 +1,31 @@
+---
+mysql_replicaset_admin_grants:
+  - >-
+    *.*:RELOAD,SHUTDOWN,PROCESS,FILE,SELECT,SUPER,REPLICATION SLAVE,REPLICATION CLIENT,
+    REPLICATION_APPLIER,CREATE USER,SYSTEM_VARIABLES_ADMIN,PERSIST_RO_VARIABLES_ADMIN,
+    BACKUP_ADMIN,CLONE_ADMIN,EXECUTE,GRANT
+  - >-
+    mysql_innodb_cluster_metadata.*:ALTER,ALTER ROUTINE,CREATE,CREATE ROUTINE,
+    CREATE TEMPORARY TABLES,CREATE VIEW,DELETE,DROP,EVENT,EXECUTE,INDEX,INSERT,
+    LOCK TABLES,REFERENCES,SHOW VIEW,TRIGGER,UPDATE,GRANT
+  - >-
+    mysql_innodb_cluster_metadata_bkp.*:ALTER,ALTER ROUTINE,CREATE,CREATE ROUTINE,
+    CREATE TEMPORARY TABLES,CREATE VIEW,DELETE,DROP,EVENT,EXECUTE,INDEX,INSERT,
+    LOCK TABLES,REFERENCES,SHOW VIEW,TRIGGER,UPDATE,GRANT
+  - >-
+    mysql_innodb_cluster_metadata_previous.*:ALTER,ALTER ROUTINE,CREATE,CREATE ROUTINE,
+    CREATE TEMPORARY TABLES,CREATE VIEW,DELETE,DROP,EVENT,EXECUTE,INDEX,INSERT,
+    LOCK TABLES,REFERENCES,SHOW VIEW,TRIGGER,UPDATE,GRANT
+  - mysql.*:INSERT,UPDATE,DELETE,GRANT
+mysql_backup_user: mysql_backup
+mysql_backup_password_var: mysql_backup_password
+mysql_backup_enabled: false
+mysql_backup_repository: ""
+mysql_backup_grants:
+  - "*.*:BACKUP_ADMIN,PROCESS,RELOAD,LOCK TABLES,REPLICATION CLIENT"
+  - performance_schema.log_status:SELECT
+  - performance_schema.keyring_component_status:SELECT
+  - performance_schema.replication_group_members:SELECT
+  - performance_schema.replication_connection_status:SELECT
+  - performance_schema.replication_applier_status:SELECT
+mysql_zabbix_monitor_password_var: mysql_zabbix_monitor_password

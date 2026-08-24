@@ -1,23 +1,25 @@
 ---
-- name: Install mysql-server
+- name: Pin MySQL packages to the 8.4 LTS series
+  ansible.builtin.copy:
+    content: |
+      Package: mysql-server mysql-server-core-* mysql-client mysql-client-core-* mysql-shell mysql-router
+      Pin: version 8.4.*
+      Pin-Priority: 1001
+    dest: "{{ mysql_server_apt_pin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: mysql_server_apt_pin
+
+- name: Install MySQL 8.4 server and administration packages
   ansible.builtin.include_role:
     name: apt_state
   vars:
     apt_state_packages: "{{ mysql_server_packages }}"
+    apt_state_force_update_cache: "{{ mysql_server_apt_pin.changed | default(false) }}"
 
 - name: Start mysql-server
   ansible.builtin.systemd_service:
     name: "{{ mysql_server_service_name }}"
     state: started
     enabled: true
-
-- name: Remove anonymous users
-  ansible.mysql.mysql_user:
-    login_user: "{{ mysql_login_user }}"
-    login_unix_socket: "{{ mysql_login_unix_socket }}"
-    name: ""
-    host_all: true
-    state: absent
-  when:
-    - mysql_server_remove_anonymous_users | bool
-    - not ansible_check_mode

@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule MySQL ReplicaSet physical backup
+
+[Timer]
+OnCalendar={{ mysql_backup_schedule }}
+RandomizedDelaySec={{ mysql_backup_randomized_delay_seconds }}
+Persistent=true
+Unit={{ mysql_backup_service_name }}
+
+[Install]
+WantedBy=timers.target

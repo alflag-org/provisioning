@@ -18,6 +18,9 @@ $TTL {{ dns_authoritative_zone.ttl | default(dns_authoritative_default_ttl) }}
 {% for record in dns_authoritative_zone.records | default([]) %}
 {{ record.name }}{% if record.ttl is defined %} {{ record.ttl }}{% endif %} IN {{ record.type }} {{ record.value }}
 {% endfor %}
+{% for runtime_record_file in dns_authoritative_zone.runtime_record_files | default([]) %}
+$INCLUDE {{ runtime_record_file }}
+{% endfor %}
 {% set inventory_records = dns_authoritative_zone.inventory_records | default('') %}
 {% set record_source_group = dns_authoritative_record_source_group | default('default') %}
 {% set source_hosts = groups.get(record_source_group, []) | sort %}

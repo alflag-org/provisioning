@@ -13,8 +13,7 @@ network_gateway: 10.10.10.1
 network_dns_resolvers:
   - 10.10.10.240
   - 10.10.10.241
-network_service_aliases:
-  - mysql-shared.access.internal
+mysql_server_id: 221
 
 systemd_resolved_dns:
   - 10.10.10.240

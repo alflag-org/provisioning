@@ -5,9 +5,13 @@ mysql_login_unix_socket: /var/run/mysqld/mysqld.sock
 mysql_server_packages:
   - mysql-server
   - mysql-client
+  - mysql-shell
   - python3-pymysql
   - python3-cryptography
   - python3-setuptools
+
+mysql_server_apt_pin_path: /etc/apt/preferences.d/mysql-8.4
+mysql_server_expected_version: "8.4"
 
 mysql_server_service_name: mysql
 
@@ -21,17 +25,21 @@ mysql_server_user: mysql
 mysql_server_bind_address: 127.0.0.1
 mysql_server_port: 3306
 mysql_server_datadir: /var/lib/mysql
-mysql_server_max_connections: 500
-mysql_server_key_buffer_size: 16M
-mysql_server_myisam_recover_options: BACKUP
+mysql_server_id: 0
+mysql_server_report_host: "{{ inventory_hostname }}"
 mysql_server_error_log: /var/log/mysql/error.log
 mysql_server_slow_query_log: true
 mysql_server_slow_query_log_file: /var/log/mysql/mysql-slow.log
 mysql_server_long_query_time: 2
 mysql_server_max_binlog_size: 100M
+mysql_server_binlog_path: /var/log/mysql/mysql-bin
+mysql_server_relay_log_path: /var/log/mysql/mysql-relay-bin
+mysql_server_binlog_expire_logs_seconds: 604800
 mysql_server_extra_mysqld_options: []
 
 mysql_server_remove_anonymous_users: true
+mysql_server_remove_test_database: true
 mysql_server_required_secret_vars: []
+mysql_server_local_bootstrap_users: []
 mysql_server_databases: []
 mysql_server_users: []

@@ -7,9 +7,10 @@ ansible_become: true
 
 network_primary_fqdn: "{{ inventory_hostname }}.srv.alflag.internal"
 
-node_exporter_enabled: true
-node_exporter_listen_address: 0.0.0.0
-node_exporter_listen_port: 9100
+zabbix_server_address: >-
+  {{ hostvars['monitor01'].network_ipv4_address
+     | default(hostvars['monitor01'].ansible_host) }}
+zabbix_agent2_listen_port: 10050
 
 # Atlas is a required part of every managed host's foundation.
 atlas_validate_runtime: true

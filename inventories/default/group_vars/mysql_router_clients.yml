@@ -1,0 +1,12 @@
+---
+mysql_router_replicaset_name: mysql-shared
+mysql_router_bootstrap_instance: mysql-shared01.srv.alflag.internal
+mysql_router_bind_address: 127.0.0.1
+mysql_router_rw_port: 6446
+mysql_router_ro_port: 6447
+mysql_router_split_port: 6450
+mysql_router_rw_socket: /run/mysqlrouter/mysql-rw.sock
+mysql_router_ro_socket: /run/mysqlrouter/mysql-ro.sock
+mysql_router_split_socket: /run/mysqlrouter/mysql-rw-split.sock
+mysql_router_wait_for_my_writes: true
+mysql_router_wait_for_my_writes_timeout: 1

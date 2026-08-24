@@ -9,7 +9,6 @@
       before enabling this mysql-server workload.
     quiet: true
   loop: "{{ mysql_server_required_secret_vars }}"
-  no_log: true
 
 - name: Validate mysql-server database definitions
   ansible.builtin.assert:
@@ -21,6 +20,17 @@
   loop: "{{ mysql_server_databases }}"
   loop_control:
     label: "{{ item.name | default('<missing>') }}"
+
+- name: Validate mysql-server identity and version policy
+  ansible.builtin.assert:
+    that:
+      - mysql_server_expected_version == '8.4'
+      - mysql_server_id | int > 0
+      - mysql_server_report_host is string
+      - mysql_server_report_host | length > 0
+      - mysql_server_bind_address is string
+      - mysql_server_bind_address | length > 0
+    fail_msg: Every MySQL node requires a unique positive server_id, a stable report_host, and the 8.4 version policy.
 
 - name: Validate mysql-server user definitions
   ansible.builtin.assert:
@@ -36,6 +46,21 @@
   loop_control:
     label: "{{ item.name | default('<missing>') }}"
   no_log: true
+
+- name: Validate mysql-server local bootstrap user definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | string | length > 0
+      - item.host is defined
+      - item.host | string | length > 0
+      - item.password_var is defined
+      - lookup('ansible.builtin.vars', item.password_var, default='') | string | length > 0
+    fail_msg: Every local bootstrap account requires name, host, and a defined secret password_var.
+    quiet: true
+  loop: "{{ mysql_server_local_bootstrap_users }}"
+  loop_control:
+    label: "{{ item.name | default('<missing>') }}@{{ item.host | default('<missing>') }}"
 
 - name: Mark mysql-server preflight as completed
   ansible.builtin.set_fact:

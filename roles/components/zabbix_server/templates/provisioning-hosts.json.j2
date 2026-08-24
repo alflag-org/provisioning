@@ -1,0 +1,21 @@
+{
+  "host_group": {{ zabbix_server_managed_host_group | to_json }},
+  "template_group": {{ zabbix_server_custom_template_group | to_json }},
+  "templates": {
+    "linux": {{ zabbix_server_linux_template | to_json }},
+    "mysql": {{ zabbix_server_mysql_template | to_json }},
+    "mysql_platform": {{ zabbix_server_mysql_platform_template | to_json }},
+    "mysql_router": {{ zabbix_server_mysql_router_template | to_json }}
+  },
+  "hosts": [
+{% for host in groups['default'] | sort %}
+    {
+      "name": {{ host | to_json }},
+      "address": {{ (hostvars[host].network_ipv4_address | default(hostvars[host].ansible_host)) | to_json }},
+      "port": {{ zabbix_agent2_listen_port | string | to_json }},
+      "mysql": {{ (host in groups['svc_mysql']) | to_json }},
+      "router": {{ (host in groups['mysql_router_clients']) | to_json }}
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+  ]
+}

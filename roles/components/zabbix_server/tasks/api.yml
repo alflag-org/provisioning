@@ -1,0 +1,46 @@
+---
+- name: Install the Zabbix API reconciliation program
+  ansible.builtin.copy:
+    src: configure-zabbix.py
+    dest: "{{ zabbix_server_api_program_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the managed Zabbix host inventory
+  ansible.builtin.template:
+    src: provisioning-hosts.json.j2
+    dest: "{{ zabbix_server_api_inventory_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+
+- name: Reconcile Zabbix hosts, templates, items, and triggers
+  ansible.builtin.command:
+    argv:
+      - "{{ zabbix_server_api_program_path }}"
+      - --url
+      - "{{ zabbix_server_api_url }}"
+      - --host-header
+      - "{{ zabbix_server_frontend_alias }}"
+      - --inventory
+      - "{{ zabbix_server_api_inventory_path }}"
+      - --username
+      - "{{ zabbix_server_api_user }}"
+  environment:
+    ZABBIX_API_PASSWORD: "{{ lookup('ansible.builtin.vars', zabbix_server_api_password_var) }}"
+    ZABBIX_API_BOOTSTRAP_PASSWORD: "{{ zabbix_server_api_bootstrap_password }}"
+  register: zabbix_server_api_reconcile
+  changed_when: >-
+    zabbix_server_api_reconcile.rc == 0
+    and (zabbix_server_api_reconcile.stdout | from_json).changed
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Report the sanitized Zabbix API reconciliation result
+  ansible.builtin.debug:
+    msg: >-
+      Zabbix API reconciliation changed={{ (zabbix_server_api_reconcile.stdout | from_json).changed }},
+      hosts={{ (zabbix_server_api_reconcile.stdout | from_json).hosts }},
+      templates={{ (zabbix_server_api_reconcile.stdout | from_json).templates }}.
+  when: not ansible_check_mode

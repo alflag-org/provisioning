@@ -6,11 +6,17 @@
     name: "{{ item.name }}"
     host: "{{ item.host | default(omit) }}"
     host_all: "{{ item.host_all | default(omit) }}"
-    plugin: "{{ item.plugin | default(omit) }}"
-    plugin_auth_string: "{{ item.plugin_auth_string | default(omit) }}"
-    salt: "{{ item.salt | default(omit) }}"
+    plugin: "{{ item.plugin | default('caching_sha2_password') }}"
+    plugin_auth_string: >-
+      {{ lookup('ansible.builtin.vars', item.password_var)
+         if item.password_var is defined
+         else item.plugin_auth_string | default(omit) }}
+    salt: >-
+      {{ item.salt
+         | default(((item.name ~ '@' ~ (item.host | default('*'))) | hash('sha256'))[:20]) }}
     priv: "{{ item.priv | default(omit) }}"
     append_privs: "{{ item.append_privs | default(omit) }}"
+    tls_requires: "{{ item.tls_requires | default(omit) }}"
     state: "{{ item.state | default('present') }}"
     update_password: "{{ item.update_password | default(omit) }}"
   loop: "{{ mysql_server_users }}"

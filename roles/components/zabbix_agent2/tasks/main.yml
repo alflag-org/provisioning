@@ -1,0 +1,105 @@
+---
+- name: Validate Zabbix Agent 2 inputs
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent2_major_version == '7.0'
+      - zabbix_server_address is string
+      - zabbix_server_address | length > 0
+      - ansible_distribution == 'Ubuntu'
+    fail_msg: Zabbix Agent 2 requires Zabbix 7.0 and an explicit server address on Ubuntu.
+
+- name: Install Zabbix repository prerequisites
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages:
+      - ca-certificates
+      - python3-debian
+
+- name: Add the Zabbix 7.0 repository
+  ansible.builtin.deb822_repository:
+    name: zabbix-7.0
+    types:
+      - deb
+    uris:
+      - "{{ zabbix_agent2_repository_uri }}"
+    suites:
+      - "{{ ansible_distribution_release }}"
+    components:
+      - main
+    signed_by: "{{ zabbix_agent2_repository_key }}"
+    state: present
+  register: zabbix_agent2_repository
+
+- name: Pin Zabbix packages to the 7.0 LTS series
+  ansible.builtin.copy:
+    content: |
+      Package: zabbix-*
+      Pin: version 1:7.0.*
+      Pin-Priority: 1001
+    dest: "{{ zabbix_agent2_apt_pin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: zabbix_agent2_apt_pin
+
+- name: Install Zabbix Agent 2
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ zabbix_agent2_package }}"
+    apt_state_force_update_cache: >-
+      {{ zabbix_agent2_repository.changed | default(false)
+         or zabbix_agent2_apt_pin.changed | default(false) }}
+
+- name: Ensure the Zabbix Agent 2 include directory exists
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}"
+    state: directory
+    owner: root
+    group: zabbix
+    mode: "0750"
+
+- name: Render the Zabbix Agent 2 configuration
+  ansible.builtin.template:
+    src: zabbix_agent2.conf.j2
+    dest: "{{ zabbix_agent2_config_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  notify: Restart Zabbix Agent 2
+
+- name: Enable and start Zabbix Agent 2
+  ansible.builtin.systemd_service:
+    name: "{{ zabbix_agent2_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Apply pending Zabbix Agent 2 handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Validate the Zabbix Agent 2 built-in health key
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/zabbix_agent2
+      - -t
+      - agent.ping
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Read the Zabbix Agent 2 version
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/zabbix_agent2
+      - -V
+  register: zabbix_agent2_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require Zabbix Agent 2 7.0 LTS
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent2_version.stdout is search('zabbix_agent2 \(Zabbix\) 7\.0\.')
+    fail_msg: "Installed Zabbix Agent 2 is outside the required 7.0 LTS series: {{ zabbix_agent2_version.stdout }}"
+  when: not ansible_check_mode

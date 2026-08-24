@@ -1,0 +1,37 @@
+---
+mysql_backup_enabled: false
+mysql_backup_repository: ""
+mysql_backup_repository_filesystem_types:
+  - nfs
+  - nfs4
+  - cifs
+  - fuse.sshfs
+mysql_backup_user: mysql_backup
+mysql_backup_password_var: mysql_backup_password
+mysql_backup_credentials_path: /etc/mysql/mysql-backup.cnf
+mysql_backup_config_path: /etc/mysql-backup/config.json
+mysql_backup_config_dir: "{{ mysql_backup_config_path | dirname }}"
+mysql_backup_staging_dir: /var/lib/mysql-backup/staging
+mysql_backup_restore_dir: /var/lib/mysql-backup/restore-test
+mysql_backup_status_path: /var/lib/mysql-backup/status.json
+mysql_backup_status_dir: "{{ mysql_backup_status_path | dirname }}"
+mysql_backup_program_path: /usr/local/sbin/mysql-physical-backup
+mysql_backup_restore_program_path: /usr/local/sbin/mysql-restore-test
+mysql_backup_status_program_path: /usr/local/libexec/mysql-backup-status
+mysql_backup_lock_path: /run/lock/mysql-physical-backup.lock
+mysql_backup_mysql_socket: /var/run/mysqld/mysqld.sock
+mysql_backup_mysql_datadir: "{{ mysql_server_datadir | default('/var/lib/mysql') }}"
+mysql_backup_binlog_dir: /var/log/mysql
+mysql_backup_replicaset_name: mysql-shared
+mysql_backup_schedule: "*-*-* 02:15:00"
+mysql_backup_randomized_delay_seconds: 1800
+mysql_backup_service_name: mysql-physical-backup.service
+mysql_backup_timer_name: mysql-physical-backup.timer
+mysql_backup_percona_release_url: https://repo.percona.com/apt/percona-release_1.0-9.generic_all.deb
+mysql_backup_percona_release_checksum: sha256:71d7c9d3eac749765f998520871444f3c06135c5008a46c33d1e24a52c1c6f00
+mysql_backup_percona_release_path: /var/cache/percona-release_1.0-9.generic_all.deb
+mysql_backup_packages:
+  - percona-xtrabackup-84
+  - rsync
+  - util-linux
+  - zstd

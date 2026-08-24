@@ -1,0 +1,14 @@
+---
+- name: Restart MySQL Router
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_router_service_name }}"
+    state: restarted
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Restart Zabbix Agent 2 for Router checks
+  ansible.builtin.systemd_service:
+    name: zabbix-agent2
+    state: restarted
+    enabled: true
+  when: not ansible_check_mode

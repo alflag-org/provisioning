@@ -1,0 +1,98 @@
+---
+- name: Render the Zabbix server database configuration
+  ansible.builtin.template:
+    src: zabbix_server.conf.j2
+    dest: "{{ zabbix_server_config_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  no_log: true
+  notify: Restart Zabbix server
+
+- name: Ensure the Zabbix frontend configuration directory exists
+  ansible.builtin.file:
+    path: "{{ zabbix_server_frontend_config_path | dirname }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0750"
+
+- name: Render the Zabbix frontend database configuration
+  ansible.builtin.template:
+    src: zabbix.conf.php.j2
+    dest: "{{ zabbix_server_frontend_config_path }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+  no_log: true
+  notify: Restart Zabbix frontend
+
+- name: Render the dedicated Zabbix PHP-FPM pool
+  ansible.builtin.template:
+    src: php-fpm.conf.j2
+    dest: "{{ zabbix_server_php_fpm_pool_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Zabbix frontend
+  when: zabbix_server_php_fpm_pool_path | default('') | length > 0
+
+- name: Render the Zabbix Nginx virtual host
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ zabbix_server_nginx_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Zabbix frontend
+
+- name: Remove the distribution Nginx default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart Zabbix frontend
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/nginx
+      - -t
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Enable and start the Zabbix server and frontend services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - "{{ zabbix_server_service_name }}"
+    - "{{ zabbix_server_php_fpm_service_name }}"
+    - "{{ zabbix_server_nginx_service_name }}"
+  when:
+    - not ansible_check_mode
+    - zabbix_server_php_fpm_service_name | default('') | length > 0
+
+- name: Apply pending Zabbix service handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the local Zabbix API
+  ansible.builtin.uri:
+    url: "{{ zabbix_server_api_url }}"
+    method: POST
+    headers:
+      Host: "{{ zabbix_server_frontend_alias }}"
+      Content-Type: application/json-rpc
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      method: apiinfo.version
+      params: {}
+      id: 1
+    return_content: true
+    status_code: 200
+  register: zabbix_server_api_health
+  retries: 30
+  delay: 2
+  until: zabbix_server_api_health.json.result | default('') is match('^7\.0\.')
+  when: not ansible_check_mode

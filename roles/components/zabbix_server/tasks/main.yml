@@ -1,0 +1,110 @@
+---
+- name: Validate Zabbix server inputs
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_major_version == '7.0'
+      - ansible_distribution == 'Ubuntu'
+      - inventory_hostname in groups['svc_monitoring']
+      - groups['svc_monitoring'] | length == 1
+      - lookup('ansible.builtin.vars', zabbix_server_database_password_var, default='') | string | length > 0
+      - lookup('ansible.builtin.vars', zabbix_server_api_password_var, default='') | string | length >= 12
+    fail_msg: >-
+      Zabbix Server requires the 7.0 LTS series and explicit PostgreSQL and API secrets on the single monitoring host.
+    quiet: true
+
+- name: Install Zabbix server repository prerequisites
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages:
+      - ca-certificates
+      - python3-debian
+
+- name: Add the Zabbix 7.0 server repository
+  ansible.builtin.deb822_repository:
+    name: zabbix-7.0
+    types:
+      - deb
+    uris:
+      - "{{ zabbix_server_repository_uri }}"
+    suites:
+      - "{{ ansible_distribution_release }}"
+    components:
+      - main
+    signed_by: "{{ zabbix_server_repository_key }}"
+    state: present
+  register: zabbix_server_repository
+
+- name: Pin server packages to the Zabbix 7.0 LTS series
+  ansible.builtin.copy:
+    content: |
+      Package: zabbix-*
+      Pin: version 1:7.0.*
+      Pin-Priority: 1001
+    dest: "{{ zabbix_server_apt_pin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: zabbix_server_apt_pin
+
+- name: Install Zabbix server, frontend, and local PostgreSQL
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ zabbix_server_packages }}"
+    apt_state_force_update_cache: >-
+      {{ zabbix_server_repository.changed | default(false)
+         or zabbix_server_apt_pin.changed | default(false) }}
+
+- name: Detect the installed PHP runtime
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/php
+      - -r
+      - echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+  register: zabbix_server_php_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record the PHP-FPM service and pool path
+  ansible.builtin.set_fact:
+    zabbix_server_php_fpm_service_name: "php{{ zabbix_server_php_version.stdout }}-fpm"
+    zabbix_server_php_fpm_pool_path: >-
+      /etc/php/{{ zabbix_server_php_version.stdout }}/fpm/pool.d/zabbix.conf
+  when: zabbix_server_php_version.rc == 0
+
+- name: Require an installed PHP-FPM runtime on apply
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_php_fpm_service_name | default('') | length > 0
+    fail_msg: Zabbix frontend packages did not provide a usable PHP-FPM runtime.
+  when: not ansible_check_mode
+
+- name: Configure the local Zabbix PostgreSQL database
+  ansible.builtin.include_tasks:
+    file: database.yml
+
+- name: Configure the Zabbix server and frontend
+  ansible.builtin.include_tasks:
+    file: frontend.yml
+
+- name: Configure Zabbix hosts, templates, items, and triggers
+  ansible.builtin.include_tasks:
+    file: api.yml
+
+- name: Validate the installed Zabbix server series
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/zabbix_server
+      - --version
+  register: zabbix_server_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require Zabbix Server 7.0 LTS
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_version.stdout is search('zabbix_server \(Zabbix\) 7\.0\.')
+    fail_msg: "Installed Zabbix server is outside the required 7.0 LTS series: {{ zabbix_server_version.stdout }}"
+  when: not ansible_check_mode

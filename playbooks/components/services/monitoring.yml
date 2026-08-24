@@ -5,4 +5,3 @@
 
   roles:
     - role: services/monitoring  # noqa role-name[path]
-      when: monitoring_stack_enabled | default(false)

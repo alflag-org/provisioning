@@ -1,0 +1,21 @@
+---
+- name: Reload systemd for MySQL backup
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart Zabbix Agent 2 for backup checks
+  ansible.builtin.systemd_service:
+    name: zabbix-agent2
+    state: restarted
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Reload MySQL AppArmor profile
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/apparmor_parser
+      - --replace
+      - /etc/apparmor.d/usr.sbin.mysqld
+  changed_when: true
+  when: not ansible_check_mode

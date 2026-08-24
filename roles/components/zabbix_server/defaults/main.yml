@@ -1,0 +1,54 @@
+---
+zabbix_server_major_version: "7.0"
+zabbix_server_repository_uri: https://repo.zabbix.com/zabbix/7.0/ubuntu
+zabbix_server_repository_key: https://repo.zabbix.com/zabbix-official-repo.key
+zabbix_server_apt_pin_path: /etc/apt/preferences.d/zabbix-7.0
+zabbix_server_packages:
+  - nginx
+  - php-cli
+  - php-fpm
+  - postgresql
+  - python3-psycopg2
+  - zabbix-frontend-php
+  - zabbix-get
+  - zabbix-nginx-conf
+  - zabbix-server-pgsql
+  - zabbix-sql-scripts
+
+zabbix_server_service_name: zabbix-server
+zabbix_server_postgresql_service_name: postgresql
+zabbix_server_nginx_service_name: nginx
+zabbix_server_database_host: 127.0.0.1
+zabbix_server_database_port: 5432
+zabbix_server_database_name: zabbix
+zabbix_server_database_user: zabbix
+zabbix_server_database_password_var: zabbix_server_database_password
+zabbix_server_schema_path: /usr/share/zabbix-sql-scripts/postgresql/server.sql.gz
+zabbix_server_config_path: /etc/zabbix/zabbix_server.conf
+zabbix_server_frontend_config_path: /etc/zabbix/web/zabbix.conf.php
+zabbix_server_nginx_config_path: /etc/zabbix/nginx.conf
+zabbix_server_php_socket: /run/php/zabbix.sock
+zabbix_server_frontend_alias: zabbix.access.internal
+zabbix_server_frontend_site_names:
+  - "{{ zabbix_server_frontend_alias }}"
+  - "{{ inventory_hostname }}"
+  - "{{ network_primary_fqdn }}"
+zabbix_server_timezone: Asia/Tokyo
+zabbix_server_cache_size: 128M
+zabbix_server_history_cache_size: 64M
+zabbix_server_history_index_cache_size: 16M
+zabbix_server_trend_cache_size: 32M
+zabbix_server_value_cache_size: 64M
+
+zabbix_server_api_url: http://127.0.0.1/api_jsonrpc.php
+zabbix_server_api_user: Admin
+zabbix_server_api_password_var: zabbix_server_api_password
+zabbix_server_api_bootstrap_password: zabbix
+zabbix_server_api_program_path: /usr/local/sbin/configure-zabbix
+zabbix_server_api_inventory_path: /etc/zabbix/provisioning-hosts.json
+zabbix_server_managed_host_group: Managed hosts
+zabbix_server_custom_template_group: Templates/Provisioning
+zabbix_server_linux_template: Linux by Zabbix agent
+zabbix_server_mysql_template: MySQL by Zabbix agent 2
+zabbix_server_mysql_platform_template: Provisioning MySQL platform
+zabbix_server_mysql_router_template: Provisioning MySQL Router

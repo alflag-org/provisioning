@@ -1,0 +1,40 @@
+---
+- name: Validate InnoDB ReplicaSet inputs
+  ansible.builtin.assert:
+    that:
+      - groups['svc_mysql'] | length == 2
+      - mysql_replicaset_initial_primary in groups['svc_mysql']
+      - >-
+        groups['svc_mysql']
+        | map('extract', hostvars, 'mysql_server_id')
+        | map('int')
+        | unique
+        | list
+        | length == 2
+      - >-
+        groups['svc_mysql']
+        | map('extract', hostvars, 'network_primary_fqdn')
+        | unique
+        | list
+        | length == 2
+      - mysql_replicaset_name is string
+      - mysql_replicaset_name | length > 0
+      - mysql_replicaset_replication_allowed_host is string
+      - mysql_replicaset_replication_allowed_host | length > 0
+      - lookup('ansible.builtin.vars', mysql_replicaset_admin_password_var, default='') | string | length > 0
+    fail_msg: >-
+      The ReplicaSet requires exactly two members with unique server IDs and FQDNs,
+      an initial seed, an allowed replication subnet, and its administrator secret.
+    quiet: true
+
+- name: Install the ReplicaSet administration program
+  ansible.builtin.copy:
+    src: mysql-replicaset.js
+    dest: "{{ mysql_replicaset_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Run the ReplicaSet convergence or check operation
+  ansible.builtin.include_tasks:
+    file: run.yml

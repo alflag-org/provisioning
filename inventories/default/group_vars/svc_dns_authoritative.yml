@@ -17,6 +17,8 @@ dns_authoritative_zones:
   - name: srv.alflag.internal
     managed: true
     inventory_records: server_identity
+    runtime_record_files:
+      - /etc/nsd/runtime/mysql-role-records.zone
 
   - name: access.internal
     managed: true

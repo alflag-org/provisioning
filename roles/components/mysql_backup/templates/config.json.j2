@@ -1,0 +1,15 @@
+{
+  "backup_repository": {{ mysql_backup_repository | to_json }},
+  "repository_filesystem_types": {{ mysql_backup_repository_filesystem_types | to_json }},
+  "credentials_file": {{ mysql_backup_credentials_path | to_json }},
+  "staging_directory": {{ mysql_backup_staging_dir | to_json }},
+  "restore_directory": {{ mysql_backup_restore_dir | to_json }},
+  "status_file": {{ mysql_backup_status_path | to_json }},
+  "lock_file": {{ mysql_backup_lock_path | to_json }},
+  "mysql_socket": {{ mysql_backup_mysql_socket | to_json }},
+  "mysql_datadir": {{ mysql_backup_mysql_datadir | to_json }},
+  "binlog_directory": {{ mysql_backup_binlog_dir | to_json }},
+  "replicaset_name": {{ mysql_backup_replicaset_name | to_json }},
+  "source_node": {{ inventory_hostname | to_json }},
+  "expected_databases": {{ (['mysql'] + ((mysql_server_databases + mysql_shared_expanded.databases) | map(attribute='name') | list)) | unique | list | to_json }}
+}

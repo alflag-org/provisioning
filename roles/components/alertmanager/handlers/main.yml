@@ -1,6 +1,0 @@
----
-- name: Restart Alertmanager
-  ansible.builtin.service:
-    name: "{{ alertmanager_service_name }}"
-    state: restarted
-  when: not ansible_check_mode

@@ -1,0 +1,64 @@
+---
+- name: Run an explicit MySQL physical backup
+  hosts: svc_mysql
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    mysql_backup_allow_primary: false
+    mysql_backup_target: ""
+    mysql_backup_program_path: /usr/local/sbin/mysql-physical-backup
+    mysql_backup_config_path: /etc/mysql-backup/config.json
+
+  pre_tasks:
+    - name: Validate the explicit backup target policy  # noqa run-once[task]
+      ansible.builtin.assert:
+        that:
+          - mysql_backup_target | length == 0 or mysql_backup_target in groups['svc_mysql']
+          - not mysql_backup_allow_primary | bool or mysql_backup_target | length > 0
+        fail_msg: >-
+          Normal backup checks both nodes and runs only on SECONDARY. A PRIMARY override requires an explicit
+          mysql_backup_target and mysql_backup_allow_primary=true.
+      run_once: true
+
+  tasks:
+    - name: Run the role-aware physical backup program
+      ansible.builtin.command:
+        argv: >-
+          {{
+            [mysql_backup_program_path, '--config', mysql_backup_config_path]
+            + (['--allow-primary'] if mysql_backup_allow_primary | bool else [])
+          }}
+      register: mysql_backup_operation
+      changed_when: >-
+        mysql_backup_operation.rc == 0
+        and (mysql_backup_operation.stdout | from_json).changed
+      throttle: 1
+      when:
+        - not ansible_check_mode
+        - not mysql_backup_allow_primary | bool or mysql_backup_target | length > 0
+        - mysql_backup_target | length == 0 or inventory_hostname == mysql_backup_target
+
+    - name: Record the physical backup result
+      ansible.builtin.set_fact:
+        mysql_backup_operation_document: "{{ mysql_backup_operation.stdout | from_json }}"
+      when:
+        - not ansible_check_mode
+        - not mysql_backup_operation.skipped | default(false)
+
+    - name: Require exactly one completed physical backup  # noqa run-once[task]
+      ansible.builtin.assert:
+        that:
+          - mysql_backup_operation_documents | length > 0
+          - mysql_backup_operation_documents | selectattr('changed', 'equalto', true) | list | length == 1
+          - mysql_backup_operation_documents | selectattr('prepare_success', 'defined') | list | length == 1
+        fail_msg: The explicit operation did not produce exactly one prepared physical backup.
+      vars:
+        mysql_backup_operation_documents: >-
+          {{
+            groups['svc_mysql']
+            | map('extract', hostvars, 'mysql_backup_operation_document')
+            | select('defined')
+            | list
+          }}
+      when: not ansible_check_mode
+      run_once: true

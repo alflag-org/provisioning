@@ -16,12 +16,40 @@
 - name: Apply pending mysql-server handlers
   ansible.builtin.meta: flush_handlers
 
+- name: Read local MySQL state and secure writable instances
+  ansible.builtin.include_tasks:
+    file: secure.yml
+
 - name: Manage mysql-server databases
   ansible.builtin.include_tasks:
     file: databases.yml
-  when: mysql_server_databases | length > 0
+  when:
+    - mysql_server_databases | length > 0
+    - mysql_server_is_writable | bool
 
 - name: Manage mysql-server users
   ansible.builtin.include_tasks:
     file: users.yml
-  when: mysql_server_users | length > 0
+  when:
+    - mysql_server_users | length > 0
+    - mysql_server_is_writable | bool
+
+- name: Read MySQL component versions
+  ansible.builtin.command:
+    argv: "{{ item }}"
+  loop:
+    - [/usr/sbin/mysqld, --version]
+    - [/usr/bin/mysqlsh, --version]
+  register: mysql_server_component_versions
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require MySQL Server and Shell 8.4
+  ansible.builtin.assert:
+    that:
+      - item.stdout is search('8\\.4\\.')
+    fail_msg: "Installed MySQL component is outside the required 8.4 series: {{ item.stdout }}"
+  loop: "{{ mysql_server_component_versions.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item[0] | default('mysql component') }}"
+  when: not ansible_check_mode

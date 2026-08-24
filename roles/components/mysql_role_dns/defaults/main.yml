@@ -1,0 +1,9 @@
+---
+mysql_role_dns_zone_name: srv.alflag.internal
+mysql_role_dns_zone_path: /etc/nsd/zones/srv.alflag.internal.zone
+mysql_role_dns_record_path: /etc/nsd/runtime/mysql-role-records.zone
+mysql_role_dns_applied_state_path: /etc/nsd/runtime/mysql-role-records.applied.json
+mysql_role_dns_update_program_path: /usr/local/sbin/update-mysql-role-dns
+mysql_role_dns_ttl: 45
+mysql_role_dns_service_name: nsd
+mysql_role_dns_secondary: ""

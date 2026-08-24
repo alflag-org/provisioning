@@ -1,0 +1,225 @@
+---
+- name: Validate physical backup inputs
+  ansible.builtin.assert:
+    that:
+      - mysql_backup_repository is string
+      - mysql_backup_repository | length > 1
+      - mysql_backup_repository is match('^/')
+      - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
+    fail_msg: >-
+      Physical backup is enabled, but its absolute off-host mysql_backup_repository or backup account secret is missing.
+    quiet: true
+
+- name: Check the physical backup repository mount
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/findmnt
+      - --noheadings
+      - --output
+      - FSTYPE,SOURCE
+      - --target
+      - "{{ mysql_backup_repository }}"
+  register: mysql_backup_repository_mount
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Require an off-host backup filesystem
+  ansible.builtin.assert:
+    that:
+      - mysql_backup_repository_mount.rc == 0
+      - mysql_backup_repository_mount.stdout.split() | length >= 2
+      - >-
+        mysql_backup_repository_mount.stdout.split() | first | default('')
+        in mysql_backup_repository_filesystem_types
+    fail_msg: >-
+      mysql_backup_repository must be mounted from an off-host filesystem. Found:
+      {{ mysql_backup_repository_mount.stdout | default('no mount') }}
+
+- name: Download the pinned Percona repository package
+  ansible.builtin.get_url:
+    url: "{{ mysql_backup_percona_release_url }}"
+    dest: "{{ mysql_backup_percona_release_path }}"
+    checksum: "{{ mysql_backup_percona_release_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check the downloaded Percona repository package
+  ansible.builtin.stat:
+    path: "{{ mysql_backup_percona_release_path }}"
+  register: mysql_backup_percona_release_package
+
+- name: Install the Percona repository package
+  ansible.builtin.apt:
+    deb: "{{ mysql_backup_percona_release_path }}"
+    state: present
+  when: mysql_backup_percona_release_package.stat.exists
+
+- name: Check the Percona XtraBackup repository definition
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/percona-pxb-84-lts-release.list
+  register: mysql_backup_percona_repository
+
+- name: Enable only the Percona XtraBackup 8.4 LTS repository
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/percona-release
+      - enable-only
+      - pxb-84-lts
+      - release
+  register: mysql_backup_percona_repository_enable
+  changed_when: true
+  when:
+    - not mysql_backup_percona_repository.stat.exists
+    - not ansible_check_mode
+
+- name: Install Percona XtraBackup 8.4 and transfer tools
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ mysql_backup_packages }}"
+    apt_state_force_update_cache: >-
+      {{ mysql_backup_percona_repository_enable.changed | default(false) }}
+  when:
+    - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
+
+- name: Ensure physical backup directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ mysql_backup_config_dir }}"
+      group: root
+      mode: "0750"
+    - path: "{{ mysql_backup_status_dir }}"
+      group: zabbix
+      mode: "0750"
+    - path: "{{ mysql_backup_staging_dir }}"
+      group: root
+      mode: "0700"
+
+- name: Render physical backup credentials
+  ansible.builtin.template:
+    src: mysql-backup.cnf.j2
+    dest: "{{ mysql_backup_credentials_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render physical backup configuration
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ mysql_backup_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install physical backup programs
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - src: mysql-physical-backup.py
+      dest: "{{ mysql_backup_program_path }}"
+      mode: "0750"
+    - src: mysql-restore-test.py
+      dest: "{{ mysql_backup_restore_program_path }}"
+      mode: "0750"
+    - src: mysql-backup-status.py
+      dest: "{{ mysql_backup_status_program_path }}"
+      mode: "0755"
+
+- name: Seed the backup status document when absent
+  ansible.builtin.copy:
+    content: |
+      {
+        "last_attempt": null,
+        "last_success": null,
+        "last_failure": null,
+        "duration": null,
+        "backup_size": null,
+        "backup_path": null,
+        "source_node": "{{ inventory_hostname }}",
+        "source_role": null,
+        "prepare_success": false,
+        "restore_test_success": false,
+        "restore_test_timestamp": null
+      }
+    dest: "{{ mysql_backup_status_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+    force: false
+
+- name: Check for the MySQL AppArmor profile
+  ansible.builtin.stat:
+    path: /etc/apparmor.d/usr.sbin.mysqld
+  register: mysql_backup_apparmor_profile
+
+- name: Configure AppArmor access to the isolated restore directory
+  ansible.builtin.template:
+    src: apparmor-mysql-backup.j2
+    dest: /etc/apparmor.d/local/usr.sbin.mysqld
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload MySQL AppArmor profile
+  when: mysql_backup_apparmor_profile.stat.exists
+
+- name: Render the physical backup service and timer
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - src: mysql-physical-backup.service.j2
+      dest: "/etc/systemd/system/{{ mysql_backup_service_name }}"
+    - src: mysql-physical-backup.timer.j2
+      dest: "/etc/systemd/system/{{ mysql_backup_timer_name }}"
+  notify: Reload systemd for MySQL backup
+
+- name: Configure Zabbix backup status keys
+  ansible.builtin.template:
+    src: zabbix-mysql-backup.conf.j2
+    dest: /etc/zabbix/zabbix_agent2.d/mysql-backup.conf
+    owner: root
+    group: zabbix
+    mode: "0640"
+  notify: Restart Zabbix Agent 2 for backup checks
+
+- name: Apply pending physical backup handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the physical backup timer on both MySQL nodes
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_backup_timer_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Validate Percona XtraBackup 8.4
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/xtrabackup
+      - --version
+  register: mysql_backup_xtrabackup_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require the XtraBackup 8.4 series
+  ansible.builtin.assert:
+    that:
+      - mysql_backup_xtrabackup_version.stdout is search('8\\.4\\.')
+    fail_msg: "Installed XtraBackup is outside the required 8.4 series: {{ mysql_backup_xtrabackup_version.stdout }}"
+  when: not ansible_check_mode

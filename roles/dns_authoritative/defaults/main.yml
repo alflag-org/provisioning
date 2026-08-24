@@ -5,6 +5,9 @@ dns_authoritative_service_name: nsd
 dns_authoritative_config_path: /etc/nsd/nsd.conf
 dns_authoritative_config_dir: "{{ dns_authoritative_config_path | dirname }}"
 dns_authoritative_zone_dir: /etc/nsd/zones
+dns_authoritative_runtime_dir: /etc/nsd/runtime
+dns_authoritative_mysql_role_record_path: "{{ dns_authoritative_runtime_dir }}/mysql-role-records.zone"
+dns_authoritative_runtime_update_program_path: /usr/local/sbin/update-mysql-role-dns
 dns_authoritative_listen_addresses:
   - "127.0.0.1"
 dns_authoritative_default_ttl: 300

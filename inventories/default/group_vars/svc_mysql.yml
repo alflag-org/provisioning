@@ -1,8 +1,42 @@
 ---
-mysql_service_intended_components:
-  - mysql-server
-
-mysql_server_enabled: true
 mysql_server_bind_address: "{{ network_ipv4_address | default(ansible_host) }}"
+mysql_server_report_host: "{{ network_primary_fqdn }}"
+mysql_server_binlog_expire_logs_seconds: 604800
+
+mysql_replicaset_name: mysql-shared
+mysql_replicaset_initial_primary: mysql-shared01
+mysql_replicaset_admin_user: mysql_replicaset_admin
+mysql_replicaset_admin_allowed_clients: >-
+  {{ (groups['svc_mysql'] + groups['mysql_router_clients']) | unique }}
+mysql_replicaset_replication_allowed_host: 10.10.10.0/24
+
+mysql_shared_privilege_profiles:
+  application:
+    - SELECT
+    - INSERT
+    - UPDATE
+    - DELETE
+    - CREATE
+    - ALTER
+    - INDEX
+    - DROP
+    - REFERENCES
+    - CREATE TEMPORARY TABLES
+    - LOCK TABLES
+    - EXECUTE
+  read_only:
+    - SELECT
+    - SHOW VIEW
+mysql_shared_tenants: []
+
+# The physical backup role fails closed until an operator supplies an absolute
+# path backed by an off-host filesystem through secret or extra variables.
+mysql_backup_enabled: true
+mysql_backup_schedule: "*-*-* 02:15:00"
+mysql_backup_randomized_delay_seconds: 1800
+
+mysql_zabbix_monitor_user: zbx_monitor
+mysql_router_monitor_user: zbx_router
+
 mysql_server_databases: []
 mysql_server_users: []

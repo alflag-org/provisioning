@@ -1,0 +1,43 @@
+---
+- name: Perform a planned MySQL ReplicaSet switchover
+  hosts: svc_mysql
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    mysql_replicaset_action: switchover
+
+  pre_tasks:
+    - name: Validate the planned switchover target  # noqa run-once[task]
+      ansible.builtin.assert:
+        that:
+          - mysql_target_primary is defined
+          - mysql_target_primary in groups['svc_mysql']
+        fail_msg: Pass mysql_target_primary as one of the two svc_mysql hosts.
+      run_once: true
+
+  roles:
+    - role: components/mysql_replicaset  # noqa role-name[path]
+
+  post_tasks:
+    - name: Synchronize role DNS after planned switchover  # noqa role-name[path] run-once[task]
+      ansible.builtin.include_role:
+        name: components/mysql_role_dns
+      vars:
+        mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
+        mysql_role_dns_secondary: "{{ mysql_replicaset_runtime_secondary }}"
+      when: not ansible_check_mode
+      run_once: true
+
+- name: Validate every Router after planned switchover
+  hosts: mysql_router_clients
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    mysql_router_require_secondary: true
+
+  tasks:
+    - name: Validate Router topology and synthetic connections  # noqa role-name[path]
+      ansible.builtin.include_role:
+        name: components/mysql_router
+        tasks_from: validate.yml
+      when: not ansible_check_mode

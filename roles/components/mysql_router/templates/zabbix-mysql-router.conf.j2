@@ -1,0 +1,2 @@
+# Managed by Alflag provisioning.
+UserParameter=mysql.router.status[*],{{ mysql_router_status_program_path }} --defaults-file {{ mysql_router_monitor_config_path }} --state-file {{ mysql_router_dynamic_state_path }} --rw-port {{ mysql_router_rw_port }} --ro-port {{ mysql_router_ro_port }} --split-port {{ mysql_router_split_port }} "$1"

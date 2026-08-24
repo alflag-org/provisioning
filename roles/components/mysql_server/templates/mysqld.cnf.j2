@@ -8,10 +8,20 @@ user = {{ mysql_server_user }}
 bind-address = {{ mysql_server_bind_address }}
 port = {{ mysql_server_port }}
 datadir = {{ mysql_server_datadir }}
+server_id = {{ mysql_server_id }}
+report_host = {{ mysql_server_report_host }}
 
-max_connections = {{ mysql_server_max_connections }}
-key_buffer_size = {{ mysql_server_key_buffer_size }}
-myisam-recover-options = {{ mysql_server_myisam_recover_options }}
+log_bin = {{ mysql_server_binlog_path }}
+relay_log = {{ mysql_server_relay_log_path }}
+relay_log_recovery = ON
+gtid_mode = ON
+enforce_gtid_consistency = ON
+binlog_format = ROW
+log_replica_updates = ON
+binlog_expire_logs_seconds = {{ mysql_server_binlog_expire_logs_seconds }}
+require_secure_transport = ON
+skip_name_resolve = ON
+mysqlx = OFF
 
 log_error = {{ mysql_server_error_log }}
 slow_query_log = {{ 1 if mysql_server_slow_query_log | bool else 0 }}

@@ -1,0 +1,11 @@
+---
+mysql_zabbix_monitor_user: zbx_monitor
+mysql_zabbix_monitor_password_var: mysql_zabbix_monitor_password
+zabbix_mysql_session_name: mysql-local
+zabbix_mysql_socket: /var/run/mysqld/mysqld.sock
+zabbix_mysql_plugin_config_path: /etc/zabbix/zabbix_agent2.d/mysql.conf
+zabbix_mysql_client_config_path: /etc/zabbix/mysql-platform.cnf
+zabbix_mysql_status_program_path: /usr/local/libexec/mysql-platform-status
+zabbix_mysql_user_parameter_path: /etc/zabbix/zabbix_agent2.d/mysql-platform.conf
+zabbix_mysql_primary_alias: mysql-shared-primary.srv.alflag.internal
+zabbix_mysql_replica_alias: mysql-shared-replica.srv.alflag.internal

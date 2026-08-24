@@ -1,0 +1,81 @@
+---
+- name: Validate emergency failover authorization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Require an explicit emergency failover confirmation
+      ansible.builtin.assert:
+        that:
+          - mysql_target_primary is defined
+          - (mysql_target_primary | default('')) in groups['svc_mysql']
+          - >-
+            mysql_failover_confirmation | default('')
+            == 'force:' ~ (mysql_target_primary | default(''))
+        fail_msg: >-
+          Forced failover can lose transactions. Pass mysql_target_primary and
+          mysql_failover_confirmation=force:<target> only after declaring the former PRIMARY unavailable.
+
+    - name: Authorize only the confirmed emergency failover target
+      ansible.builtin.add_host:
+        name: "{{ mysql_target_primary }}"
+        groups: mysql_failover_authorized_target
+      changed_when: false
+
+- name: Force an emergency MySQL ReplicaSet failover
+  hosts: >-
+    {{
+      groups['mysql_failover_authorized_target']
+      | default([])
+      | first
+      | default('localhost', true)
+    }}
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    mysql_replicaset_action: failover
+
+  pre_tasks:
+    - name: Gather facts only for the authorized failover target
+      ansible.builtin.setup:
+      when: >-
+        inventory_hostname
+        in groups['mysql_failover_authorized_target'] | default([])
+
+  roles:
+    - role: components/mysql_replicaset  # noqa role-name[path]
+      when: >-
+        inventory_hostname
+        in groups['mysql_failover_authorized_target'] | default([])
+
+  post_tasks:
+    - name: Synchronize role DNS after forced failover  # noqa role-name[path] run-once[task]
+      ansible.builtin.include_role:
+        name: components/mysql_role_dns
+      vars:
+        mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
+        mysql_role_dns_secondary: "{{ mysql_replicaset_runtime_secondary | default('', true) }}"
+      when:
+        - not ansible_check_mode
+        - >-
+          inventory_hostname
+          in groups['mysql_failover_authorized_target'] | default([])
+      run_once: true
+
+- name: Validate every Router after forced failover
+  hosts: mysql_router_clients
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    mysql_router_require_secondary: false
+
+  tasks:
+    - name: Validate Router topology and synthetic connections  # noqa role-name[path]
+      ansible.builtin.include_role:
+        name: components/mysql_router
+        tasks_from: validate.yml
+      when:
+        - not ansible_check_mode
+        - groups['mysql_failover_authorized_target'] | default([]) | length == 1

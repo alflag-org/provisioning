@@ -1,0 +1,87 @@
+---
+- name: Read the local MySQL writability state
+  ansible.mysql.mysql_query:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    query: SELECT @@GLOBAL.read_only AS read_only
+  register: mysql_server_read_only_query
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Record whether local account changes are allowed
+  ansible.builtin.set_fact:
+    mysql_server_is_writable: >-
+      {{ ansible_check_mode
+         or (mysql_server_read_only_query.query_result[0][0].read_only | default(1) | int == 0) }}
+
+- name: Remove anonymous users
+  ansible.mysql.mysql_user:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: ""
+    host_all: true
+    state: absent
+  when:
+    - mysql_server_remove_anonymous_users | bool
+    - mysql_server_is_writable | bool
+    - not ansible_check_mode
+
+- name: Find remote root accounts
+  ansible.mysql.mysql_query:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    query: >-
+      SELECT User, Host FROM mysql.user
+      WHERE User = 'root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')
+  register: mysql_server_remote_root_accounts
+  changed_when: false
+  when:
+    - mysql_server_is_writable | bool
+    - not ansible_check_mode
+
+- name: Remove remote root accounts
+  ansible.mysql.mysql_user:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: root
+    host: "{{ item.Host }}"
+    state: absent
+  loop: "{{ mysql_server_remote_root_accounts.query_result[0] | default([]) }}"
+  loop_control:
+    label: "root@{{ item.Host }}"
+  when:
+    - mysql_server_is_writable | bool
+    - not ansible_check_mode
+
+- name: Remove the test database
+  ansible.mysql.mysql_db:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: test
+    state: absent
+  when:
+    - mysql_server_remove_test_database | bool
+    - mysql_server_is_writable | bool
+    - not ansible_check_mode
+
+- name: Create local bootstrap accounts on writable standalone or primary nodes
+  ansible.mysql.mysql_user:
+    login_user: "{{ mysql_login_user }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ item.name }}"
+    host: "{{ item.host }}"
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ lookup('ansible.builtin.vars', item.password_var) }}"
+    salt: "{{ ((item.name ~ '@' ~ item.host) | hash('sha256'))[:20] }}"
+    priv: "{{ item.priv }}"
+    tls_requires:
+      SSL: true
+    state: present
+    update_password: always
+  loop: "{{ mysql_server_local_bootstrap_users }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.host }}"
+  no_log: true
+  when:
+    - mysql_server_is_writable | bool
+    - not ansible_check_mode

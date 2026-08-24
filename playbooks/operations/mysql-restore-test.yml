@@ -1,0 +1,38 @@
+---
+- name: Validate a physical backup with an isolated MySQL restore
+  hosts: svc_mysql
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    mysql_replicaset_action: status
+    mysql_restore_backup_path: ""
+    mysql_backup_restore_program_path: /usr/local/sbin/mysql-restore-test
+    mysql_backup_config_path: /etc/mysql-backup/config.json
+
+  roles:
+    - role: components/mysql_replicaset  # noqa role-name[path]
+
+  post_tasks:
+    - name: Run an isolated restore test on the current SECONDARY  # noqa run-once[task]
+      ansible.builtin.command:
+        argv: >-
+          {{
+            [mysql_backup_restore_program_path, '--config', mysql_backup_config_path]
+            + (['--backup-path', mysql_restore_backup_path]
+               if mysql_restore_backup_path | length > 0 else [])
+          }}
+      register: mysql_restore_test_operation
+      changed_when: >-
+        mysql_restore_test_operation.rc == 0
+        and (mysql_restore_test_operation.stdout | from_json).changed
+      delegate_to: "{{ mysql_replicaset_runtime_secondary }}"
+      when: not ansible_check_mode
+      run_once: true
+
+    - name: Require a successful isolated restore test  # noqa run-once[task]
+      ansible.builtin.assert:
+        that:
+          - (mysql_restore_test_operation.stdout | from_json).restore_test_success | bool
+        fail_msg: The isolated physical backup restore test did not complete successfully.
+      when: not ansible_check_mode
+      run_once: true

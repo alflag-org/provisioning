@@ -1,0 +1,60 @@
+# Managed by Alflag provisioning. Bootstrap owns the metadata registration and keyring.
+[DEFAULT]
+logging_folder=/var/log/mysqlrouter
+runtime_folder=/run/mysqlrouter
+data_folder={{ mysql_router_bootstrap_dir }}/data
+keyring_path={{ mysql_router_keyring_path }}
+master_key_path={{ mysql_router_master_key_path }}
+dynamic_state={{ mysql_router_dynamic_state_path }}
+client_ssl_cert={{ mysql_router_client_ssl_cert_path }}
+client_ssl_key={{ mysql_router_client_ssl_key_path }}
+unknown_config_option=error
+max_idle_server_connections=64
+
+[logger]
+level=INFO
+
+[metadata_cache:{{ mysql_router_replicaset_name }}]
+cluster_type=rs
+router_id={{ mysql_router_id }}
+user={{ mysql_router_metadata_user }}
+metadata_cluster={{ mysql_router_replicaset_name }}
+ttl=0.5
+auth_cache_ttl=-1
+auth_cache_refresh_interval=2
+use_gr_notifications=0
+ssl_mode=REQUIRED
+
+[routing:read_write]
+bind_address={{ mysql_router_bind_address }}
+bind_port={{ mysql_router_rw_port }}
+socket={{ mysql_router_rw_socket }}
+destinations=metadata-cache://{{ mysql_router_replicaset_name }}/?role=PRIMARY
+routing_strategy=first-available
+protocol=classic
+client_ssl_mode=PREFERRED
+server_ssl_mode=REQUIRED
+
+[routing:read_only]
+bind_address={{ mysql_router_bind_address }}
+bind_port={{ mysql_router_ro_port }}
+socket={{ mysql_router_ro_socket }}
+destinations=metadata-cache://{{ mysql_router_replicaset_name }}/?role=SECONDARY
+routing_strategy=round-robin-with-fallback
+protocol=classic
+client_ssl_mode=PREFERRED
+server_ssl_mode=REQUIRED
+
+[routing:read_write_split]
+bind_address={{ mysql_router_bind_address }}
+bind_port={{ mysql_router_split_port }}
+socket={{ mysql_router_split_socket }}
+destinations=metadata-cache://{{ mysql_router_replicaset_name }}/?role=PRIMARY_AND_SECONDARY
+routing_strategy=round-robin
+access_mode=auto
+protocol=classic
+connection_sharing=1
+wait_for_my_writes={{ 1 if mysql_router_wait_for_my_writes | bool else 0 }}
+wait_for_my_writes_timeout={{ mysql_router_wait_for_my_writes_timeout }}
+client_ssl_mode=PREFERRED
+server_ssl_mode=REQUIRED

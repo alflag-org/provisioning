@@ -1,0 +1,4 @@
+# Managed by Alflag provisioning.
+Plugins.Mysql.Sessions.{{ zabbix_mysql_session_name }}.Uri=unix:{{ zabbix_mysql_socket }}
+Plugins.Mysql.Sessions.{{ zabbix_mysql_session_name }}.User={{ mysql_zabbix_monitor_user }}
+Plugins.Mysql.Sessions.{{ zabbix_mysql_session_name }}.Password={{ lookup('ansible.builtin.vars', mysql_zabbix_monitor_password_var) }}
