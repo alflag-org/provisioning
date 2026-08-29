@@ -55,6 +55,10 @@ does not make asynchronous replication synchronous. Router-to-MySQL traffic
 uses TLS in `REQUIRED` mode. Bootstrap-generated metadata credentials remain in
 the Router keyring rather than configuration or inventory.
 
+A new Router bootstraps through
+`mysql-shared-primary.srv.alflag.internal`. After registration, Router follows
+ReplicaSet metadata rather than that DNS name.
+
 Use the read/write endpoint for migrations, transactions that require a single
 backend, and workloads without split-routing support. Use the read-only endpoint
 only when stale reads and primary fallback are acceptable.
@@ -129,6 +133,12 @@ Each successful job:
 4. flushes and archives closed binary logs with node identity, server UUID, and
    GTID metadata;
 5. atomically updates `/var/lib/mysql-backup/status.json`.
+
+Closed binary logs are copied off host only as part of a successful full-backup
+job. Transactions after the latest successful archive, including transactions
+in the active log, are not yet off host. The recovery point therefore depends
+on the interval between successful jobs; this is not short-interval binlog
+shipping.
 
 The repository layout keeps stable identities across role changes:
 
@@ -217,6 +227,9 @@ playbook then proves that the new primary is writable, the former primary is
 read-only, both members remain online, DNS is synchronized, and every Router
 reaches the expected backends.
 
+Before the dry run, both MySQL nodes must report an inactive physical-backup
+service and an available shared backup/restore lock.
+
 Check current ReplicaSet status first and replace `<current-secondary>` below.
 
 ```bash
@@ -232,7 +245,8 @@ does not create or join ReplicaSet members.
 
 For planned OS or MySQL maintenance:
 
-1. verify Zabbix, backup freshness, and two online members;
+1. verify Zabbix, backup freshness, idle backup/restore work, and two online
+   members;
 2. switch `PRIMARY` to the other member;
 3. maintain the now-secondary node;
 4. run targeted normal provisioning after it returns so an unambiguous
@@ -244,7 +258,8 @@ For planned OS or MySQL maintenance:
 Forced failover is a separate, manual data-loss decision. Use it only after
 declaring the former primary unavailable and checking the target's replication
 position. The target must still be the online `SECONDARY`, and the confirmation
-must name the same host.
+must name the same host. The target's backup service and shared backup/restore
+lock must also be idle.
 
 Check current ReplicaSet status first and replace `<current-secondary>` below.
 

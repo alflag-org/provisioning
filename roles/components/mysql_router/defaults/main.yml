@@ -10,7 +10,7 @@ mysql_router_bootstrap_config_path: "{{ mysql_router_bootstrap_dir }}/mysqlroute
 mysql_router_dynamic_state_path: "{{ mysql_router_bootstrap_dir }}/data/state.json"
 mysql_router_apt_pin_path: /etc/apt/preferences.d/mysql-8.4
 mysql_router_replicaset_name: mysql-shared
-mysql_router_bootstrap_instance: mysql-shared01.srv.alflag.internal
+mysql_router_bootstrap_instance: mysql-shared-primary.srv.alflag.internal
 mysql_router_bootstrap_port: 3306
 mysql_router_admin_user: mysql_replicaset_admin
 mysql_router_admin_password_var: mysql_replicaset_admin_password

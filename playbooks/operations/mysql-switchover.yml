@@ -15,6 +15,11 @@
         fail_msg: Pass mysql_target_primary as one of the two svc_mysql hosts.
       run_once: true
 
+    - name: Require idle backup and restore operations  # noqa role-name[path]
+      ansible.builtin.include_role:
+        name: components/mysql_backup
+        tasks_from: assert_idle.yml
+
   roles:
     - role: components/mysql_replicaset  # noqa role-name[path]
 

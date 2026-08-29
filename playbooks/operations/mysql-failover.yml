@@ -44,6 +44,14 @@
         inventory_hostname
         in groups['mysql_failover_authorized_target'] | default([])
 
+    - name: Require idle backup and restore operations  # noqa role-name[path]
+      ansible.builtin.include_role:
+        name: components/mysql_backup
+        tasks_from: assert_idle.yml
+      when: >-
+        inventory_hostname
+        in groups['mysql_failover_authorized_target'] | default([])
+
   roles:
     - role: components/mysql_replicaset  # noqa role-name[path]
       when: >-

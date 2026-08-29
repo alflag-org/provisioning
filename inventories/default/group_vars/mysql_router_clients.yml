@@ -1,6 +1,6 @@
 ---
 mysql_router_replicaset_name: mysql-shared
-mysql_router_bootstrap_instance: mysql-shared01.srv.alflag.internal
+mysql_router_bootstrap_instance: mysql-shared-primary.srv.alflag.internal
 mysql_router_bind_address: 127.0.0.1
 mysql_router_rw_port: 6446
 mysql_router_ro_port: 6447
