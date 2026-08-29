@@ -1,0 +1,7 @@
+---
+zabbix_server_major_version: "7.0"
+zabbix_server_database_name: zabbix
+zabbix_server_database_user: zabbix
+zabbix_server_frontend_alias: zabbix.access.internal
+zabbix_server_timezone: Asia/Tokyo
+zabbix_server_managed_host_group: Managed hosts

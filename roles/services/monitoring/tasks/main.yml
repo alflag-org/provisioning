@@ -1,20 +1,4 @@
 ---
-- name: Apply Prometheus  # noqa role-name[path]
+- name: Apply the self-contained Zabbix monitoring server  # noqa role-name[path]
   ansible.builtin.include_role:
-    name: components/prometheus
-  when: prometheus_enabled | default(false)
-
-- name: Apply Alertmanager  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: components/alertmanager
-  when: alertmanager_enabled | default(false)
-
-- name: Apply Grafana  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: components/grafana
-  when: grafana_enabled | default(false)
-
-- name: Apply blackbox exporter  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: components/blackbox_exporter
-  when: blackbox_exporter_enabled | default(false)
+    name: components/zabbix_server

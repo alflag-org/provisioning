@@ -24,7 +24,11 @@ run = """
 PATH="$PWD/.venv/bin:$PATH" ansible-lint \
   playbooks/site.yml \
   playbooks/bootstrap.yml \
-  playbooks/cloudflare.yml
+  playbooks/cloudflare.yml \
+  playbooks/operations/mysql-switchover.yml \
+  playbooks/operations/mysql-failover.yml \
+  playbooks/operations/mysql-backup.yml \
+  playbooks/operations/mysql-restore-test.yml
 """
 
 [tasks.syntax]
@@ -33,6 +37,10 @@ run = """
 .venv/bin/ansible-playbook --syntax-check playbooks/site.yml
 .venv/bin/ansible-playbook --syntax-check playbooks/bootstrap.yml
 .venv/bin/ansible-playbook --syntax-check playbooks/cloudflare.yml
+.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-switchover.yml
+.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-failover.yml
+.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-backup.yml
+.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-restore-test.yml
 """
 
 [tasks.test]

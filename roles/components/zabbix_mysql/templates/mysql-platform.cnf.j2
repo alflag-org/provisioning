@@ -1,0 +1,5 @@
+[client]
+user={{ mysql_zabbix_monitor_user }}
+password={{ lookup('ansible.builtin.vars', mysql_zabbix_monitor_password_var) | to_json(ensure_ascii=False) }}
+socket={{ zabbix_mysql_socket }}
+protocol=socket

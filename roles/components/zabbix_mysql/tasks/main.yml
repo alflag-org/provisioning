@@ -1,0 +1,76 @@
+---
+- name: Validate Zabbix MySQL monitoring inputs
+  ansible.builtin.assert:
+    that:
+      - mysql_zabbix_monitor_user is string
+      - mysql_zabbix_monitor_user | length > 0
+      - lookup('ansible.builtin.vars', mysql_zabbix_monitor_password_var, default='') | string | length > 0
+    fail_msg: Zabbix MySQL monitoring requires a local monitoring account secret.
+    quiet: true
+
+- name: Render the Zabbix Agent 2 MySQL named session
+  ansible.builtin.template:
+    src: mysql.conf.j2
+    dest: "{{ zabbix_mysql_plugin_config_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  no_log: true
+  notify: Restart Zabbix Agent 2 for MySQL checks
+
+- name: Render local MySQL status credentials
+  ansible.builtin.template:
+    src: mysql-platform.cnf.j2
+    dest: "{{ zabbix_mysql_client_config_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  no_log: true
+
+- name: Install the MySQL role and replication status program
+  ansible.builtin.copy:
+    src: mysql-platform-status.py
+    dest: "{{ zabbix_mysql_status_program_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure the MySQL platform status key
+  ansible.builtin.template:
+    src: mysql-platform.conf.j2
+    dest: "{{ zabbix_mysql_user_parameter_path }}"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  notify: Restart Zabbix Agent 2 for MySQL checks
+
+- name: Apply pending Zabbix MySQL monitoring handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Validate the Zabbix Agent 2 MySQL session
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/zabbix_agent2
+      - -t
+      - "mysql.ping[\"{{ zabbix_mysql_session_name }}\"]"
+  changed_when: false
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Validate the machine-readable MySQL platform status
+  ansible.builtin.command:
+    argv:
+      - "{{ zabbix_mysql_status_program_path }}"
+      - --defaults-file
+      - "{{ zabbix_mysql_client_config_path }}"
+      - --node-address
+      - "{{ network_ipv4_address | default(ansible_host) }}"
+      - --primary-alias
+      - "{{ zabbix_mysql_primary_alias }}"
+      - --replica-alias
+      - "{{ zabbix_mysql_replica_alias }}"
+      - json
+  register: zabbix_mysql_status_validation
+  changed_when: false
+  no_log: true
+  when: not ansible_check_mode

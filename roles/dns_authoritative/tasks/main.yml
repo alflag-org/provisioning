@@ -28,6 +28,34 @@
     mode: "0755"
   when: dns_authoritative_enabled | bool
 
+- name: Ensure the authoritative DNS runtime record directory exists
+  ansible.builtin.file:
+    path: "{{ dns_authoritative_runtime_dir }}"
+    state: directory
+    owner: root
+    group: nsd
+    mode: "0750"
+  when: dns_authoritative_enabled | bool
+
+- name: Preserve or seed the MySQL runtime role records
+  ansible.builtin.copy:
+    content: "; Runtime MySQL role records are populated from ReplicaSet status.\n"
+    dest: "{{ dns_authoritative_mysql_role_record_path }}"
+    owner: root
+    group: nsd
+    mode: "0640"
+    force: false
+  when: dns_authoritative_enabled | bool
+
+- name: Install the atomic MySQL role DNS updater
+  ansible.builtin.copy:
+    src: update-mysql-role-dns.py
+    dest: "{{ dns_authoritative_runtime_update_program_path }}"
+    owner: root
+    group: root
+    mode: "0750"
+  when: dns_authoritative_enabled | bool
+
 - name: Check manual authoritative DNS zone files
   ansible.builtin.stat:
     path: "{{ item.file | default(dns_authoritative_zone_dir ~ '/' ~ item.name ~ '.zone') }}"

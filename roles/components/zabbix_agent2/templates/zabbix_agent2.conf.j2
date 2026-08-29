@@ -1,0 +1,13 @@
+# Managed by Alflag provisioning.
+PidFile=/run/zabbix/zabbix_agent2.pid
+LogType=file
+LogFile={{ zabbix_agent2_log_path }}
+LogFileSize=10
+Server={{ zabbix_server_address }}
+ServerActive={{ zabbix_server_address }}:{{ zabbix_agent2_server_port }}
+Hostname={{ inventory_hostname }}
+ListenIP={{ zabbix_agent2_listen_address }}
+ListenPort={{ zabbix_agent2_listen_port }}
+Timeout={{ zabbix_agent2_timeout }}
+ControlSocket=/run/zabbix/agent.sock
+Include={{ zabbix_agent2_include_dir }}/*.conf

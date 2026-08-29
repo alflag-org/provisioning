@@ -1,6 +1,0 @@
----
-- name: Restart Prometheus
-  ansible.builtin.service:
-    name: "{{ prometheus_service_name }}"
-    state: restarted
-  when: not ansible_check_mode

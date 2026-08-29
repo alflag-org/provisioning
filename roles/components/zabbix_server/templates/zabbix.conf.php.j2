@@ -1,0 +1,18 @@
+<?php
+// Managed by Alflag provisioning.
+$DB['TYPE'] = 'POSTGRESQL';
+$DB['SERVER'] = '{{ zabbix_server_database_host }}';
+$DB['PORT'] = '{{ zabbix_server_database_port }}';
+$DB['DATABASE'] = '{{ zabbix_server_database_name }}';
+$DB['USER'] = '{{ zabbix_server_database_user }}';
+$DB['PASSWORD'] = base64_decode(
+    '{{ lookup('ansible.builtin.vars', zabbix_server_database_password_var) | b64encode }}',
+    true
+);
+$DB['SCHEMA'] = '';
+
+$ZBX_SERVER = '127.0.0.1';
+$ZBX_SERVER_PORT = '10051';
+$ZBX_SERVER_NAME = 'Alflag infrastructure';
+
+$IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;

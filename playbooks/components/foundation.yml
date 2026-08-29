@@ -13,5 +13,4 @@
       when: ssh_server_enabled | default(false)
     - role: systemd_resolved
       when: systemd_resolved_enabled | default(false)
-    - role: node_exporter
-      when: node_exporter_enabled | default(false)
+    - role: components/zabbix_agent2  # noqa role-name[path]

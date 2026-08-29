@@ -1,0 +1,5 @@
+[client]
+user={{ mysql_router_monitor_user }}
+password={{ lookup('ansible.builtin.vars', mysql_router_monitor_password_var) | to_json(ensure_ascii=False) }}
+host=127.0.0.1
+ssl-mode=DISABLED

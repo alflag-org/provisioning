@@ -1,5 +1,189 @@
 ---
-- name: Apply shared MySQL server  # noqa role-name[path]
+- name: Validate shared MySQL platform secrets and inventory
+  ansible.builtin.assert:
+    that:
+      - groups['svc_mysql'] | length == 2
+      - groups['mysql_router_clients'] | length > 0
+      - mysql_replicaset_admin_password is defined
+      - mysql_replicaset_admin_password | string | length > 0
+      - mysql_backup_password is defined
+      - mysql_backup_password | string | length > 0
+      - mysql_zabbix_monitor_password is defined
+      - mysql_zabbix_monitor_password | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_repository | default('') is match('^/.+')
+    fail_msg: >-
+      Define the ReplicaSet, physical backup, and MySQL monitoring secrets plus an absolute off-host backup
+      repository before converging svc_mysql.
+    quiet: true
+
+- name: Expand MySQL shared tenant declarations
+  ansible.builtin.set_fact:
+    mysql_shared_expanded: >-
+      {{ mysql_shared_tenants | mysql_expand_tenants(hostvars, mysql_shared_privilege_profiles) }}
+
+- name: Validate MySQL shared tenant secrets
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.vars', item, default='') | string | length > 0
+    fail_msg: "Required MySQL tenant secret {{ item }} is not defined."
+    quiet: true
+  loop: "{{ mysql_shared_expanded.required_secret_vars }}"
+  run_once: true
+
+- name: Resolve ReplicaSet administrator source addresses from inventory
+  ansible.builtin.set_fact:
+    mysql_replicaset_admin_allowed_addresses: >-
+      {{ mysql_replicaset_admin_allowed_clients | mysql_hosts_to_addresses(hostvars) }}
+
+- name: Build local ReplicaSet bootstrap accounts
+  ansible.builtin.set_fact:
+    mysql_replicaset_bootstrap_users: >-
+      {{ (mysql_replicaset_bootstrap_users | default([])) + [
+           {
+             'name': mysql_replicaset_admin_user,
+             'host': item,
+             'password_var': 'mysql_replicaset_admin_password',
+             'priv': mysql_replicaset_admin_grants | map('regex_replace', ',\\s+', ',') | join('/')
+           }
+         ] }}
+  loop: "{{ mysql_replicaset_admin_allowed_addresses }}"
+
+- name: Resolve MySQL Router monitor source addresses
+  ansible.builtin.set_fact:
+    mysql_router_monitor_addresses: >-
+      {{ groups['mysql_router_clients'] | mysql_hosts_to_addresses(hostvars) }}
+  run_once: true
+
+- name: Build MySQL platform accounts
+  ansible.builtin.set_fact:
+    mysql_platform_users: >-
+      {{
+        mysql_shared_expanded.users
+        + [
+            {
+              'name': mysql_backup_user,
+              'host': 'localhost',
+              'password_var': mysql_backup_password_var,
+              'priv': mysql_backup_grants | join('/')
+            },
+            {
+              'name': mysql_zabbix_monitor_user,
+              'host': 'localhost',
+              'password_var': mysql_zabbix_monitor_password_var,
+              'priv': '*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW'
+            }
+          ]
+        + mysql_replicaset_bootstrap_users
+      }}
+  run_once: true
+
+- name: Add host-restricted Router monitoring accounts
+  ansible.builtin.set_fact:
+    mysql_platform_users: >-
+      {{ mysql_platform_users + [
+           {
+             'name': mysql_router_monitor_user,
+             'host': item,
+             'password_var': mysql_zabbix_monitor_password_var,
+             'priv': '*.*:USAGE',
+             'tls_requires': {'SSL': true}
+           }
+         ] }}
+  loop: "{{ mysql_router_monitor_addresses }}"
+  run_once: true
+
+- name: Validate the complete shared database list
+  ansible.builtin.set_fact:
+    mysql_managed_databases: >-
+      {{
+        (mysql_server_databases + mysql_shared_expanded.databases)
+        | mysql_validate_databases
+      }}
+  run_once: true
+
+- name: Validate the complete shared account list
+  ansible.builtin.set_fact:
+    mysql_managed_users: >-
+      {{
+        (mysql_server_users + mysql_platform_users)
+        | mysql_validate_accounts
+      }}
+  no_log: true
+  run_once: true
+
+- name: Apply the MySQL 8.4 server  # noqa role-name[path]
   ansible.builtin.include_role:
     name: components/mysql_server
-  when: mysql_server_enabled | default(false)
+  vars:
+    mysql_server_required_secret_vars:
+      - mysql_replicaset_admin_password
+    mysql_server_local_bootstrap_users: "{{ mysql_replicaset_bootstrap_users }}"
+
+- name: Converge the InnoDB ReplicaSet  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: components/mysql_replicaset
+
+- name: Manage shared tenant databases on the current PRIMARY
+  ansible.mysql.mysql_db:
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: "{{ item.name }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    state: "{{ item.state | default('present') }}"
+  loop: "{{ mysql_managed_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: >-
+    {{ mysql_replicaset_initial_primary
+       if ansible_check_mode
+       else mysql_replicaset_runtime_primary }}
+
+- name: Manage shared MySQL accounts on the current PRIMARY
+  ansible.mysql.mysql_user:
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: "{{ item.name }}"
+    host: "{{ item.host }}"
+    plugin: "{{ item.plugin | default('caching_sha2_password') }}"
+    plugin_auth_string: >-
+      {{ lookup('ansible.builtin.vars', item.password_var)
+         if item.password_var is defined
+         else item.plugin_auth_string | default(omit) }}
+    salt: >-
+      {{ item.salt
+         | default(((item.name ~ '@' ~ (item.host | default('*'))) | hash('sha256'))[:20]) }}
+    priv: "{{ item.priv | default(omit) }}"
+    tls_requires: "{{ item.tls_requires | default(omit) }}"
+    state: "{{ item.state | default('present') }}"
+    update_password: "{{ item.update_password | default('always') }}"
+  loop: "{{ mysql_managed_users }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.host }}"
+  no_log: true
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: >-
+    {{ mysql_replicaset_initial_primary
+       if ansible_check_mode
+       else mysql_replicaset_runtime_primary }}
+
+- name: Install physical backup capability  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: components/mysql_backup
+  when: mysql_backup_enabled | bool
+
+- name: Configure Zabbix MySQL monitoring  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: components/zabbix_mysql
+
+- name: Synchronize operator-facing MySQL role DNS  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: components/mysql_role_dns
+  vars:
+    mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
+    mysql_role_dns_secondary: "{{ mysql_replicaset_runtime_secondary }}"
+  when: not ansible_check_mode
+  run_once: true

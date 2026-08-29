@@ -1,0 +1,41 @@
+server {
+    listen 80;
+    server_name {{ zabbix_server_frontend_site_names | join(' ') }};
+
+    root /usr/share/zabbix;
+    index index.php;
+    client_max_body_size 16m;
+
+    location = /favicon.ico {
+        log_not_found off;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location /assets {
+        access_log off;
+        expires 10d;
+    }
+
+    location ~ /(api\/|conf[^\.]|include|locale) {
+        deny all;
+        return 404;
+    }
+
+    location /vendor {
+        deny all;
+        return 404;
+    }
+
+    location ~ [^/]\.php(/|$) {
+        fastcgi_pass unix:{{ zabbix_server_php_socket }};
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        set $path_info $fastcgi_path_info;
+        fastcgi_param PATH_INFO $path_info;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $document_root;
+    }
+}

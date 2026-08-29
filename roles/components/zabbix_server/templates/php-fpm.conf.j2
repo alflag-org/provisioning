@@ -1,0 +1,24 @@
+[zabbix]
+user = www-data
+group = www-data
+listen = {{ zabbix_server_php_socket }}
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 16
+pm.start_servers = 4
+pm.min_spare_servers = 2
+pm.max_spare_servers = 6
+pm.max_requests = 500
+
+php_value[session.save_handler] = files
+php_value[session.save_path] = /var/lib/php/sessions
+php_value[max_execution_time] = 300
+php_value[memory_limit] = 256M
+php_value[post_max_size] = 16M
+php_value[upload_max_filesize] = 8M
+php_value[max_input_time] = 300
+php_value[max_input_vars] = 10000
+php_value[date.timezone] = {{ zabbix_server_timezone }}

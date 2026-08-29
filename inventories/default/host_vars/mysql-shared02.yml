@@ -1,0 +1,26 @@
+---
+zone: mgmt
+role: mysql
+purpose: shared
+virtualization_type: vm
+os_distribution: Ubuntu
+os_version: "26.04"
+
+network_address: 10.10.10.222/24
+network_ipv4_address: 10.10.10.222
+network_prefix_length: 24
+network_gateway: 10.10.10.1
+network_dns_resolvers:
+  - 10.10.10.240
+  - 10.10.10.241
+mysql_server_id: 222
+
+systemd_resolved_dns:
+  - 10.10.10.240
+  - 10.10.10.241
+systemd_resolved_domains:
+  - srv.alflag.internal
+  - access.internal
+
+ssh_server_enabled: true
+systemd_resolved_enabled: true

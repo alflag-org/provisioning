@@ -1,0 +1,18 @@
+# Managed by Alflag provisioning.
+LogFile=/var/log/zabbix/zabbix_server.log
+LogFileSize=0
+PidFile=/run/zabbix/zabbix_server.pid
+SocketDir=/run/zabbix
+DBHost={{ zabbix_server_database_host }}
+DBName={{ zabbix_server_database_name }}
+DBUser={{ zabbix_server_database_user }}
+DBPassword={{ lookup('ansible.builtin.vars', zabbix_server_database_password_var) }}
+DBPort={{ zabbix_server_database_port }}
+CacheSize={{ zabbix_server_cache_size }}
+HistoryCacheSize={{ zabbix_server_history_cache_size }}
+HistoryIndexCacheSize={{ zabbix_server_history_index_cache_size }}
+TrendCacheSize={{ zabbix_server_trend_cache_size }}
+ValueCacheSize={{ zabbix_server_value_cache_size }}
+Timeout=10
+LogSlowQueries=3000
+StatsAllowedIP=127.0.0.1

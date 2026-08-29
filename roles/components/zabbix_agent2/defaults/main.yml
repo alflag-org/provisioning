@@ -1,0 +1,14 @@
+---
+zabbix_agent2_major_version: "7.0"
+zabbix_agent2_package: zabbix-agent2
+zabbix_agent2_service_name: zabbix-agent2
+zabbix_agent2_config_path: /etc/zabbix/zabbix_agent2.conf
+zabbix_agent2_include_dir: /etc/zabbix/zabbix_agent2.d
+zabbix_agent2_log_path: /var/log/zabbix/zabbix_agent2.log
+zabbix_agent2_listen_address: 0.0.0.0
+zabbix_agent2_listen_port: 10050
+zabbix_agent2_server_port: 10051
+zabbix_agent2_timeout: 10
+zabbix_agent2_repository_uri: https://repo.zabbix.com/zabbix/7.0/ubuntu
+zabbix_agent2_repository_key: https://repo.zabbix.com/zabbix-official-repo.key
+zabbix_agent2_apt_pin_path: /etc/apt/preferences.d/zabbix-7.0

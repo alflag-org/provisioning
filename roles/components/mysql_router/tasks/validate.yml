@@ -1,0 +1,71 @@
+---
+- name: Read the Router bootstrap configuration for validation
+  ansible.builtin.slurp:
+    path: "{{ mysql_router_bootstrap_config_path }}"
+  register: mysql_router_validation_bootstrap
+
+- name: Resolve the Router dynamic state path for validation
+  ansible.builtin.set_fact:
+    mysql_router_validation_dynamic_state_path: >-
+      {{
+        (
+          mysql_router_validation_bootstrap.content
+          | b64decode
+          | regex_search('(?m)^dynamic_state\s*=\s*([^\r\n]+)$', '\1')
+        )[0]
+      }}
+
+- name: Query Router service, metadata cache, and synthetic endpoints
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_router_status_program_path }}"
+      - --defaults-file
+      - "{{ mysql_router_monitor_config_path }}"
+      - --state-file
+      - "{{ mysql_router_validation_dynamic_state_path }}"
+      - --rw-port
+      - "{{ mysql_router_rw_port | string }}"
+      - --ro-port
+      - "{{ mysql_router_ro_port | string }}"
+      - --split-port
+      - "{{ mysql_router_split_port | string }}"
+      - json
+  register: mysql_router_health_validation
+  changed_when: false
+  failed_when: false
+  no_log: true
+  retries: 30
+  delay: 2
+  until: >-
+    mysql_router_health_validation.rc == 0
+    and (mysql_router_health_validation.stdout | from_json).service | bool
+    and (mysql_router_health_validation.stdout | from_json).metadata_cache | bool
+    and (mysql_router_health_validation.stdout | from_json).rw.reachable | bool
+    and (mysql_router_health_validation.stdout | from_json).ro.reachable | bool
+    and (mysql_router_health_validation.stdout | from_json).split.reachable | bool
+
+- name: Require correct Router backend roles
+  ansible.builtin.assert:
+    that:
+      - mysql_router_health_validation.rc == 0
+      - mysql_router_health.service | bool
+      - mysql_router_health.metadata_cache | bool
+      - mysql_router_health.rw.reachable | bool
+      - mysql_router_health.rw.backend.read_only | int == 0
+      - mysql_router_health.ro.reachable | bool
+      - not mysql_router_require_secondary | bool or mysql_router_health.ro.backend.read_only | int == 1
+      - mysql_router_health.split.reachable | bool
+    fail_msg: MySQL Router did not expose healthy RW, RO, and split endpoints with the expected backend roles.
+  vars:
+    mysql_router_health: "{{ mysql_router_health_validation.stdout | from_json }}"
+
+- name: Report sanitized Router validation state
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      rw_backend: "{{ mysql_router_health.rw.backend.hostname }}"
+      ro_backend: "{{ mysql_router_health.ro.backend.hostname }}"
+      split_reachable: "{{ mysql_router_health.split.reachable }}"
+      metadata_cache: "{{ mysql_router_health.metadata_cache }}"
+  vars:
+    mysql_router_health: "{{ mysql_router_health_validation.stdout | from_json }}"

@@ -1,0 +1,160 @@
+---
+- name: Validate runtime MySQL role DNS inputs
+  ansible.builtin.assert:
+    that:
+      - mysql_role_dns_primary in groups['svc_mysql']
+      - mysql_role_dns_secondary | length == 0 or mysql_role_dns_secondary in groups['svc_mysql']
+      - mysql_role_dns_secondary | length == 0 or mysql_role_dns_primary != mysql_role_dns_secondary
+      - groups['svc_dns_authoritative'] | length == 2
+      - mysql_role_dns_ttl | int >= 30
+      - mysql_role_dns_ttl | int <= 60
+    fail_msg: Runtime role DNS requires distinct ReplicaSet roles and two authoritative DNS servers.
+  run_once: true
+
+- name: Inspect current MySQL role DNS state on both authoritative servers
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_role_dns_update_program_path }}"
+      - --zone-name
+      - "{{ mysql_role_dns_zone_name }}"
+      - --zone-file
+      - "{{ mysql_role_dns_zone_path }}"
+      - --record-file
+      - "{{ mysql_role_dns_record_path }}"
+      - --applied-state-file
+      - "{{ mysql_role_dns_applied_state_path }}"
+      - --primary
+      - "{{ hostvars[mysql_role_dns_primary].network_primary_fqdn }}"
+      - --secondary
+      - >-
+        {{ hostvars[mysql_role_dns_secondary].network_primary_fqdn
+           if mysql_role_dns_secondary | length > 0 else '' }}
+      - --ttl
+      - "{{ mysql_role_dns_ttl | string }}"
+      - --inspect
+  loop: "{{ groups['svc_dns_authoritative'] }}"
+  loop_control:
+    label: "{{ item }}"
+  delegate_to: "{{ item }}"
+  register: mysql_role_dns_inspections
+  changed_when: false
+  run_once: true
+
+- name: Collect current authoritative DNS serials and record state
+  ansible.builtin.set_fact:
+    mysql_role_dns_inspection_documents: >-
+      {{
+        mysql_role_dns_inspections.results
+        | map(attribute='stdout')
+        | map('from_json')
+        | list
+      }}
+    mysql_role_dns_current_serials: >-
+      {{
+        mysql_role_dns_inspections.results
+        | map(attribute='stdout')
+        | map('from_json')
+        | map(attribute='serial')
+        | list
+      }}
+  run_once: true
+
+- name: Select one SOA serial for both authoritative DNS servers
+  ansible.builtin.set_fact:
+    mysql_role_dns_target_serial: >-
+      {{
+        mysql_role_dns_current_serials
+        | mysql_role_dns_converged_serial(
+          mysql_role_dns_inspection_documents
+          | selectattr('records_match', 'equalto', false)
+          | list
+          | length > 0
+        )
+      }}
+  run_once: true
+
+- name: Atomically update MySQL runtime role records on both authoritative servers
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_role_dns_update_program_path }}"
+      - --zone-name
+      - "{{ mysql_role_dns_zone_name }}"
+      - --zone-file
+      - "{{ mysql_role_dns_zone_path }}"
+      - --record-file
+      - "{{ mysql_role_dns_record_path }}"
+      - --applied-state-file
+      - "{{ mysql_role_dns_applied_state_path }}"
+      - --primary
+      - "{{ hostvars[mysql_role_dns_primary].network_primary_fqdn }}"
+      - --secondary
+      - >-
+        {{ hostvars[mysql_role_dns_secondary].network_primary_fqdn
+           if mysql_role_dns_secondary | length > 0 else '' }}
+      - --ttl
+      - "{{ mysql_role_dns_ttl | string }}"
+      - --target-serial
+      - "{{ mysql_role_dns_target_serial | string }}"
+  loop: "{{ groups['svc_dns_authoritative'] }}"
+  loop_control:
+    label: "{{ item }}"
+  delegate_to: "{{ item }}"
+  register: mysql_role_dns_updates
+  changed_when: "(mysql_role_dns_updates.stdout | from_json).changed"
+  run_once: true
+
+- name: Require identical runtime role records on both DNS servers
+  ansible.builtin.assert:
+    that:
+      - >-
+        mysql_role_dns_updates.results
+        | map(attribute='stdout')
+        | map('from_json')
+        | map(attribute='records_sha256')
+        | unique
+        | list
+        | length == 1
+      - >-
+        mysql_role_dns_updates.results
+        | map(attribute='stdout')
+        | map('from_json')
+        | map(attribute='serial')
+        | unique
+        | list
+        | length == 1
+    fail_msg: Authoritative DNS servers produced different MySQL runtime role records.
+  run_once: true
+
+- name: Reload NSD after a runtime role update  # noqa no-handler
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_role_dns_service_name }}"
+    state: reloaded
+  loop: "{{ mysql_role_dns_updates.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  delegate_to: "{{ item.item }}"
+  when:
+    - >-
+      item.changed | bool
+      or (item.stdout | from_json).reload_required | bool
+  run_once: true
+
+- name: Record the successfully loaded MySQL role DNS state
+  ansible.builtin.copy:
+    content: >-
+      {{
+        {
+          'records_sha256': (item.stdout | from_json).records_sha256,
+          'serial': (item.stdout | from_json).serial
+        }
+        | to_nice_json
+      }}
+    dest: "{{ mysql_role_dns_applied_state_path }}"
+    owner: root
+    group: nsd
+    mode: "0640"
+  loop: "{{ mysql_role_dns_updates.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  delegate_to: "{{ item.item }}"
+  run_once: true

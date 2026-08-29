@@ -1,0 +1,2 @@
+# Managed by Alflag provisioning.
+UserParameter=mysql.platform.status[*],{{ zabbix_mysql_status_program_path }} --defaults-file {{ zabbix_mysql_client_config_path }} --node-address {{ network_ipv4_address | default(ansible_host) }} --primary-alias {{ zabbix_mysql_primary_alias }} --replica-alias {{ zabbix_mysql_replica_alias }} "$1"

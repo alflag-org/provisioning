@@ -1,0 +1,167 @@
+---
+- name: Reset the expected ReplicaSet member list
+  ansible.builtin.set_fact:
+    mysql_replicaset_instances: []
+  run_once: true
+
+- name: Build the expected ReplicaSet member list
+  ansible.builtin.set_fact:
+    mysql_replicaset_instances: >-
+      {{ (mysql_replicaset_instances | default([])) + [
+           {
+             'name': item,
+             'host': hostvars[item].network_primary_fqdn,
+             'port': mysql_replicaset_port | int,
+             'serverId': hostvars[item].mysql_server_id | int
+           }
+         ] }}
+  loop: "{{ groups['svc_mysql'] }}"
+  run_once: true
+
+- name: Check whether MySQL Shell is installed
+  ansible.builtin.stat:
+    path: /usr/bin/mysqlsh
+  register: mysql_replicaset_shell
+  changed_when: false
+  run_once: true
+  delegate_to: >-
+    {{ mysql_target_primary
+       if mysql_replicaset_action == 'failover'
+       else mysql_replicaset_initial_primary }}
+
+- name: Check whether the ReplicaSet management script is installed
+  ansible.builtin.stat:
+    path: "{{ mysql_replicaset_script_path }}"
+  register: mysql_replicaset_script
+  changed_when: false
+  run_once: true
+  delegate_to: >-
+    {{ mysql_target_primary
+       if mysql_replicaset_action == 'failover'
+       else mysql_replicaset_initial_primary }}
+
+- name: Run MySQL Shell against the ReplicaSet
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mysqlsh
+      - --js
+      - --file
+      - "{{ mysql_replicaset_script_path }}"
+  environment:
+    MYSQL_REPLICASET_ACTION: >-
+      {{ 'check'
+         if ansible_check_mode and mysql_replicaset_action == 'converge'
+         else mysql_replicaset_action }}
+    MYSQL_REPLICASET_DRY_RUN_ONLY: "{{ ansible_check_mode | ternary('true', 'false') }}"
+    MYSQL_REPLICASET_NAME: "{{ mysql_replicaset_name }}"
+    MYSQL_REPLICASET_INSTANCES: "{{ mysql_replicaset_instances | to_json }}"
+    MYSQL_REPLICASET_INITIAL_PRIMARY: "{{ mysql_replicaset_initial_primary }}"
+    MYSQL_REPLICASET_ADMIN_USER: "{{ mysql_replicaset_admin_user }}"
+    MYSQL_REPLICASET_ADMIN_PASSWORD: >-
+      {{ lookup('ansible.builtin.vars', mysql_replicaset_admin_password_var) }}
+    MYSQL_REPLICASET_ALLOWED_HOST: "{{ mysql_replicaset_replication_allowed_host }}"
+    MYSQL_REPLICASET_TARGET: "{{ mysql_target_primary | default('') }}"
+    MYSQL_REPLICASET_TIMEOUT: "{{ mysql_replicaset_operation_timeout }}"
+  register: mysql_replicaset_command
+  check_mode: false
+  changed_when: "'\"changed\":true' in mysql_replicaset_command.stdout"
+  no_log: true
+  run_once: true
+  delegate_to: >-
+    {{ mysql_target_primary
+       if mysql_replicaset_action == 'failover'
+       else mysql_replicaset_initial_primary }}
+  when:
+    - >-
+      not ansible_check_mode
+      or (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)
+
+- name: Explain why ReplicaSet check is unavailable
+  ansible.builtin.debug:
+    msg: >-
+      MySQL Shell or the ReplicaSet management script is not installed on the
+      operation host, so the topology check is skipped in Ansible check mode.
+  when:
+    - ansible_check_mode
+    - >-
+      not (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)
+  run_once: true
+
+- name: Require exactly one ReplicaSet operation result
+  ansible.builtin.assert:
+    that:
+      - >-
+        mysql_replicaset_command.stdout_lines
+        | select('match', '^PROVISIONING_RESULT=')
+        | list
+        | length == 1
+    fail_msg: MySQL Shell did not emit exactly one ReplicaSet operation result.
+  run_once: true
+  when:
+    - >-
+      not ansible_check_mode
+      or (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)
+
+- name: Extract the ReplicaSet operation result
+  ansible.builtin.set_fact:
+    mysql_replicaset_result: >-
+      {{
+        (
+          mysql_replicaset_command.stdout_lines
+          | select('match', '^PROVISIONING_RESULT=')
+          | list
+          | last
+          | regex_replace('^PROVISIONING_RESULT=', '')
+        )
+        | from_json
+      }}
+  run_once: true
+  when:
+    - >-
+      not ansible_check_mode
+      or (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)
+
+- name: Require a complete online ReplicaSet for healthy topology actions
+  ansible.builtin.assert:
+    that:
+      - mysql_replicaset_result.exists | bool
+      - mysql_replicaset_result.status.replicaSet.name == mysql_replicaset_name
+      - mysql_replicaset_result.members | length == 2
+      - mysql_replicaset_result.members | selectattr('status', 'equalto', 'ONLINE') | list | length == 2
+      - mysql_replicaset_result.members | selectattr('role', 'equalto', 'PRIMARY') | list | length == 1
+      - mysql_replicaset_result.members | selectattr('role', 'equalto', 'SECONDARY') | list | length == 1
+    fail_msg: ReplicaSet convergence did not produce one online PRIMARY and one online SECONDARY.
+  when:
+    - >-
+      not ansible_check_mode
+      or (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)
+    - mysql_replicaset_action in ['converge', 'status', 'switchover']
+  run_once: true
+
+- name: Record current ReplicaSet roles
+  ansible.builtin.set_fact:
+    mysql_replicaset_runtime_primary: "{{ mysql_replicaset_result.primary }}"
+    mysql_replicaset_runtime_secondary: "{{ mysql_replicaset_result.secondary }}"
+  when:
+    - >-
+      not ansible_check_mode
+      or (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)
+    - mysql_replicaset_result.exists | bool
+  run_once: true
+
+- name: Report the sanitized ReplicaSet state
+  ansible.builtin.debug:
+    msg:
+      action: "{{ mysql_replicaset_result.action }}"
+      changed: "{{ mysql_replicaset_result.changed }}"
+      before_members: >-
+        {{ (mysql_replicaset_result.before | default({}, true)).members | default([]) }}
+      primary: "{{ mysql_replicaset_result.primary | default('unknown') }}"
+      secondary: "{{ mysql_replicaset_result.secondary | default('unknown') }}"
+      after_members: "{{ mysql_replicaset_result.members | default([]) }}"
+      mutation_skipped: "{{ ansible_check_mode }}"
+  run_once: true
+  when:
+    - >-
+      not ansible_check_mode
+      or (mysql_replicaset_shell.stat.exists and mysql_replicaset_script.stat.exists)

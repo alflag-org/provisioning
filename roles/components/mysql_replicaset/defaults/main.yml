@@ -1,0 +1,10 @@
+---
+mysql_replicaset_name: mysql-shared
+mysql_replicaset_initial_primary: mysql-shared01
+mysql_replicaset_admin_user: mysql_replicaset_admin
+mysql_replicaset_admin_password_var: mysql_replicaset_admin_password
+mysql_replicaset_replication_allowed_host: 10.10.10.0/24
+mysql_replicaset_port: 3306
+mysql_replicaset_operation_timeout: 120
+mysql_replicaset_script_path: /usr/local/libexec/mysql-replicaset
+mysql_replicaset_action: converge

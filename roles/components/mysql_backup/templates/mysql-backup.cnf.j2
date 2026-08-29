@@ -1,0 +1,5 @@
+[client]
+user={{ mysql_backup_user }}
+password={{ lookup('ansible.builtin.vars', mysql_backup_password_var) | to_json(ensure_ascii=False) }}
+socket={{ mysql_backup_mysql_socket }}
+protocol=socket
