@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 import urllib.request
 
 
@@ -120,6 +121,13 @@ class ZabbixAPI:
             {"username": username, "password": password},
             authenticated=False,
         )
+
+    def logout(self):
+        if self.auth:
+            try:
+                self.call("user.logout", [])
+            finally:
+                self.auth = None
 
 
 class Reconciler:
@@ -385,8 +393,18 @@ def login_and_rotate(api, username, desired_password, bootstrap_password):
             "user.update",
             {"userid": users[0]["userid"], "passwd": desired_password},
         )
+        api.logout()
         api.login(username, desired_password)
         return True
+
+
+def logout_preserving_exception(api):
+    active_exception = sys.exc_info()[0] is not None
+    try:
+        api.logout()
+    except Exception:
+        if not active_exception:
+            raise
 
 
 def main():
@@ -402,25 +420,28 @@ def main():
         raise RuntimeError("Zabbix API credentials were not supplied")
 
     api = ZabbixAPI(args.url, args.host_header)
-    password_changed = login_and_rotate(
-        api,
-        args.username,
-        desired_password,
-        bootstrap_password,
-    )
-    inventory = json.loads(Path(args.inventory).read_text(encoding="utf-8"))
-    reconciler = Reconciler(api, inventory)
-    reconciler.run()
-    print(
-        json.dumps(
-            {
-                "changed": password_changed or reconciler.changed,
-                "hosts": reconciler.host_count,
-                "templates": reconciler.template_count,
-            },
-            sort_keys=True,
+    try:
+        password_changed = login_and_rotate(
+            api,
+            args.username,
+            desired_password,
+            bootstrap_password,
         )
-    )
+        inventory = json.loads(Path(args.inventory).read_text(encoding="utf-8"))
+        reconciler = Reconciler(api, inventory)
+        reconciler.run()
+        print(
+            json.dumps(
+                {
+                    "changed": password_changed or reconciler.changed,
+                    "hosts": reconciler.host_count,
+                    "templates": reconciler.template_count,
+                },
+                sort_keys=True,
+            )
+        )
+    finally:
+        logout_preserving_exception(api)
 
 
 if __name__ == "__main__":

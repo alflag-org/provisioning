@@ -72,7 +72,7 @@
   ansible.builtin.shell: >-
     set -o pipefail &&
     /usr/bin/zcat {{ zabbix_server_schema_path | quote }} |
-    /usr/bin/psql --set ON_ERROR_STOP=1 --dbname {{ zabbix_server_database_name | quote }}
+    /usr/bin/psql --single-transaction --set ON_ERROR_STOP=1 --file=- --dbname {{ zabbix_server_database_name | quote }}
   args:
     executable: /bin/bash
   become: true

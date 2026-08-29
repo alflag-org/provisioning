@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 import yaml
@@ -57,6 +58,19 @@ class InventoryTests(unittest.TestCase):
             (INVENTORY / "host_vars/monitor01.yml").read_text()
         )
         self.assertEqual(monitor["network_service_aliases"], ["zabbix.access.internal"])
+
+    def test_inventory_and_playbooks_do_not_use_legacy_group_prefix(self):
+        forbidden_prefix = "cap" + "_"
+        for root in (ROOT / "inventories", ROOT / "playbooks"):
+            for path in root.rglob("*"):
+                if path.is_file():
+                    self.assertIsNone(
+                        re.search(
+                            rf"\b{re.escape(forbidden_prefix)}[A-Za-z0-9_]*",
+                            path.read_text(),
+                        ),
+                        path.as_posix(),
+                    )
 
 if __name__ == "__main__":
     unittest.main()

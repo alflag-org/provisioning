@@ -145,9 +145,11 @@ Run a normal explicit backup:
 
 Run an emergency backup on a named primary only after accepting its load:
 
+Check current ReplicaSet status first and replace `<current-primary>` below.
+
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-backup.yml \
-  -e mysql_backup_target=mysql-shared02 \
+  -e mysql_backup_target=<current-primary> \
   -e mysql_backup_allow_primary=true
 ```
 
@@ -178,9 +180,8 @@ Provisioning templates add:
 - Router service, metadata cache, and synthetic connections through ports 6446,
   6447, and 6450.
 
-The current alert policy treats a `SECONDARY` backup older than 36 hours and a
-restore test older than eight days as stale. Primary nodes retain backup status
-for inspection but do not raise responsibility alerts.
+Monitor for stale or failed backups and restore validation. Primary nodes retain
+backup status for inspection but do not raise responsibility alerts.
 
 The MySQL Agent 2 plugin supplies availability, uptime, connection, thread,
 query, transaction, slow-query, InnoDB, buffer-pool, binary-log, and replication
@@ -216,15 +217,18 @@ playbook then proves that the new primary is writable, the former primary is
 read-only, both members remain online, DNS is synchronized, and every Router
 reaches the expected backends.
 
+Check current ReplicaSet status first and replace `<current-secondary>` below.
+
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-switchover.yml \
-  -e mysql_target_primary=mysql-shared02
+  -e mysql_target_primary=<current-secondary>
 ```
 
-With `--check`, the switchover and failover playbooks run only the corresponding
-MySQL Shell dry run. They do not change the topology, DNS records, or Router
-state. Normal `site.yml` check mode reads the current ReplicaSet without
-creating or joining members.
+With `--check`, an installed MySQL Shell and ReplicaSet management script run
+the corresponding read-only or dry-run topology check. If either is missing,
+provisioning reports that reason and skips the topology check. Check mode does
+not change the topology, DNS records, or Router state, and normal `site.yml`
+does not create or join ReplicaSet members.
 
 For planned OS or MySQL maintenance:
 
@@ -242,10 +246,12 @@ declaring the former primary unavailable and checking the target's replication
 position. The target must still be the online `SECONDARY`, and the confirmation
 must name the same host.
 
+Check current ReplicaSet status first and replace `<current-secondary>` below.
+
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-failover.yml \
-  -e mysql_target_primary=mysql-shared02 \
-  -e mysql_failover_confirmation=force:mysql-shared02
+  -e mysql_target_primary=<current-secondary> \
+  -e mysql_failover_confirmation=force:<current-secondary>
 ```
 
 Do not reconnect the former primary as writable. Inspect it for transactions not
@@ -258,5 +264,4 @@ InnoDB ReplicaSet uses asynchronous replication. Planned maintenance supports a
 controlled switchover, but unexpected primary loss requires operator-approved
 failover. The platform does not provide automatic election and does not
 guarantee `RPO=0`. MySQL Router removes topology details from clients but does
-not change those replication guarantees. If automatic election becomes a
-requirement, evaluate InnoDB Cluster and Group Replication as a separate design.
+not change those replication guarantees.

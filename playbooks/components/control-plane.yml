@@ -1,6 +1,6 @@
 ---
 - name: Preserve the control-plane lifecycle boundary
-  hosts: cap_control_node
+  hosts: control_plane_nodes
   gather_facts: false
 
   tasks:
