@@ -1,5 +1,10 @@
+import contextlib
+import fcntl
 import importlib.util
+import io
+import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -83,6 +88,74 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             socket_path.touch()
             with self.assertRaisesRegex(RuntimeError, "without a live ownership pid"):
                 RESTORE.stop_server(pid_path, socket_path, scratch)
+
+    def test_scheduled_backup_skips_when_the_shared_lock_is_busy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "mysql-physical-backup.lock"
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps({"lock_file": str(lock_path)}), encoding="utf-8"
+            )
+            output = io.StringIO()
+
+            with lock_path.open("w", encoding="utf-8") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "mysql-physical-backup",
+                        "--config",
+                        str(config_path),
+                        "--skip-if-lock-busy",
+                    ],
+                ):
+                    with contextlib.redirect_stdout(output):
+                        BACKUP.main()
+
+            self.assertEqual(
+                json.loads(output.getvalue()),
+                {"changed": False, "reason": "shared lock busy"},
+            )
+
+    def test_explicit_backup_fails_when_the_shared_lock_is_busy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "mysql-physical-backup.lock"
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps({"lock_file": str(lock_path)}), encoding="utf-8"
+            )
+
+            with lock_path.open("w", encoding="utf-8") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    ["mysql-physical-backup", "--config", str(config_path)],
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "topology operation"):
+                        BACKUP.main()
+
+    def test_restore_test_fails_when_the_shared_lock_is_busy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "mysql-physical-backup.lock"
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps({"lock_file": str(lock_path)}), encoding="utf-8"
+            )
+
+            with lock_path.open("w", encoding="utf-8") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    ["mysql-restore-test", "--config", str(config_path)],
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "topology operation"):
+                        RESTORE.main()
 
 
 if __name__ == "__main__":

@@ -11,7 +11,6 @@ import yaml
 
 from roles.components.mysql_backup.filter_plugins.mysql_backup import (
     mysql_backup_service_is_idle,
-    mysql_backup_timer_snapshot,
 )
 
 
@@ -54,17 +53,13 @@ class MySQLOperationSafetyTests(unittest.TestCase):
         switchover, _ = operation_block("mysql-switchover.yml", 0)
         self.assertEqual(switchover[0]["hosts"], "svc_mysql")
 
-    def test_lock_acquisition_is_fail_closed_and_follows_timer_suspension(self):
+    def test_lock_acquisition_is_fail_closed_without_timer_mutation(self):
         tasks = yaml.safe_load(
             (BACKUP_TASKS / "acquire_topology_lock.yml").read_text()
         )
         names = [task["name"] for task in tasks]
         self.assertLess(
-            names.index("Suspend the physical backup timer"),
-            names.index("Start the topology operation lock holder"),
-        )
-        self.assertLess(
-            names.index("Recheck the physical backup service after timer suspension"),
+            names.index("Require a loaded and inactive physical backup service"),
             names.index("Start the topology operation lock holder"),
         )
         serialized = yaml.safe_dump(tasks)
@@ -72,6 +67,7 @@ class MySQLOperationSafetyTests(unittest.TestCase):
         self.assertIn("LoadState", serialized)
         self.assertIn("ActiveState", serialized)
         self.assertNotIn("is-active", serialized)
+        self.assertNotIn("mysql_backup_timer", serialized)
 
     def test_lock_holder_has_a_failsafe_expiration(self):
         unit = LOCK_UNIT.read_text()
@@ -88,7 +84,11 @@ class MySQLOperationSafetyTests(unittest.TestCase):
         defaults = yaml.safe_load(
             (ROOT / "roles/components/mysql_backup/defaults/main.yml").read_text()
         )
-        self.assertGreaterEqual(defaults["mysql_topology_lock_runtime_max_seconds"], 600)
+        self.assertGreaterEqual(defaults["mysql_topology_lock_runtime_max_seconds"], 3600)
+        acquire_tasks = (
+            BACKUP_TASKS / "acquire_topology_lock.yml"
+        ).read_text()
+        self.assertIn("mysql_topology_lock_runtime_max_seconds | int >= 3600", acquire_tasks)
 
     def test_backup_service_state_is_allowed_only_when_loaded_and_inactive(self):
         allowed = "LoadState=loaded\nActiveState=inactive\n"
@@ -113,41 +113,23 @@ class MySQLOperationSafetyTests(unittest.TestCase):
         )
         self.assertFalse(mysql_backup_service_is_idle(allowed, 1))
 
-    def test_timer_snapshot_preserves_enabled_and_active_state(self):
-        enabled_active = mysql_backup_timer_snapshot(
-            "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n", 0
+    def test_topology_operations_never_change_the_backup_timer(self):
+        topology_tasks = "\n".join(
+            (BACKUP_TASKS / filename).read_text()
+            for filename in (
+                "acquire_topology_lock.yml",
+                "release_topology_lock.yml",
+            )
         )
-        self.assertTrue(enabled_active["valid"])
-        self.assertTrue(enabled_active["enabled"])
-        self.assertTrue(enabled_active["active"])
+        self.assertNotIn("mysql_backup_timer", topology_tasks)
+        self.assertNotIn("timer state", topology_tasks)
 
-        disabled_inactive = mysql_backup_timer_snapshot(
-            "LoadState=loaded\nActiveState=inactive\nUnitFileState=disabled\n", 0
-        )
-        self.assertTrue(disabled_inactive["valid"])
-        self.assertFalse(disabled_inactive["enabled"])
-        self.assertFalse(disabled_inactive["active"])
-
-        for output in (
-            "LoadState=loaded\nActiveState=failed\nUnitFileState=enabled\n",
-            "LoadState=not-found\nActiveState=inactive\nUnitFileState=disabled\n",
-            "LoadState=loaded\nActiveState=inactive\nUnitFileState=masked\n",
-        ):
-            self.assertFalse(mysql_backup_timer_snapshot(output, 0)["valid"])
-
-    def test_release_restores_the_saved_timer_state(self):
-        tasks = yaml.safe_load(
-            (BACKUP_TASKS / "release_topology_lock.yml").read_text()
-        )
-        restore = next(
-            task
-            for task in tasks
-            if task["name"] == "Restore the physical backup timer state"
-        )["ansible.builtin.systemd_service"]
-        self.assertEqual(
-            restore["enabled"], "{{ mysql_backup_timer_before_topology.enabled }}"
-        )
-        self.assertIn("mysql_backup_timer_before_topology.active", restore["state"])
+        scheduled_service = (
+            ROOT
+            / "roles/components/mysql_backup/templates"
+            / "mysql-physical-backup.service.j2"
+        ).read_text()
+        self.assertIn("--skip-if-lock-busy", scheduled_service)
 
     def test_backup_or_restore_lock_blocks_topology_acquisition(self):
         with tempfile.TemporaryDirectory() as directory:

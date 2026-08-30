@@ -73,7 +73,7 @@
           when: not ansible_check_mode
           run_once: true
       always:
-        - name: Release the target lock and restore its backup timer  # noqa role-name[path]
+        - name: Release the target topology operation lock  # noqa role-name[path]
           ansible.builtin.include_role:
             name: components/mysql_backup
             tasks_from: release_topology_lock.yml

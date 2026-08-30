@@ -140,6 +140,20 @@ def write_json_atomic(path, document):
             temporary.unlink()
 
 
+def acquire_operation_lock(path, skip_if_busy):
+    lock_handle = path.open("w", encoding="utf-8")
+    try:
+        fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        lock_handle.close()
+        if skip_if_busy:
+            return None
+        raise RuntimeError(
+            "another backup, restore validation, or topology operation is running"
+        ) from error
+    return lock_handle
+
+
 def archive_closed_binlogs(config, destination, server_uuid, backup_run_id):
     mysql(config, "FLUSH BINARY LOGS")
     binlogs = mysql(config, "SHOW BINARY LOGS")
@@ -207,14 +221,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--allow-primary", action="store_true")
+    parser.add_argument("--skip-if-lock-busy", action="store_true")
     args = parser.parse_args()
 
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    lock_handle = Path(config["lock_file"]).open("w", encoding="utf-8")
-    try:
-        fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as error:
-        raise RuntimeError("another backup or restore validation is already running") from error
+    lock_handle = acquire_operation_lock(
+        Path(config["lock_file"]), args.skip_if_lock_busy
+    )
+    if lock_handle is None:
+        print(json.dumps({"changed": False, "reason": "shared lock busy"}))
+        return
     status_path = Path(config["status_file"])
     status = read_status(status_path, config["source_node"])
     started = time.monotonic()

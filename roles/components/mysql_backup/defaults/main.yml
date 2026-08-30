@@ -28,8 +28,7 @@ mysql_backup_randomized_delay_seconds: 1800
 mysql_backup_service_name: mysql-physical-backup.service
 mysql_backup_timer_name: mysql-physical-backup.timer
 mysql_topology_lock_service_name: mysql-topology-operation-lock.service
-mysql_topology_lock_runtime_max_seconds: 900
-mysql_topology_suspend_backup_timer: true
+mysql_topology_lock_runtime_max_seconds: 3600
 mysql_backup_percona_release_url: https://repo.percona.com/apt/percona-release_1.0-9.generic_all.deb
 mysql_backup_percona_release_checksum: sha256:71d7c9d3eac749765f998520871444f3c06135c5008a46c33d1e24a52c1c6f00
 mysql_backup_percona_release_path: /var/cache/percona-release_1.0-9.generic_all.deb

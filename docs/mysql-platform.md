@@ -156,8 +156,11 @@ Percona XtraBackup 8.4 and the same tooling are installed on both database
 nodes. Both timers run, but the program reads the local MySQL runtime state at
 job start. A healthy `SECONDARY` proceeds; `PRIMARY` exits without taking a
 scheduled full backup. Any ambiguous or degraded state fails closed. A manual
-primary backup requires both an explicit host and an override. Backup and
-restore validation share a local lock, so they cannot overlap on one node.
+primary backup requires both an explicit host and an override. Backup, restore
+validation, and topology operations share a local lock, so they cannot overlap
+on one node. If the timer fires while that lock is held, the scheduled service
+exits successfully with `changed=false` and `reason=shared lock busy`. Explicit
+backup and restore-test commands treat the same condition as an error.
 
 Each successful job:
 
@@ -213,9 +216,12 @@ database, shuts down, and removes the scratch datadir.
 Backup, restore validation, planned switchover, and emergency promotion use the
 same `/run/lock/mysql-physical-backup.lock` file. A topology playbook holds that
 lock through the ReplicaSet mutation, role-DNS update, and Router validation,
-so backup or restore cannot begin during the operation. The lock holder is a
-bounded systemd service; `RuntimeMaxSec` releases the lock if the controller
-disappears before its normal cleanup runs.
+so backup or restore cannot begin during the operation. The backup timer stays
+enabled and active throughout; a scheduled invocation that loses the lock race
+is a normal skip. The lock holder is a bounded systemd service;
+the one-hour `RuntimeMaxSec` exceeds the normal ReplicaSet, DNS, and sequential
+Router-validation budget and releases the lock if the controller disappears
+before its normal cleanup runs. Timer state is never changed.
 
 ## Zabbix
 
@@ -272,13 +278,14 @@ read-only, both members remain online, DNS is synchronized, and every Router
 reaches the expected backends.
 
 Before the dry run, both MySQL nodes must report the physical-backup unit as
-exactly `LoadState=loaded` and `ActiveState=inactive`. The playbook records each
-backup timer's enabled and active state, stops the timer without killing a
-running service, and acquires the shared backup/restore lock on both nodes. It
-holds both locks through the ReplicaSet change, DNS synchronization, and Router
-validation. Its `always` cleanup releases both locks and restores each timer to
-the recorded state on success or failure. Unknown, missing, failed, activating,
-reloading, or deactivating service states fail before topology mutation.
+exactly `LoadState=loaded` and `ActiveState=inactive`. The playbook then
+acquires the shared backup/restore lock on both nodes and holds both locks
+through the ReplicaSet change, DNS synchronization, and Router validation. Its
+`always` cleanup releases both locks on success or failure. The backup timers
+remain untouched; if one fires before lock acquisition, one operation wins and
+the other stops before topology mutation or heavy backup work. Unknown,
+missing, failed, activating, reloading, or deactivating service states fail
+before topology mutation.
 
 Check current ReplicaSet status first and replace `<current-secondary>` below.
 
@@ -287,13 +294,13 @@ Check current ReplicaSet status first and replace `<current-secondary>` below.
   -e mysql_target_primary=<current-secondary>
 ```
 
-With `--check`, the playbook reads the backup service and timer state and probes
-an existing shared lock without stopping the timer or starting the lock-holder
-service. An installed MySQL Shell and ReplicaSet management script then run the
-corresponding read-only or dry-run topology check. If either is missing,
-provisioning reports that reason and skips the topology check. Check mode does
-not change the topology, DNS records, Router state, or timer state, and normal
-`site.yml` does not create or join ReplicaSet members.
+With `--check`, the playbook reads the backup service state and probes an
+existing shared lock without starting the lock-holder service. An installed
+MySQL Shell and ReplicaSet management script then run the corresponding
+read-only or dry-run topology check. If either is missing, provisioning reports
+that reason and skips the topology check. Check mode does not change the
+topology, DNS records, Router state, or backup schedule, and normal `site.yml`
+does not create or join ReplicaSet members.
 
 For planned OS or MySQL maintenance:
 
@@ -311,10 +318,10 @@ Forced failover is a separate, manual data-loss decision. Use it only after
 declaring the former primary unavailable and checking the target's replication
 position. The target must still be the online `SECONDARY`, and the confirmation
 must name the same host. On the promotion target, the playbook applies the same
-fail-closed backup-service check, timer suspension, and shared-lock ownership
-used by planned switchover. It does not require the unavailable former primary
-to accept a lock. Cleanup releases the target lock and restores its timer after
-ReplicaSet, DNS, and Router processing succeeds or fails.
+fail-closed backup-service check and shared-lock ownership used by planned
+switchover. It does not require the unavailable former primary to accept a
+lock. Cleanup releases the target lock after ReplicaSet, DNS, and Router
+processing succeeds or fails; the backup timer is never changed.
 
 Check current ReplicaSet status first and replace `<current-secondary>` below.
 

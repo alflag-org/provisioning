@@ -149,7 +149,10 @@ def main():
     try:
         fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError as error:
-        raise RuntimeError("another backup or restore validation is already running") from error
+        lock_handle.close()
+        raise RuntimeError(
+            "another backup, restore validation, or topology operation is running"
+        ) from error
     repository_is_off_host(config)
     repository = Path(config["backup_repository"]).resolve()
     backup = (
