@@ -62,7 +62,7 @@
 - name: Report sanitized Router validation state
   ansible.builtin.debug:
     msg:
-      host: "{{ inventory_hostname }}"
+      host: "{{ mysql_router_validation_host | default(inventory_hostname) }}"
       rw_backend: "{{ mysql_router_health.rw.backend.hostname }}"
       ro_backend: "{{ mysql_router_health.ro.backend.hostname }}"
       split_reachable: "{{ mysql_router_health.split.reachable }}"

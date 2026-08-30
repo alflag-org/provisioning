@@ -55,9 +55,24 @@ does not make asynchronous replication synchronous. Router-to-MySQL traffic
 uses TLS in `REQUIRED` mode. Bootstrap-generated metadata credentials remain in
 the Router keyring rather than configuration or inventory.
 
-A new Router bootstraps through
-`mysql-shared-primary.srv.alflag.internal`. After registration, Router follows
-ReplicaSet metadata rather than that DNS name.
+A new Router builds its bootstrap candidates from the stable FQDNs of the two
+`svc_mysql` inventory members. It tries a TLS MySQL session against each member
+in inventory order and fails if neither member accepts the session. The member
+can be either `PRIMARY` or `SECONDARY`; Router obtains the current topology from
+ReplicaSet metadata and reconnects as needed.
+
+Bootstrap uses the TLS-required `mysql_router_bootstrap` account, restricted to
+the inventory addresses of `mysql_router_clients`. Its grant set follows the
+[MySQL Router 8.4 bootstrap minimum](https://dev.mysql.com/doc/mysql-router/8.4/en/mysqlrouter.html)
+needed to create the generated Router metadata account. The stronger
+`mysql_replicaset_admin` account is restricted to the two database-node source
+addresses where MySQL Shell runs topology operations; it is not available from
+application hosts. After bootstrap, Router uses its generated keyring account,
+not the bootstrap account.
+
+The operator-facing role DNS aliases are not bootstrap inputs. Missing or stale
+role DNS therefore cannot prevent Router from discovering an available stable
+ReplicaSet member.
 
 Use the read/write endpoint for migrations, transactions that require a single
 backend, and workloads without split-routing support. Use the read-only endpoint
@@ -75,12 +90,18 @@ mysql_shared_tenants:
   - name: example
     database: example_app
     users:
-      - name: example_writer
-        password_var: example_writer_password
+      - name: example_app
+        password_var: example_app_password
         clients:
           - web01
         privileges:
           - application
+      - name: example_migrate
+        password_var: example_migrate_password
+        clients:
+          - control01
+        privileges:
+          - migration
       - name: example_reader
         password_var: example_reader_password
         clients:
@@ -93,6 +114,16 @@ Database, account, and secret names accept ASCII letters, digits, and
 underscores. Client inventory names resolve to exact IPv4 account sources.
 Duplicate database names or account/source pairs fail validation.
 
+The standard privilege profiles separate account responsibilities:
+
+- `application` contains runtime DML and `EXECUTE`, without schema DDL;
+- `migration` contains the DML and DDL needed by an explicitly declared schema
+  migration account;
+- `read_only` contains only `SELECT` and `SHOW VIEW`.
+
+Provisioning does not create a migration account unless the tenant declaration
+includes one, and it never runs the application's schema migration.
+
 ## Required inputs and secrets
 
 Place secret values in the ignored
@@ -101,6 +132,7 @@ equivalent operator secret source. A complete deployment requires:
 
 ```yaml
 mysql_replicaset_admin_password: <secret>
+mysql_router_bootstrap_password: <secret>
 mysql_backup_password: <secret>
 mysql_zabbix_monitor_password: <secret>
 zabbix_server_database_password: <secret>
@@ -108,7 +140,9 @@ zabbix_server_api_password: <secret-at-least-12-characters>
 mysql_backup_repository: /absolute/path/on/an/off-host-mount
 
 # One variable for each tenant password_var declaration:
-example_writer_password: <secret>
+example_app_password: <secret>
+example_migrate_password: <secret>
+example_reader_password: <secret>
 ```
 
 `mysql_backup_repository` must resolve through `findmnt` to an allowed off-host
@@ -176,6 +210,13 @@ database, shuts down, and removes the scratch datadir.
   -e mysql_restore_backup_path=/absolute/repository/path/to/run
 ```
 
+Backup, restore validation, planned switchover, and emergency promotion use the
+same `/run/lock/mysql-physical-backup.lock` file. A topology playbook holds that
+lock through the ReplicaSet mutation, role-DNS update, and Router validation,
+so backup or restore cannot begin during the operation. The lock holder is a
+bounded systemd service; `RuntimeMaxSec` releases the lock if the controller
+disappears before its normal cleanup runs.
+
 ## Zabbix
 
 Foundation provisioning installs Zabbix Agent 2 on every managed host. The
@@ -214,10 +255,13 @@ zone fragment on both authoritative servers, validate the complete zone,
 advance the SOA serial, reload NSD, and require identical serials and record
 hashes. Normal DNS convergence preserves the runtime fragment.
 
-These aliases are for operators, troubleshooting, backup work, and maintenance.
-They are not application endpoints or a failover mechanism. During forced
-failover, the replica alias is removed if no healthy online `SECONDARY` exists.
-Zabbix then reports the missing/mismatched role record until redundancy returns.
+These aliases are operator-facing runtime state for inspection,
+troubleshooting, backup work, maintenance, and Zabbix consistency checks. They
+are not application endpoints, Router bootstrap inputs, application failover
+mechanisms, or the routing source of truth. MySQL Router metadata is the
+application-routing source of truth. During forced failover, the replica alias
+is removed if no healthy online `SECONDARY` exists. Zabbix then reports the
+missing or mismatched role record until redundancy returns.
 
 ## Planned switchover
 
@@ -227,8 +271,14 @@ playbook then proves that the new primary is writable, the former primary is
 read-only, both members remain online, DNS is synchronized, and every Router
 reaches the expected backends.
 
-Before the dry run, both MySQL nodes must report an inactive physical-backup
-service and an available shared backup/restore lock.
+Before the dry run, both MySQL nodes must report the physical-backup unit as
+exactly `LoadState=loaded` and `ActiveState=inactive`. The playbook records each
+backup timer's enabled and active state, stops the timer without killing a
+running service, and acquires the shared backup/restore lock on both nodes. It
+holds both locks through the ReplicaSet change, DNS synchronization, and Router
+validation. Its `always` cleanup releases both locks and restores each timer to
+the recorded state on success or failure. Unknown, missing, failed, activating,
+reloading, or deactivating service states fail before topology mutation.
 
 Check current ReplicaSet status first and replace `<current-secondary>` below.
 
@@ -237,11 +287,13 @@ Check current ReplicaSet status first and replace `<current-secondary>` below.
   -e mysql_target_primary=<current-secondary>
 ```
 
-With `--check`, an installed MySQL Shell and ReplicaSet management script run
-the corresponding read-only or dry-run topology check. If either is missing,
+With `--check`, the playbook reads the backup service and timer state and probes
+an existing shared lock without stopping the timer or starting the lock-holder
+service. An installed MySQL Shell and ReplicaSet management script then run the
+corresponding read-only or dry-run topology check. If either is missing,
 provisioning reports that reason and skips the topology check. Check mode does
-not change the topology, DNS records, or Router state, and normal `site.yml`
-does not create or join ReplicaSet members.
+not change the topology, DNS records, Router state, or timer state, and normal
+`site.yml` does not create or join ReplicaSet members.
 
 For planned OS or MySQL maintenance:
 
@@ -258,8 +310,11 @@ For planned OS or MySQL maintenance:
 Forced failover is a separate, manual data-loss decision. Use it only after
 declaring the former primary unavailable and checking the target's replication
 position. The target must still be the online `SECONDARY`, and the confirmation
-must name the same host. The target's backup service and shared backup/restore
-lock must also be idle.
+must name the same host. On the promotion target, the playbook applies the same
+fail-closed backup-service check, timer suspension, and shared-lock ownership
+used by planned switchover. It does not require the unavailable former primary
+to accept a lock. Cleanup releases the target lock and restores its timer after
+ReplicaSet, DNS, and Router processing succeeds or fails.
 
 Check current ReplicaSet status first and replace `<current-secondary>` below.
 
@@ -279,4 +334,7 @@ InnoDB ReplicaSet uses asynchronous replication. Planned maintenance supports a
 controlled switchover, but unexpected primary loss requires operator-approved
 failover. The platform does not provide automatic election and does not
 guarantee `RPO=0`. MySQL Router removes topology details from clients but does
-not change those replication guarantees.
+not change those replication guarantees. Closed binary logs move off host only
+with a successful physical-backup job, so the physical-backup interval limits
+the current off-host recovery-point granularity. This is neither continuous
+PITR shipping nor an `RPO=0` design.

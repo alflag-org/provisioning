@@ -1,0 +1,15 @@
+[Unit]
+Description=Hold the MySQL backup and restore lock during a topology operation
+After=mysql.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+ExecStart=/usr/bin/flock --nonblock --exclusive {{ mysql_backup_lock_path }} /bin/sh -c '/usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity'
+RuntimeMaxSec={{ mysql_topology_lock_runtime_max_seconds }}
+TimeoutStartSec=10
+KillMode=control-group
+TimeoutStopSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

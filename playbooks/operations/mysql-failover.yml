@@ -32,58 +32,48 @@
       | first
       | default('localhost', true)
     }}
-  gather_facts: false
+  gather_facts: true
   any_errors_fatal: true
   vars:
     mysql_replicaset_action: failover
 
-  pre_tasks:
-    - name: Gather facts only for the authorized failover target
-      ansible.builtin.setup:
-      when: >-
-        inventory_hostname
-        in groups['mysql_failover_authorized_target'] | default([])
-
-    - name: Require idle backup and restore operations  # noqa role-name[path]
-      ansible.builtin.include_role:
-        name: components/mysql_backup
-        tasks_from: assert_idle.yml
-      when: >-
-        inventory_hostname
-        in groups['mysql_failover_authorized_target'] | default([])
-
-  roles:
-    - role: components/mysql_replicaset  # noqa role-name[path]
-      when: >-
-        inventory_hostname
-        in groups['mysql_failover_authorized_target'] | default([])
-
-  post_tasks:
-    - name: Synchronize role DNS after forced failover  # noqa role-name[path] run-once[task]
-      ansible.builtin.include_role:
-        name: components/mysql_role_dns
-      vars:
-        mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
-        mysql_role_dns_secondary: "{{ mysql_replicaset_runtime_secondary | default('', true) }}"
-      when:
-        - not ansible_check_mode
-        - >-
-          inventory_hostname
-          in groups['mysql_failover_authorized_target'] | default([])
-      run_once: true
-
-- name: Validate every Router after forced failover
-  hosts: mysql_router_clients
-  gather_facts: false
-  any_errors_fatal: true
-  vars:
-    mysql_router_require_secondary: false
-
   tasks:
-    - name: Validate Router topology and synthetic connections  # noqa role-name[path]
-      ansible.builtin.include_role:
-        name: components/mysql_router
-        tasks_from: validate.yml
-      when:
-        - not ansible_check_mode
-        - groups['mysql_failover_authorized_target'] | default([]) | length == 1
+    - name: Hold the target shared lock through the complete emergency failover
+      block:
+        - name: Acquire the target topology operation lock  # noqa role-name[path]
+          ansible.builtin.include_role:
+            name: components/mysql_backup
+            tasks_from: acquire_topology_lock.yml
+
+        - name: Force the ReplicaSet primary change  # noqa role-name[path]
+          ansible.builtin.include_role:
+            name: components/mysql_replicaset
+
+        - name: Synchronize role DNS after forced failover  # noqa role-name[path] run-once[task]
+          ansible.builtin.include_role:
+            name: components/mysql_role_dns
+          vars:
+            mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
+            mysql_role_dns_secondary: >-
+              {{ mysql_replicaset_runtime_secondary | default('', true) }}
+          when: not ansible_check_mode
+          run_once: true
+
+        - name: Validate every Router after forced failover  # noqa role-name[path] run-once[task]
+          ansible.builtin.include_role:
+            name: components/mysql_router
+            tasks_from: validate.yml
+            apply:
+              delegate_to: "{{ mysql_router_validation_host }}"
+          vars:
+            mysql_router_require_secondary: false
+          loop: "{{ groups['mysql_router_clients'] }}"
+          loop_control:
+            loop_var: mysql_router_validation_host
+          when: not ansible_check_mode
+          run_once: true
+      always:
+        - name: Release the target lock and restore its backup timer  # noqa role-name[path]
+          ansible.builtin.include_role:
+            name: components/mysql_backup
+            tasks_from: release_topology_lock.yml

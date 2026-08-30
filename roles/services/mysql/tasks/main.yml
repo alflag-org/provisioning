@@ -6,14 +6,17 @@
       - groups['mysql_router_clients'] | length > 0
       - mysql_replicaset_admin_password is defined
       - mysql_replicaset_admin_password | string | length > 0
+      - mysql_router_bootstrap_password is defined
+      - mysql_router_bootstrap_password | string | length > 0
       - mysql_backup_password is defined
       - mysql_backup_password | string | length > 0
       - mysql_zabbix_monitor_password is defined
       - mysql_zabbix_monitor_password | string | length > 0
       - not mysql_backup_enabled | bool or mysql_backup_repository | default('') is match('^/.+')
     fail_msg: >-
-      Define the ReplicaSet, physical backup, and MySQL monitoring secrets plus an absolute off-host backup
-      repository before converging svc_mysql.
+      Define the ReplicaSet administrator, Router bootstrap, physical backup,
+      and MySQL monitoring secrets plus an absolute off-host backup repository
+      before converging svc_mysql.
     quiet: true
 
 - name: Expand MySQL shared tenant declarations
@@ -33,7 +36,7 @@
 - name: Resolve ReplicaSet administrator source addresses from inventory
   ansible.builtin.set_fact:
     mysql_replicaset_admin_allowed_addresses: >-
-      {{ mysql_replicaset_admin_allowed_clients | mysql_hosts_to_addresses(hostvars) }}
+      {{ groups['svc_mysql'] | mysql_hosts_to_addresses(hostvars) }}
 
 - name: Build local ReplicaSet bootstrap accounts
   ansible.builtin.set_fact:
@@ -51,6 +54,12 @@
 - name: Resolve MySQL Router monitor source addresses
   ansible.builtin.set_fact:
     mysql_router_monitor_addresses: >-
+      {{ groups['mysql_router_clients'] | mysql_hosts_to_addresses(hostvars) }}
+  run_once: true
+
+- name: Resolve MySQL Router bootstrap source addresses
+  ansible.builtin.set_fact:
+    mysql_router_bootstrap_addresses: >-
       {{ groups['mysql_router_clients'] | mysql_hosts_to_addresses(hostvars) }}
   run_once: true
 
@@ -75,6 +84,21 @@
           ]
         + mysql_replicaset_bootstrap_users
       }}
+  run_once: true
+
+- name: Add host-restricted Router bootstrap accounts
+  ansible.builtin.set_fact:
+    mysql_platform_users: >-
+      {{ mysql_platform_users + [
+           {
+             'name': mysql_router_bootstrap_user,
+             'host': item,
+             'password_var': mysql_router_bootstrap_password_var,
+             'priv': mysql_router_bootstrap_grants | join('/'),
+             'tls_requires': {'SSL': true}
+           }
+         ] }}
+  loop: "{{ mysql_router_bootstrap_addresses }}"
   run_once: true
 
 - name: Add host-restricted Router monitoring accounts
@@ -140,6 +164,24 @@
     {{ mysql_replicaset_initial_primary
        if ansible_check_mode
        else mysql_replicaset_runtime_primary }}
+
+- name: Remove ReplicaSet administrator accounts from Router client sources
+  ansible.mysql.mysql_user:
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: "{{ mysql_replicaset_admin_user }}"
+    host: "{{ item }}"
+    state: absent
+  loop: >-
+    {{
+      mysql_router_bootstrap_addresses
+      | difference(mysql_replicaset_admin_allowed_addresses)
+    }}
+  loop_control:
+    label: "{{ mysql_replicaset_admin_user }}@{{ item }}"
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ mysql_replicaset_runtime_primary }}"
 
 - name: Manage shared MySQL accounts on the current PRIMARY
   ansible.mysql.mysql_user:

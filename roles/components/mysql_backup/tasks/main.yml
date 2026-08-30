@@ -174,7 +174,7 @@
   notify: Reload MySQL AppArmor profile
   when: mysql_backup_apparmor_profile.stat.exists
 
-- name: Render the physical backup service and timer
+- name: Render the physical backup and topology lock units
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -186,6 +186,8 @@
       dest: "/etc/systemd/system/{{ mysql_backup_service_name }}"
     - src: mysql-physical-backup.timer.j2
       dest: "/etc/systemd/system/{{ mysql_backup_timer_name }}"
+    - src: mysql-topology-operation-lock.service.j2
+      dest: "/etc/systemd/system/{{ mysql_topology_lock_service_name }}"
   notify: Reload systemd for MySQL backup
 
 - name: Configure Zabbix backup status keys

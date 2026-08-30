@@ -1,0 +1,113 @@
+---
+- name: Stop the topology operation lock holder
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_topology_lock_service_name }}"
+    state: stopped
+  failed_when: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool
+
+- name: Clear the topology operation lock holder result
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - reset-failed
+      - "{{ mysql_topology_lock_service_name }}"
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool
+
+- name: Verify the released topology operation lock holder
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_topology_lock_service_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+  register: mysql_topology_lock_holder_released_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool
+
+- name: Restore the physical backup timer state
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_backup_timer_name }}"
+    enabled: "{{ mysql_backup_timer_before_topology.enabled }}"
+    state: >-
+      {{ mysql_backup_timer_before_topology.active | ternary('started', 'stopped') }}
+  failed_when: false
+  when:
+    - not ansible_check_mode
+    - mysql_backup_timer_state_captured | default(false) | bool
+
+- name: Verify the restored physical backup timer state
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_backup_timer_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+      - --property=UnitFileState
+  register: mysql_backup_timer_restored_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - mysql_backup_timer_state_captured | default(false) | bool
+
+- name: Require lock release and exact timer restoration
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (mysql_topology_lock_start_attempted | default(false) | bool)
+        or (
+          mysql_topology_lock_holder_released.query_ok
+          and mysql_topology_lock_holder_released.load_state == 'loaded'
+          and mysql_topology_lock_holder_released.active_state == 'inactive'
+        )
+      - >-
+        not (mysql_backup_timer_state_captured | default(false) | bool)
+        or mysql_backup_timer_restored.valid
+      - >-
+        not (mysql_backup_timer_state_captured | default(false) | bool)
+        or mysql_backup_timer_restored.active
+           == mysql_backup_timer_before_topology.active
+      - >-
+        not (mysql_backup_timer_state_captured | default(false) | bool)
+        or mysql_backup_timer_restored.enabled
+           == mysql_backup_timer_before_topology.enabled
+    fail_msg: >-
+      Topology operation cleanup did not release the shared lock or restore the
+      physical backup timer exactly on {{ inventory_hostname }}.
+  vars:
+    mysql_topology_lock_holder_released: >-
+      {{
+        mysql_topology_lock_holder_released_query.stdout | default('')
+        | mysql_systemd_properties(
+            mysql_topology_lock_holder_released_query.rc | default(1)
+          )
+      }}
+    mysql_backup_timer_restored: >-
+      {{
+        mysql_backup_timer_restored_query.stdout | default('')
+        | mysql_backup_timer_snapshot(
+            mysql_backup_timer_restored_query.rc | default(1)
+          )
+      }}
+  when:
+    - not ansible_check_mode
+    - >-
+      mysql_topology_lock_start_attempted | default(false) | bool
+      or mysql_backup_timer_state_captured | default(false) | bool

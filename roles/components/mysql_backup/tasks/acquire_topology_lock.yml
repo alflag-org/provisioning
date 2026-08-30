@@ -1,0 +1,236 @@
+---
+- name: Initialize topology lock cleanup state
+  ansible.builtin.set_fact:
+    mysql_topology_lock_start_attempted: false
+    mysql_backup_timer_state_captured: false
+
+- name: Read the physical backup service state
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_backup_service_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+  register: mysql_backup_service_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Require a loaded and inactive physical backup service
+  ansible.builtin.assert:
+    that:
+      - >-
+        mysql_backup_service_query.stdout
+        | mysql_backup_service_is_idle(mysql_backup_service_query.rc)
+    fail_msg: >-
+      Refusing the topology operation because the physical backup service on
+      {{ inventory_hostname }} is not verifiably loaded and inactive.
+
+- name: Read the physical backup timer state
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_backup_timer_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+      - --property=UnitFileState
+  register: mysql_backup_timer_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: mysql_topology_suspend_backup_timer | bool
+
+- name: Capture the physical backup timer state
+  ansible.builtin.set_fact:
+    mysql_backup_timer_before_topology: >-
+      {{
+        mysql_backup_timer_query.stdout
+        | mysql_backup_timer_snapshot(mysql_backup_timer_query.rc)
+      }}
+  when: mysql_topology_suspend_backup_timer | bool
+
+- name: Require a restorable physical backup timer state
+  ansible.builtin.assert:
+    that:
+      - mysql_backup_timer_before_topology.valid | bool
+    fail_msg: >-
+      Refusing the topology operation because the physical backup timer state
+      on {{ inventory_hostname }} cannot be preserved exactly.
+  when: mysql_topology_suspend_backup_timer | bool
+
+- name: Record that the physical backup timer state was captured
+  ansible.builtin.set_fact:
+    mysql_backup_timer_state_captured: true
+  when: mysql_topology_suspend_backup_timer | bool
+
+- name: Suspend the physical backup timer
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_backup_timer_name }}"
+    state: stopped
+  when:
+    - mysql_topology_suspend_backup_timer | bool
+    - not ansible_check_mode
+
+- name: Recheck the physical backup service after timer suspension
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_backup_service_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+  register: mysql_backup_service_recheck
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Require the physical backup service to remain idle
+  ansible.builtin.assert:
+    that:
+      - >-
+        mysql_backup_service_recheck.stdout
+        | mysql_backup_service_is_idle(mysql_backup_service_recheck.rc)
+    fail_msg: >-
+      Refusing the topology operation because backup work started before the
+      shared lock could be acquired on {{ inventory_hostname }}.
+  when: not ansible_check_mode
+
+- name: Read the topology lock holder state
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_topology_lock_service_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+      - --property=SubState
+  register: mysql_topology_lock_holder_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Parse the topology lock holder state
+  ansible.builtin.set_fact:
+    mysql_topology_lock_holder_before: >-
+      {{
+        mysql_topology_lock_holder_query.stdout
+        | mysql_systemd_properties(mysql_topology_lock_holder_query.rc)
+      }}
+
+- name: Refuse a concurrent topology lock holder
+  ansible.builtin.assert:
+    that:
+      - mysql_topology_lock_holder_before.query_ok | bool
+      - mysql_topology_lock_holder_before.load_state == 'loaded'
+      - mysql_topology_lock_holder_before.active_state in ['inactive', 'failed']
+    fail_msg: >-
+      Refusing the topology operation because its lock holder is unavailable or
+      already active on {{ inventory_hostname }}.
+
+- name: Clear an expired topology lock holder failure
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - reset-failed
+      - "{{ mysql_topology_lock_service_name }}"
+  changed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_holder_before.active_state == 'failed'
+
+- name: Inspect the shared backup and restore lock
+  ansible.builtin.stat:
+    path: "{{ mysql_backup_lock_path }}"
+    follow: false
+  register: mysql_backup_operation_lock
+
+- name: Require a safe shared backup and restore lock file
+  ansible.builtin.assert:
+    that:
+      - >-
+        not mysql_backup_operation_lock.stat.exists
+        or (mysql_backup_operation_lock.stat.isreg | default(false))
+      - not (mysql_backup_operation_lock.stat.islnk | default(false))
+    fail_msg: >-
+      The shared MySQL backup and restore lock is not a safe regular file on
+      {{ inventory_hostname }}.
+
+- name: Probe the shared lock without topology mutation in check mode
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/flock
+      - --nonblock
+      - "{{ mysql_backup_lock_path }}"
+      - /usr/bin/true
+  register: mysql_topology_check_mode_lock_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - ansible_check_mode
+    - mysql_backup_operation_lock.stat.exists
+
+- name: Require an available shared lock in check mode
+  ansible.builtin.assert:
+    that:
+      - >-
+        not mysql_backup_operation_lock.stat.exists
+        or (mysql_topology_check_mode_lock_probe.rc | default(1)) == 0
+    fail_msg: >-
+      Backup, restore, or another topology operation holds the shared lock on
+      {{ inventory_hostname }}.
+  when: ansible_check_mode
+
+- name: Record the topology lock start attempt
+  ansible.builtin.set_fact:
+    mysql_topology_lock_start_attempted: true
+  when: not ansible_check_mode
+
+- name: Start the topology operation lock holder
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_topology_lock_service_name }}"
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Verify the topology operation lock holder
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_topology_lock_service_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+      - --property=SubState
+  register: mysql_topology_lock_holder_active_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Require the topology operation lock to be held
+  ansible.builtin.assert:
+    that:
+      - mysql_topology_lock_holder_active.query_ok | bool
+      - mysql_topology_lock_holder_active.load_state == 'loaded'
+      - mysql_topology_lock_holder_active.active_state == 'active'
+      - mysql_topology_lock_holder_active.sub_state == 'running'
+    fail_msg: >-
+      The shared backup and restore lock was not acquired on
+      {{ inventory_hostname }}.
+  vars:
+    mysql_topology_lock_holder_active: >-
+      {{
+        mysql_topology_lock_holder_active_query.stdout
+        | mysql_systemd_properties(mysql_topology_lock_holder_active_query.rc)
+      }}
+  when: not ansible_check_mode
