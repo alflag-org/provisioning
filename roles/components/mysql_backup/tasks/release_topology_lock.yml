@@ -1,0 +1,60 @@
+---
+- name: Stop the topology operation lock holder
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_topology_lock_service_name }}"
+    state: stopped
+  failed_when: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool
+
+- name: Clear the topology operation lock holder result
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - reset-failed
+      - "{{ mysql_topology_lock_service_name }}"
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool
+
+- name: Verify the released topology operation lock holder
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - "{{ mysql_topology_lock_service_name }}"
+      - --no-pager
+      - --property=LoadState
+      - --property=ActiveState
+  register: mysql_topology_lock_holder_released_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool
+
+- name: Require the topology operation lock to be released
+  ansible.builtin.assert:
+    that:
+      - mysql_topology_lock_holder_released.query_ok
+      - mysql_topology_lock_holder_released.load_state == 'loaded'
+      - mysql_topology_lock_holder_released.active_state == 'inactive'
+    fail_msg: >-
+      Topology operation cleanup did not release the shared lock on
+      {{ inventory_hostname }}.
+  vars:
+    mysql_topology_lock_holder_released: >-
+      {{
+        mysql_topology_lock_holder_released_query.stdout | default('')
+        | mysql_systemd_properties(
+            mysql_topology_lock_holder_released_query.rc | default(1)
+          )
+      }}
+  when:
+    - not ansible_check_mode
+    - mysql_topology_lock_start_attempted | default(false) | bool

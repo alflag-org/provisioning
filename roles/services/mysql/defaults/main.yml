@@ -17,6 +17,15 @@ mysql_replicaset_admin_grants:
     CREATE TEMPORARY TABLES,CREATE VIEW,DELETE,DROP,EVENT,EXECUTE,INDEX,INSERT,
     LOCK TABLES,REFERENCES,SHOW VIEW,TRIGGER,UPDATE,GRANT
   - mysql.*:INSERT,UPDATE,DELETE,GRANT
+mysql_router_bootstrap_user: mysql_router_bootstrap
+mysql_router_bootstrap_password_var: mysql_router_bootstrap_password
+mysql_router_bootstrap_grants:
+  - "*.*:CREATE USER,GRANT"
+  - mysql_innodb_cluster_metadata.*:SELECT,INSERT,UPDATE,DELETE,EXECUTE
+  - mysql.user:SELECT
+  - performance_schema.replication_group_members:SELECT
+  - performance_schema.replication_group_member_stats:SELECT
+  - performance_schema.global_variables:SELECT
 mysql_backup_user: mysql_backup
 mysql_backup_password_var: mysql_backup_password
 mysql_backup_enabled: false

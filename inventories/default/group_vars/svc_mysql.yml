@@ -6,8 +6,6 @@ mysql_server_binlog_expire_logs_seconds: 604800
 mysql_replicaset_name: mysql-shared
 mysql_replicaset_initial_primary: mysql-shared01
 mysql_replicaset_admin_user: mysql_replicaset_admin
-mysql_replicaset_admin_allowed_clients: >-
-  {{ (groups['svc_mysql'] + groups['mysql_router_clients']) | unique }}
 mysql_replicaset_replication_allowed_host: 10.10.10.0/24
 
 mysql_shared_privilege_profiles:
@@ -16,10 +14,17 @@ mysql_shared_privilege_profiles:
     - INSERT
     - UPDATE
     - DELETE
+    - EXECUTE
+  migration:
+    - SELECT
+    - INSERT
+    - UPDATE
+    - DELETE
     - CREATE
     - ALTER
     - INDEX
     - DROP
+    - TRIGGER
     - REFERENCES
     - CREATE TEMPORARY TABLES
     - LOCK TABLES

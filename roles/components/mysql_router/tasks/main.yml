@@ -7,9 +7,16 @@
       - mysql_router_rw_port | int == 6446
       - mysql_router_ro_port | int == 6447
       - mysql_router_split_port | int == 6450
-      - lookup('ansible.builtin.vars', mysql_router_admin_password_var, default='') | string | length > 0
+      - >-
+        lookup(
+          'ansible.builtin.vars',
+          mysql_router_bootstrap_password_var,
+          default=''
+        ) | string | length > 0
       - lookup('ansible.builtin.vars', mysql_router_monitor_password_var, default='') | string | length > 0
-    fail_msg: MySQL Router requires the local endpoint policy and the ReplicaSet and monitoring secrets.
+    fail_msg: >-
+      MySQL Router requires the local endpoint policy plus its dedicated
+      bootstrap and monitoring secrets.
     quiet: true
 
 - name: Pin MySQL Router to the 8.4 LTS series
@@ -55,11 +62,59 @@
     - not mysql_router_bootstrap_config.stat.exists
     - not ansible_check_mode
 
+- name: Build stable ReplicaSet bootstrap candidates
+  ansible.builtin.set_fact:
+    mysql_router_bootstrap_candidates: >-
+      {{
+        groups['svc_mysql']
+        | mysql_router_bootstrap_candidates(hostvars)
+      }}
+  when: not mysql_router_bootstrap_config.stat.exists
+
+- name: Probe stable ReplicaSet members with the Router bootstrap credential
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mysql
+      - --batch
+      - --skip-column-names
+      - --connect-timeout=5
+      - --protocol=TCP
+      - --ssl-mode=REQUIRED
+      - --host
+      - "{{ item }}"
+      - --port
+      - "{{ mysql_router_bootstrap_port | string }}"
+      - --user
+      - "{{ mysql_router_bootstrap_user }}"
+      - --execute
+      - SELECT COUNT(*) FROM mysql_innodb_cluster_metadata.instances
+  environment:
+    MYSQL_PWD: >-
+      {{ lookup('ansible.builtin.vars', mysql_router_bootstrap_password_var) }}
+  loop: "{{ mysql_router_bootstrap_candidates | default([]) }}"
+  register: mysql_router_bootstrap_candidate_probes
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: not mysql_router_bootstrap_config.stat.exists
+
+- name: Select the first available stable ReplicaSet member
+  ansible.builtin.set_fact:
+    mysql_router_selected_bootstrap_candidate: >-
+      {{
+        mysql_router_bootstrap_candidates
+        | mysql_router_select_bootstrap_candidate(
+            mysql_router_bootstrap_candidate_probes.results
+          )
+      }}
+  when: not mysql_router_bootstrap_config.stat.exists
+
 - name: Bootstrap this Router with a generated keyring credential
   ansible.builtin.expect:
     command: >-
       /usr/bin/mysqlrouter
-      --bootstrap {{ mysql_router_admin_user }}@{{ mysql_router_bootstrap_instance }}:{{ mysql_router_bootstrap_port }}
+      --bootstrap {{ mysql_router_bootstrap_user }}@{{ mysql_router_selected_bootstrap_candidate }}:{{ mysql_router_bootstrap_port }}
       --directory {{ mysql_router_bootstrap_dir }}
       --conf-bind-address {{ mysql_router_bind_address }}
       --account-host {{ network_ipv4_address | default(ansible_host) }}
@@ -72,7 +127,7 @@
       --strict
     responses:
       '(?i)please enter mysql password[^:]*:': >-
-        {{ lookup('ansible.builtin.vars', mysql_router_admin_password_var) }}
+        {{ lookup('ansible.builtin.vars', mysql_router_bootstrap_password_var) }}
     timeout: 180
   become: true
   become_user: "{{ mysql_router_system_user }}"

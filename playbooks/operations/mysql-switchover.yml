@@ -15,29 +15,42 @@
         fail_msg: Pass mysql_target_primary as one of the two svc_mysql hosts.
       run_once: true
 
-  roles:
-    - role: components/mysql_replicaset  # noqa role-name[path]
-
-  post_tasks:
-    - name: Synchronize role DNS after planned switchover  # noqa role-name[path] run-once[task]
-      ansible.builtin.include_role:
-        name: components/mysql_role_dns
-      vars:
-        mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
-        mysql_role_dns_secondary: "{{ mysql_replicaset_runtime_secondary }}"
-      when: not ansible_check_mode
-      run_once: true
-
-- name: Validate every Router after planned switchover
-  hosts: mysql_router_clients
-  gather_facts: false
-  any_errors_fatal: true
-  vars:
-    mysql_router_require_secondary: true
-
   tasks:
-    - name: Validate Router topology and synthetic connections  # noqa role-name[path]
-      ansible.builtin.include_role:
-        name: components/mysql_router
-        tasks_from: validate.yml
-      when: not ansible_check_mode
+    - name: Hold both shared locks through the complete planned switchover
+      block:
+        - name: Acquire the topology operation lock  # noqa role-name[path]
+          ansible.builtin.include_role:
+            name: components/mysql_backup
+            tasks_from: acquire_topology_lock.yml
+
+        - name: Switch the ReplicaSet primary  # noqa role-name[path]
+          ansible.builtin.include_role:
+            name: components/mysql_replicaset
+
+        - name: Synchronize role DNS after planned switchover  # noqa role-name[path] run-once[task]
+          ansible.builtin.include_role:
+            name: components/mysql_role_dns
+          vars:
+            mysql_role_dns_primary: "{{ mysql_replicaset_runtime_primary }}"
+            mysql_role_dns_secondary: "{{ mysql_replicaset_runtime_secondary }}"
+          when: not ansible_check_mode
+          run_once: true
+
+        - name: Validate every Router after planned switchover  # noqa role-name[path] run-once[task]
+          ansible.builtin.include_role:
+            name: components/mysql_router
+            tasks_from: validate.yml
+            apply:
+              delegate_to: "{{ mysql_router_validation_host }}"
+          vars:
+            mysql_router_require_secondary: true
+          loop: "{{ groups['mysql_router_clients'] }}"
+          loop_control:
+            loop_var: mysql_router_validation_host
+          when: not ansible_check_mode
+          run_once: true
+      always:
+        - name: Release the topology operation locks  # noqa role-name[path]
+          ansible.builtin.include_role:
+            name: components/mysql_backup
+            tasks_from: release_topology_lock.yml

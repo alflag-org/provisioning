@@ -59,6 +59,16 @@ class InventoryTests(unittest.TestCase):
         )
         self.assertEqual(monitor["network_service_aliases"], ["zabbix.access.internal"])
 
+    def test_router_bootstrap_has_no_runtime_role_alias_input(self):
+        router_vars = yaml.safe_load(
+            (INVENTORY / "group_vars/mysql_router_clients.yml").read_text()
+        )
+        router_defaults = yaml.safe_load(
+            (ROOT / "roles/components/mysql_router/defaults/main.yml").read_text()
+        )
+        self.assertNotIn("mysql_router_bootstrap_instance", router_vars)
+        self.assertNotIn("mysql_router_bootstrap_instance", router_defaults)
+
     def test_inventory_and_playbooks_do_not_use_legacy_group_prefix(self):
         forbidden_prefix = "cap" + "_"
         for root in (ROOT / "inventories", ROOT / "playbooks"):
