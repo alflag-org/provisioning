@@ -20,10 +20,12 @@ def status_document():
         "last_failure": "2026-08-23T01:00:00Z",
         "duration": 42.5,
         "backup_size": 1024,
-        "backup_path": "/backup/mysql-shared/physical/node/uuid/run",
+        "backup_id": "20260824T010000Z",
+        "backup_remote": "mysql-backup:mysql-backups/mysql-shared/physical/node/uuid/run",
         "source_node": "mysql-shared02",
         "source_role": "SECONDARY",
         "prepare_success": True,
+        "upload_success": True,
         "restore_test_success": True,
         "restore_test_timestamp": "2026-08-24T02:00:00Z",
     }

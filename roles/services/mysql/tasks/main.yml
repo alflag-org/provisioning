@@ -10,12 +10,18 @@
       - mysql_router_bootstrap_password | string | length > 0
       - mysql_backup_password is defined
       - mysql_backup_password | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_bucket | default('') | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_prefix | default('') | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_rclone_remote | default('') | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id is defined
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key is defined
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key | string | length > 0
       - mysql_zabbix_monitor_password is defined
       - mysql_zabbix_monitor_password | string | length > 0
-      - not mysql_backup_enabled | bool or mysql_backup_repository | default('') is match('^/.+')
     fail_msg: >-
       Define the ReplicaSet administrator, Router bootstrap, physical backup,
-      and MySQL monitoring secrets plus an absolute off-host backup repository
+      B2 bucket, dedicated B2 Application Key, and MySQL monitoring secrets
       before converging svc_mysql.
     quiet: true
 

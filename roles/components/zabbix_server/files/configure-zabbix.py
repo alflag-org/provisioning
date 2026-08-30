@@ -14,9 +14,9 @@ MYSQL_ITEMS = [
     ("MySQL role DNS matches local runtime state", "mysql.platform.status[dns_role_match]", 3, "1m"),
     ("MySQL GTID mode is enabled", "mysql.platform.status[gtid_enabled]", 3, "5m"),
     ("MySQL binary log format is ROW", "mysql.platform.status[row_binlog]", 3, "5m"),
-    ("MySQL physical backup status", "mysql.backup.status[json]", 4, "5m"),
-    ("MySQL physical backup age", "mysql.backup.status[age]", 0, "5m"),
-    ("MySQL physical backup failure", "mysql.backup.status[failure]", 3, "5m"),
+    ("MySQL B2 physical backup status", "mysql.backup.status[json]", 4, "5m"),
+    ("MySQL B2 physical backup age", "mysql.backup.status[age]", 0, "5m"),
+    ("MySQL B2 physical backup failure", "mysql.backup.status[failure]", 3, "5m"),
     ("MySQL restore test age", "mysql.backup.status[restore_age]", 0, "30m"),
     ("MySQL restore test failure", "mysql.backup.status[restore_failure]", 3, "5m"),
 ]

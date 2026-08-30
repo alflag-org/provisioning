@@ -24,10 +24,12 @@ def read_status(path):
         "last_failure",
         "duration",
         "backup_size",
-        "backup_path",
+        "backup_id",
+        "backup_remote",
         "source_node",
         "source_role",
         "prepare_success",
+        "upload_success",
         "restore_test_success",
         "restore_test_timestamp",
     }
@@ -36,6 +38,9 @@ def read_status(path):
         raise ValueError(f"backup status is missing fields: {', '.join(missing)}")
     for key in ("last_attempt", "last_success", "last_failure", "restore_test_timestamp"):
         parse_timestamp(data[key])
+    for key in ("backup_id", "backup_remote"):
+        if data[key] is not None and not isinstance(data[key], str):
+            raise ValueError(f"backup status {key} must be a string or null")
     return data
 
 

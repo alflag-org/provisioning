@@ -29,7 +29,9 @@ mysql_router_bootstrap_grants:
 mysql_backup_user: mysql_backup
 mysql_backup_password_var: mysql_backup_password
 mysql_backup_enabled: false
-mysql_backup_repository: ""
+mysql_backup_b2_bucket: ""
+mysql_backup_b2_prefix: mysql-shared
+mysql_backup_rclone_remote: mysql-backup
 mysql_backup_grants:
   - "*.*:BACKUP_ADMIN,PROCESS,RELOAD,LOCK TABLES,REPLICATION CLIENT"
   - performance_schema.log_status:SELECT
