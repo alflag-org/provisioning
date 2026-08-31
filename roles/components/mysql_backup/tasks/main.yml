@@ -1,40 +1,38 @@
 ---
-- name: Validate physical backup inputs
+- name: Validate physical backup storage inputs
   ansible.builtin.assert:
     that:
-      - mysql_backup_repository is string
-      - mysql_backup_repository | length > 1
-      - mysql_backup_repository is match('^/')
-      - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
+      - mysql_backup_b2_bucket is string
+      - mysql_backup_b2_bucket is match('^[A-Za-z0-9][A-Za-z0-9-]{4,48}[A-Za-z0-9]$')
+      - mysql_backup_b2_prefix is string
+      - mysql_backup_b2_prefix is match('^[A-Za-z0-9][A-Za-z0-9._/-]*[A-Za-z0-9]$')
+      - mysql_backup_b2_prefix is not search('(^|/)\.\.(/|$)')
+      - mysql_backup_rclone_remote is string
+      - mysql_backup_rclone_remote is match('^[A-Za-z0-9][A-Za-z0-9_-]*$')
+      - ansible_architecture in mysql_backup_rclone_architectures
     fail_msg: >-
-      Physical backup is enabled, but its absolute off-host mysql_backup_repository or backup account secret is missing.
+      Physical backup requires a valid B2 bucket, prefix, rclone remote, and
+      supported architecture.
     quiet: true
 
-- name: Check the physical backup repository mount
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/findmnt
-      - --noheadings
-      - --output
-      - FSTYPE,SOURCE
-      - --target
-      - "{{ mysql_backup_repository }}"
-  register: mysql_backup_repository_mount
-  changed_when: false
-  failed_when: false
-  check_mode: false
-
-- name: Require an off-host backup filesystem
+- name: Validate physical backup secret inputs
   ansible.builtin.assert:
     that:
-      - mysql_backup_repository_mount.rc == 0
-      - mysql_backup_repository_mount.stdout.split() | length >= 2
-      - >-
-        mysql_backup_repository_mount.stdout.split() | first | default('')
-        in mysql_backup_repository_filesystem_types
+      - mysql_backup_b2_application_key_id | string is match('^[A-Za-z0-9]+$')
+      - mysql_backup_b2_application_key | string is match('^[A-Za-z0-9]+$')
+      - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
     fail_msg: >-
-      mysql_backup_repository must be mounted from an off-host filesystem. Found:
-      {{ mysql_backup_repository_mount.stdout | default('no mount') }}
+      Physical backup requires a dedicated B2 Application Key and backup
+      account secret.
+    quiet: true
+  no_log: true
+
+- name: Resolve the pinned rclone release for the host architecture
+  ansible.builtin.set_fact:
+    mysql_backup_rclone_release: >-
+      {{ mysql_backup_rclone_architectures[ansible_architecture] }}
+    mysql_backup_rclone_release_name: >-
+      rclone-v{{ mysql_backup_rclone_version }}-linux-{{ mysql_backup_rclone_architectures[ansible_architecture].release_architecture }}
 
 - name: Download the pinned Percona repository package
   ansible.builtin.get_url:
@@ -84,6 +82,34 @@
   when:
     - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
 
+- name: Download the pinned rclone release archive
+  ansible.builtin.get_url:
+    url: >-
+      {{ mysql_backup_rclone_release_base_url }}/v{{ mysql_backup_rclone_version }}/{{ mysql_backup_rclone_release_name }}.zip
+    dest: "/var/cache/{{ mysql_backup_rclone_release_name }}.zip"
+    checksum: "{{ mysql_backup_rclone_release.checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extract the pinned rclone release
+  ansible.builtin.unarchive:
+    src: "/var/cache/{{ mysql_backup_rclone_release_name }}.zip"
+    dest: /var/cache
+    remote_src: true
+    creates: "/var/cache/{{ mysql_backup_rclone_release_name }}/rclone"
+  when: not ansible_check_mode
+
+- name: Install the pinned rclone binary
+  ansible.builtin.copy:
+    src: "/var/cache/{{ mysql_backup_rclone_release_name }}/rclone"
+    dest: "{{ mysql_backup_rclone_program_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: not ansible_check_mode
+
 - name: Ensure physical backup directories exist
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -93,6 +119,9 @@
     mode: "{{ item.mode }}"
   loop:
     - path: "{{ mysql_backup_config_dir }}"
+      group: root
+      mode: "0750"
+    - path: "{{ mysql_backup_rclone_config_dir }}"
       group: root
       mode: "0750"
     - path: "{{ mysql_backup_status_dir }}"
@@ -111,6 +140,15 @@
     mode: "0600"
   no_log: true
 
+- name: Render the root-only rclone B2 configuration
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ mysql_backup_rclone_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
 - name: Render physical backup configuration
   ansible.builtin.template:
     src: config.json.j2
@@ -118,6 +156,87 @@
     owner: root
     group: root
     mode: "0600"
+
+- name: Inspect the root-only rclone B2 configuration
+  ansible.builtin.stat:
+    path: "{{ mysql_backup_rclone_config_path }}"
+    follow: false
+  register: mysql_backup_rclone_config
+  when: not ansible_check_mode
+
+- name: Require safe rclone B2 configuration permissions
+  ansible.builtin.assert:
+    that:
+      - mysql_backup_rclone_config.stat.isreg | default(false)
+      - not (mysql_backup_rclone_config.stat.islnk | default(false))
+      - mysql_backup_rclone_config.stat.pw_name == 'root'
+      - mysql_backup_rclone_config.stat.gr_name == 'root'
+      - mysql_backup_rclone_config.stat.mode == '0600'
+    fail_msg: The rclone B2 configuration must be a root-owned 0600 regular file.
+  when: not ansible_check_mode
+
+- name: Read the installed rclone version
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_backup_rclone_program_path }}"
+      - version
+  register: mysql_backup_rclone_version_output
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require the pinned rclone version
+  ansible.builtin.assert:
+    that:
+      - >-
+        mysql_backup_rclone_version_output.stdout_lines | first
+        == 'rclone v' ~ mysql_backup_rclone_version
+    fail_msg: >-
+      Installed rclone does not match v{{ mysql_backup_rclone_version }}:
+      {{ mysql_backup_rclone_version_output.stdout_lines | first | default('no output') }}
+  when: not ansible_check_mode
+
+- name: List B2 buckets through the dedicated rclone remote
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_backup_rclone_program_path }}"
+      - --config
+      - "{{ mysql_backup_rclone_config_path }}"
+      - lsjson
+      - --dirs-only
+      - --no-mimetype
+      - --no-modtime
+      - "{{ mysql_backup_rclone_remote }}:"
+  register: mysql_backup_b2_bucket_listing
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require the pre-created B2 bucket
+  ansible.builtin.assert:
+    that:
+      - >-
+        mysql_backup_b2_bucket_listing.stdout | from_json
+        | selectattr('Name', 'equalto', mysql_backup_b2_bucket)
+        | selectattr('IsDir', 'equalto', true)
+        | list | length == 1
+    fail_msg: >-
+      The configured B2 bucket is not visible through the dedicated Application Key.
+      Provisioning does not create B2 buckets.
+  when: not ansible_check_mode
+
+- name: Verify that the configured B2 prefix can be listed
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_backup_rclone_program_path }}"
+      - --config
+      - "{{ mysql_backup_rclone_config_path }}"
+      - lsf
+      - --recursive
+      - --files-only
+      - --include
+      - "{{ mysql_backup_b2_prefix }}/**"
+      - "{{ mysql_backup_rclone_remote }}:{{ mysql_backup_b2_bucket }}"
+  changed_when: false
+  when: not ansible_check_mode
 
 - name: Install physical backup programs
   ansible.builtin.copy:
@@ -146,10 +265,12 @@
         "last_failure": null,
         "duration": null,
         "backup_size": null,
-        "backup_path": null,
+        "backup_id": null,
+        "backup_remote": null,
         "source_node": "{{ inventory_hostname }}",
         "source_role": null,
         "prepare_success": false,
+        "upload_success": false,
         "restore_test_success": false,
         "restore_test_timestamp": null
       }
@@ -202,14 +323,6 @@
 - name: Apply pending physical backup handlers
   ansible.builtin.meta: flush_handlers
 
-- name: Enable the physical backup timer on both MySQL nodes
-  ansible.builtin.systemd_service:
-    name: "{{ mysql_backup_timer_name }}"
-    state: started
-    enabled: true
-    daemon_reload: true
-  when: not ansible_check_mode
-
 - name: Validate Percona XtraBackup 8.4
   ansible.builtin.command:
     argv:
@@ -224,4 +337,12 @@
     that:
       - mysql_backup_xtrabackup_version.stdout is search('8\\.4\\.')
     fail_msg: "Installed XtraBackup is outside the required 8.4 series: {{ mysql_backup_xtrabackup_version.stdout }}"
+  when: not ansible_check_mode
+
+- name: Enable the physical backup timer on both MySQL nodes
+  ansible.builtin.systemd_service:
+    name: "{{ mysql_backup_timer_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
   when: not ansible_check_mode

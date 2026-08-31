@@ -1,16 +1,27 @@
 ---
 mysql_backup_enabled: false
-mysql_backup_repository: ""
-mysql_backup_repository_filesystem_types:
-  - nfs
-  - nfs4
-  - cifs
-  - fuse.sshfs
+mysql_backup_b2_bucket: ""
+mysql_backup_b2_prefix: mysql-shared
+mysql_backup_rclone_remote: mysql-backup
+mysql_backup_b2_application_key_id: ""
+mysql_backup_b2_application_key: ""
 mysql_backup_user: mysql_backup
 mysql_backup_password_var: mysql_backup_password
 mysql_backup_credentials_path: /etc/mysql/mysql-backup.cnf
 mysql_backup_config_path: /etc/mysql-backup/config.json
 mysql_backup_config_dir: "{{ mysql_backup_config_path | dirname }}"
+mysql_backup_rclone_config_path: /etc/rclone/mysql-backup.conf
+mysql_backup_rclone_config_dir: "{{ mysql_backup_rclone_config_path | dirname }}"
+mysql_backup_rclone_program_path: /usr/local/bin/rclone
+mysql_backup_rclone_version: "1.75.0"
+mysql_backup_rclone_release_base_url: https://downloads.rclone.org
+mysql_backup_rclone_architectures:
+  x86_64:
+    release_architecture: amd64
+    checksum: sha256:aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa
+  aarch64:
+    release_architecture: arm64
+    checksum: sha256:d0ad88ba4c8e285b7c9efa591e0ab643280a91741e13c27f3a9c0957ccfa5203
 mysql_backup_staging_dir: /var/lib/mysql-backup/staging
 mysql_backup_restore_dir: /var/lib/mysql-backup/restore-test
 mysql_backup_status_path: /var/lib/mysql-backup/status.json
@@ -22,7 +33,6 @@ mysql_backup_lock_path: /run/lock/mysql-physical-backup.lock
 mysql_backup_mysql_socket: /var/run/mysqld/mysqld.sock
 mysql_backup_mysql_datadir: "{{ mysql_server_datadir | default('/var/lib/mysql') }}"
 mysql_backup_binlog_dir: /var/log/mysql
-mysql_backup_replicaset_name: mysql-shared
 mysql_backup_schedule: "*-*-* 02:15:00"
 mysql_backup_randomized_delay_seconds: 1800
 mysql_backup_service_name: mysql-physical-backup.service
@@ -34,6 +44,6 @@ mysql_backup_percona_release_checksum: sha256:71d7c9d3eac749765f998520871444f3c0
 mysql_backup_percona_release_path: /var/cache/percona-release_1.0-9.generic_all.deb
 mysql_backup_packages:
   - percona-xtrabackup-84
-  - rsync
+  - unzip
   - util-linux
   - zstd

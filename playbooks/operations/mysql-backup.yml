@@ -51,7 +51,8 @@
           - mysql_backup_operation_documents | length > 0
           - mysql_backup_operation_documents | selectattr('changed', 'equalto', true) | list | length == 1
           - mysql_backup_operation_documents | selectattr('prepare_success', 'defined') | list | length == 1
-        fail_msg: The explicit operation did not produce exactly one prepared physical backup.
+          - mysql_backup_operation_documents | selectattr('upload_success', 'equalto', true) | list | length == 1
+        fail_msg: The explicit operation did not produce exactly one completed B2 physical backup.
       vars:
         mysql_backup_operation_documents: >-
           {{

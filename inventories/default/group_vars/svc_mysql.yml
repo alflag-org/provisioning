@@ -34,9 +34,12 @@ mysql_shared_privilege_profiles:
     - SHOW VIEW
 mysql_shared_tenants: []
 
-# The physical backup role fails closed until an operator supplies an absolute
-# path backed by an off-host filesystem through secret or extra variables.
+# The physical backup role fails closed until an operator supplies the B2 bucket
+# name here and the dedicated Application Key through the secret source.
 mysql_backup_enabled: true
+mysql_backup_b2_bucket: ""
+mysql_backup_b2_prefix: mysql-shared
+mysql_backup_rclone_remote: mysql-backup
 mysql_backup_schedule: "*-*-* 02:15:00"
 mysql_backup_randomized_delay_seconds: 1800
 
