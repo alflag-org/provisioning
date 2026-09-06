@@ -24,6 +24,7 @@ assert "synthetic-secret" not in repr(sys.argv)
 assert "synthetic-secret" not in repr(dict(os.environ))
 path = sys.argv[-1][1:]
 assert path.startswith("/dev/shm/atlas-vars-")
+assert pathlib.Path(os.environ["ANSIBLE_LOCAL_TEMP"]).parent == pathlib.Path(path).parent
 assert os.stat(pathlib.Path(path).parent).st_mode & 0o777 == 0o700
 assert os.stat(path).st_mode & 0o777 == 0o600
 assert yaml.load(pathlib.Path(path).read_text(), Loader=yaml.BaseLoader) == {"mysql_password": "synthetic-secret"}

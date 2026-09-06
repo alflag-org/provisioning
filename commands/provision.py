@@ -130,6 +130,7 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
             environment.update({
                 "ANSIBLE_CONFIG": str(root / "ansible.cfg"),
                 "ANSIBLE_LOG_PATH": os.devnull,
+                "ANSIBLE_LOCAL_TEMP": str(Path(directory) / "ansible"),
                 "ANSIBLE_DEBUG": "False",
                 "ANSIBLE_CACHE_PLUGIN": "memory",
                 "ANSIBLE_RETRY_FILES_ENABLED": "False",
