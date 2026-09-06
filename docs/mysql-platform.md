@@ -141,15 +141,29 @@ required_secrets:
 ```
 
 Keep backend identifiers and credential files in Atlas host configuration. The
-Zabbix API password must contain at least 12 characters. `mysql_backup_repository`
-is a non-secret absolute path to an off-host mount and belongs in inventory.
+Zabbix API password must contain at least 12 characters.
+`mysql_backup_destination` defines the actual backup transport target and is non-secret.
+For example, a standard destination is:
+
+```yaml
+mysql_backup_destination:
+  transport: rclone
+  target: synology:mysql/mysql-shared
+```
+
+This should be set to:
+
+- a repository root for `filesystem` transport (an absolute off-host path),
+- an rsync target (`backup@host:/export/mysql-backup`) for `rsync`, or
+- an rclone remote base (`synology:...`) for `rclone`.
+
 Zabbix's initial API bootstrap password is the vendor's installation default;
 replace it if the installation was already initialized with a different value.
 
-`mysql_backup_repository` must resolve through `findmnt` to an allowed off-host
-filesystem (`nfs`, `nfs4`, `cifs`, or `fuse.sshfs`). Enabling backup without that
-mounted destination fails before package or schedule configuration. There is no
-local-only fallback.
+The destination transport/target must resolve to an allowed off-host filesystem
+when `transport: filesystem` (`nfs`, `nfs4`, `cifs`, or `fuse.sshfs`).
+Enabling backup without a valid destination fails before package or schedule
+configuration.
 
 ## Backup and restore
 
@@ -167,10 +181,14 @@ Each successful job:
 
 1. takes an online physical backup in local staging;
 2. runs `xtrabackup --prepare`;
-3. copies the prepared backup to the required off-host repository;
+3. copies the prepared backup to `mysql_backup_destination` through the configured
+   transport;
 4. flushes and archives closed binary logs with node identity, server UUID, and
    GTID metadata;
 5. atomically updates `/var/lib/mysql-backup/status.json`.
+
+The standard transfer transport is `rclone + SFTP`; `rsync` and `filesystem` are
+kept as optional alternatives.
 
 Closed binary logs are copied off host only as part of a successful full-backup
 job. Transactions after the latest successful archive, including transactions
@@ -178,11 +196,11 @@ in the active log, are not yet off host. The recovery point therefore depends
 on the interval between successful jobs; this is not short-interval binlog
 shipping.
 
-The repository layout keeps stable identities across role changes:
+The destination layout keeps stable identities across role changes:
 
 ```text
-<repository>/mysql-shared/physical/<node>/<server-uuid>/<UTC-run-id>/
-<repository>/mysql-shared/binlog/<node>/<server-uuid>/
+<destination_root>/mysql-shared/physical/<node>/<server-uuid>/<UTC-run-id>/
+<destination_root>/mysql-shared/binlog/<node>/<server-uuid>/
 ```
 
 Run a normal explicit backup:
@@ -202,16 +220,16 @@ Check current ReplicaSet status first and replace `<current-primary>` below.
 ```
 
 Restore validation never stops or overwrites the production server. It copies a
-prepared backup into `/var/lib/mysql-backup/restore-test`, starts a
-network-disabled temporary `mysqld`, runs `SELECT 1`, checks every expected
+prepared backup from the destination backend, stages it under `/var/lib/mysql-backup`,
+starts a network-disabled temporary `mysqld`, runs `SELECT 1`, checks every expected
 database, shuts down, and removes the scratch datadir.
 
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml
 
-# Validate a particular prepared backup under the configured repository:
+# Validate a particular prepared backup:
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml \
-  -e mysql_restore_backup_path=/absolute/repository/path/to/run
+  -e mysql_restore_backup_path=<destination transport path to completed backup>
 ```
 
 Backup, restore validation, planned switchover, and emergency promotion use the

@@ -2,39 +2,63 @@
 - name: Validate physical backup inputs
   ansible.builtin.assert:
     that:
-      - mysql_backup_repository is string
-      - mysql_backup_repository | length > 1
-      - mysql_backup_repository is match('^/')
+      - not mysql_backup_enabled | bool or mysql_backup_destination is mapping
+      - not mysql_backup_enabled | bool or mysql_backup_destination.transport in mysql_backup_destination_allowed_transports
+      - not mysql_backup_enabled | bool or mysql_backup_destination.target is string
+      - not mysql_backup_enabled | bool or mysql_backup_destination.target | length > 0
       - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
     fail_msg: >-
-      Physical backup is enabled, but its absolute off-host mysql_backup_repository or backup account secret is missing.
+      Physical backup is enabled, but destination transport configuration or
+      backup account secret is missing.
     quiet: true
 
-- name: Check the physical backup repository mount
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/findmnt
-      - --noheadings
-      - --output
-      - FSTYPE,SOURCE
-      - --target
-      - "{{ mysql_backup_repository }}"
-  register: mysql_backup_repository_mount
-  changed_when: false
-  failed_when: false
-  check_mode: false
+- name: Validate filesystem destination mount
+  when: mysql_backup_enabled | bool and mysql_backup_destination.transport == 'filesystem'
+  block:
+    - name: Check the physical backup destination mount
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/findmnt
+          - --noheadings
+          - --output
+          - FSTYPE,SOURCE
+          - --target
+          - "{{ mysql_backup_destination.target }}"
+      register: mysql_backup_destination_mount
+      changed_when: false
+      failed_when: false
+      check_mode: false
 
-- name: Require an off-host backup filesystem
-  ansible.builtin.assert:
-    that:
-      - mysql_backup_repository_mount.rc == 0
-      - mysql_backup_repository_mount.stdout.split() | length >= 2
-      - >-
-        mysql_backup_repository_mount.stdout.split() | first | default('')
-        in mysql_backup_repository_filesystem_types
-    fail_msg: >-
-      mysql_backup_repository must be mounted from an off-host filesystem. Found:
-      {{ mysql_backup_repository_mount.stdout | default('no mount') }}
+    - name: Require an off-host backup filesystem
+      ansible.builtin.assert:
+        that:
+          - mysql_backup_destination_mount.rc == 0
+          - mysql_backup_destination_mount.stdout.split() | length >= 2
+          - >-
+            mysql_backup_destination_mount.stdout.split() | first | default('')
+            in mysql_backup_destination_filesystem_types
+        fail_msg: >-
+          mysql_backup_destination.target must be mounted from an off-host
+          filesystem. Found: {{ mysql_backup_destination_mount.stdout | default('no mount') }}
+
+- name: Validate rclone destination config path when set
+  ansible.builtin.stat:
+    path: "{{ mysql_backup_rclone_config_path }}"
+  register: mysql_backup_rclone_config_file
+  when: mysql_backup_enabled | bool and mysql_backup_destination.transport == 'rclone'
+
+- name: Render the MySQL backup rclone config
+  ansible.builtin.copy:
+    content: "{{ mysql_backup_rclone_config_content }}"
+    dest: "{{ mysql_backup_rclone_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - mysql_backup_enabled | bool
+    - mysql_backup_destination.transport == 'rclone'
+    - mysql_backup_rclone_config_content | default('') | string | length > 0
+  no_log: true
 
 - name: Download the pinned Percona repository package
   ansible.builtin.get_url:
@@ -139,19 +163,25 @@
 
 - name: Seed the backup status document when absent
   ansible.builtin.copy:
-    content: |
-      {
-        "last_attempt": null,
-        "last_success": null,
-        "last_failure": null,
-        "duration": null,
-        "backup_size": null,
-        "backup_path": null,
-        "source_node": "{{ inventory_hostname }}",
-        "source_role": null,
-        "prepare_success": false,
-        "restore_test_success": false,
-        "restore_test_timestamp": null
+      content: |
+        {
+          "last_attempt": null,
+          "last_success": null,
+          "last_failure": null,
+          "destination_transport": "{{ mysql_backup_destination.transport }}",
+          "destination_target": "{{ mysql_backup_destination.target }}",
+          "destination_available": true,
+          "duration": null,
+          "backup_size": null,
+          "backup_path": null,
+          "source_node": "{{ inventory_hostname }}",
+          "source_role": null,
+          "replication_lag_seconds": null,
+          "transfer_success": false,
+          "remote_validation_success": false,
+          "prepare_success": false,
+          "restore_test_success": false,
+          "restore_test_timestamp": null
       }
     dest: "{{ mysql_backup_status_path }}"
     owner: root
