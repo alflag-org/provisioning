@@ -1,0 +1,2 @@
+ansible-core==2.21.2
+atlas[secrets] @ git+https://github.com/alflag-org/atlas.git@8a874fea4632225109f38421f1c691665bb83cba

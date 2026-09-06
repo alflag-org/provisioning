@@ -126,24 +126,25 @@ includes one, and it never runs the application's schema migration.
 
 ## Required inputs and secrets
 
-Place secret values in the ignored
-`inventories/default/group_vars/all/secrets.yml` file or provide them through an
-equivalent operator secret source. A complete deployment requires:
+Declare the required variables as logical names and run through the `provision`
+command described in the README. A complete deployment requires:
 
 ```yaml
-mysql_replicaset_admin_password: <secret>
-mysql_router_bootstrap_password: <secret>
-mysql_backup_password: <secret>
-mysql_zabbix_monitor_password: <secret>
-zabbix_server_database_password: <secret>
-zabbix_server_api_password: <secret-at-least-12-characters>
-mysql_backup_repository: /absolute/path/on/an/off-host-mount
-
-# One variable for each tenant password_var declaration:
-example_app_password: <secret>
-example_migrate_password: <secret>
-example_reader_password: <secret>
+required_secrets:
+  mysql_replicaset_admin_password: mysql.replication.password
+  mysql_router_bootstrap_password: mysql.router.password
+  mysql_backup_password: mysql.backup.password
+  mysql_zabbix_monitor_password: mysql.monitor.password
+  zabbix_server_database_password: zabbix.database.password
+  zabbix_server_api_password: zabbix.api.password
+  # Add one mapping for each tenant password_var declaration.
 ```
+
+Keep backend identifiers and credential files in Atlas host configuration. The
+Zabbix API password must contain at least 12 characters. `mysql_backup_repository`
+is a non-secret absolute path to an off-host mount and belongs in inventory.
+Zabbix's initial API bootstrap password is the vendor's installation default;
+replace it if the installation was already initialized with a different value.
 
 `mysql_backup_repository` must resolve through `findmnt` to an allowed off-host
 filesystem (`nfs`, `nfs4`, `cifs`, or `fuse.sshfs`). Enabling backup without that

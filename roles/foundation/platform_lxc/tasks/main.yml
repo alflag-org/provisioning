@@ -22,8 +22,3 @@
   ansible.builtin.include_tasks:
     file: home.yml
   when: not foundation_lxc_skip_home | bool
-
-- name: Sync LXC operator secrets
-  ansible.builtin.include_tasks:
-    file: secrets.yml
-  when: not foundation_lxc_skip_secrets | bool
