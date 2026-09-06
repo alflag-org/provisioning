@@ -163,25 +163,25 @@
 
 - name: Seed the backup status document when absent
   ansible.builtin.copy:
-      content: |
-        {
-          "last_attempt": null,
-          "last_success": null,
-          "last_failure": null,
-          "destination_transport": "{{ mysql_backup_destination.transport }}",
-          "destination_target": "{{ mysql_backup_destination.target }}",
-          "destination_available": true,
-          "duration": null,
-          "backup_size": null,
-          "backup_path": null,
-          "source_node": "{{ inventory_hostname }}",
-          "source_role": null,
-          "replication_lag_seconds": null,
-          "transfer_success": false,
-          "remote_validation_success": false,
-          "prepare_success": false,
-          "restore_test_success": false,
-          "restore_test_timestamp": null
+    content: |
+      {
+        "last_attempt": null,
+        "last_success": null,
+        "last_failure": null,
+        "destination_transport": "{{ mysql_backup_destination.transport }}",
+        "destination_target": "{{ mysql_backup_destination.target }}",
+        "destination_available": true,
+        "duration": null,
+        "backup_size": null,
+        "backup_path": null,
+        "source_node": "{{ inventory_hostname }}",
+        "source_role": null,
+        "replication_lag_seconds": null,
+        "transfer_success": false,
+        "remote_validation_success": false,
+        "prepare_success": false,
+        "restore_test_success": false,
+        "restore_test_timestamp": null
       }
     dest: "{{ mysql_backup_status_path }}"
     owner: root
