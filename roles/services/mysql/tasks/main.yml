@@ -12,12 +12,12 @@
       - mysql_backup_password | string | length > 0
       - mysql_zabbix_monitor_password is defined
       - mysql_zabbix_monitor_password | string | length > 0
-      - not mysql_backup_enabled | bool or mysql_backup_destination.transport in mysql_backup_destination_allowed_transports
-      - not mysql_backup_enabled | bool or mysql_backup_destination.target is string
-      - not mysql_backup_enabled | bool or mysql_backup_destination.target | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_bucket | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key | string | length > 0
     fail_msg: >-
       Define the ReplicaSet administrator, Router bootstrap, physical backup,
-      transport configuration, and MySQL monitoring secrets
+      B2 configuration and MySQL monitoring secrets
       before converging svc_mysql.
     quiet: true
 

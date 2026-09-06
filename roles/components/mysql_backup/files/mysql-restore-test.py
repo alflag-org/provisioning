@@ -12,17 +12,16 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 
 UTC = dt.timezone.utc
-MYSQLD_PATH = Path("/usr/sbin/mysqld").resolve()
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 PHYSICAL_ROOT = "physical"
-INCOMING_ROOT = ".incoming"
-COMPLETION_MARKER = "COMPLETED"
-MANIFEST_ROOT = "manifests"
+COMPLETION_MARKER = "complete.json"
+MYSQLD_PATH = Path("/usr/sbin/mysqld").resolve()
 
 
 def timestamp():
@@ -30,173 +29,92 @@ def timestamp():
 
 
 def run(argv, *, capture=False, check=True):
-    return subprocess.run(
-        argv,
-        check=check,
-        text=True,
-        stdout=subprocess.PIPE if capture else sys.stderr,
-        stderr=subprocess.PIPE if capture else sys.stderr,
+    kwargs = {"check": check, "text": True}
+    if capture:
+        kwargs["stdout"] = subprocess.PIPE
+        kwargs["stderr"] = subprocess.PIPE
+    else:
+        kwargs["stdout"] = sys.stderr
+        kwargs["stderr"] = sys.stderr
+    return subprocess.run(argv, **kwargs)
+
+
+def rclone_argv(config, *args):
+    return [config["rclone_binary"], "--config", config["rclone_config_path"], *args]
+
+
+def validate_config(config):
+    for key in ("b2_bucket", "b2_prefix", "rclone_remote", "rclone_version"):
+        if not isinstance(config.get(key), str) or not config[key].strip():
+            raise RuntimeError(f"{key} is required")
+    if config["b2_bucket"].startswith("/") or config["b2_bucket"].endswith("/"):
+        raise RuntimeError("b2_bucket must not start or end with '/'")
+    if config["b2_prefix"].startswith("/") or config["b2_prefix"].endswith("/"):
+        raise RuntimeError("b2_prefix must not start or end with '/'")
+
+
+def b2_path(config, *parts):
+    base = f"{config['rclone_remote']}:{config['b2_bucket']}/{config['b2_prefix']}".rstrip("/")
+    return "/".join([base] + [str(part).strip("/") for part in parts])
+
+
+def rclone_preflight(config):
+    version = run(rclone_argv(config, "version"), capture=True, check=False)
+    if version.returncode != 0 or f"rclone v{config['rclone_version']}" not in version.stdout:
+        raise RuntimeError("rclone version or executable validation failed")
+    bucket_check = run(
+        rclone_argv(config, "lsd", f"{config['rclone_remote']}:{config['b2_bucket']}"),
+        capture=True,
+        check=False,
     )
+    if bucket_check.returncode != 0:
+        raise RuntimeError("B2 bucket authentication or availability check failed")
+    prefix_check = run(
+        rclone_argv(config, "lsf", b2_path(config), "--max-depth", "1"),
+        capture=True,
+        check=False,
+    )
+    if prefix_check.returncode != 0:
+        raise RuntimeError("B2 backup prefix availability check failed")
 
 
-def split_rsync_target(target):
-    host, sep, remote_path = target.partition(":")
-    if not sep:
-        raise RuntimeError(f"invalid rsync target: {target!r}")
-    return host, remote_path
-
-
-def parse_destination(config):
-    destination = config.get("backup_destination")
-    if not isinstance(destination, dict):
-        raise RuntimeError("backup_destination must be an object")
-
-    transport = destination.get("transport")
-    target = destination.get("target")
-
-    if not isinstance(transport, str):
-        raise RuntimeError(f"invalid transport: {transport!r}")
-
-    transport = transport.strip().lower()
-    if transport not in {"filesystem", "rsync", "rclone"}:
-        raise RuntimeError(f"unsupported transport {transport!r}")
-
-    if not isinstance(target, str) or not target:
-        raise RuntimeError("destination target is required")
-
-    if transport == "filesystem" and not target.startswith("/"):
-        raise RuntimeError("filesystem transport target must be absolute")
-
-    return transport, target
-
-
-def transport_path(transport, target, *parts):
-    if transport == "filesystem":
-        return str((Path(target) / Path(*parts)).resolve())
-    if not parts:
-        return target.rstrip("/")
-    return "/".join([target.rstrip("/")] + [str(part).strip("/") for part in parts])
-
-
-def transport_child_path(base, *parts):
-    return transport_path("rclone", str(base), *parts)
-
-
-def transport_exists(config, transport, path):
-    if transport == "filesystem":
-        return Path(path).exists()
-
-    if transport == "rclone":
-        result = run(["/usr/bin/rclone", "lsf", str(path), "--config", str(config["rclone_config_path"])], capture=True, check=False) if config.get("rclone_config_path") else run(["/usr/bin/rclone", "lsf", str(path)], capture=True, check=False)
-        return result.returncode == 0
-
-    remote_host, remote_path = split_rsync_target(str(path))
-    if not remote_path:
-        return False
+def rclone_exists(config, path):
     result = run(
-        [
-            "/usr/bin/rsync",
-            "--list-only",
-            f"{remote_host}:{remote_path}",
-        ],
+        rclone_argv(config, "lsf", str(path), "--files-only"),
         capture=True,
         check=False,
     )
     return result.returncode == 0
 
 
-def parse_run_id(value):
-    if not isinstance(value, str) or not RUN_ID_RE.fullmatch(value):
-        raise RuntimeError(f"invalid backup run id: {value!r}")
-    return dt.datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
-
-
-def transport_is_complete_backup(config, transport, candidate):
-    return (
-        transport_exists(config, transport, transport_child_path(candidate, "xtrabackup_checkpoints"))
-        and transport_exists(config, transport, transport_child_path(candidate, COMPLETION_MARKER))
-        and transport_exists(
-            config,
-            transport,
-            transport_child_path(candidate, "provisioning-backup.json"),
-        )
-    )
-
-
-def transport_list_paths(config, transport, root):
-    if transport == "filesystem":
-        base = Path(root)
-        if not base.exists():
-            return []
-        paths = []
-        for item in base.rglob("*"):
-            if item.is_dir():
-                paths.append(item.relative_to(base).as_posix())
-        return sorted(paths)
-
-    if transport == "rclone":
-        command = ["/usr/bin/rclone", "lsf", str(root), "--dirs-only", "--recursive"]
-        if config.get("rclone_config_path"):
-            command.insert(1, config["rclone_config_path"])
-            command.insert(1, "--config")
-        result = run(command, check=False, capture=True)
-        if result.returncode != 0:
-            return []
-        return [line.strip().rstrip("/") for line in result.stdout.splitlines() if line.strip()]
-
-    remote_host, remote_path = split_rsync_target(str(root))
+def rclone_list_dirs(config, root):
     result = run(
-        [
-            "/usr/bin/rsync",
-            "--recursive",
-            "--list-only",
-            "--out-format=%n",
-            f"{remote_host}:{remote_path}",
-        ],
-        check=False,
+        rclone_argv(config, "lsf", str(root), "--dirs-only", "--recursive"),
         capture=True,
+        check=False,
     )
     if result.returncode != 0:
         return []
-    return [
-        line.strip().rstrip("/")
-        for line in result.stdout.splitlines()
-        if line.strip()
-    ]
+    return [line.strip().rstrip("/") for line in result.stdout.splitlines() if line.strip()]
 
 
-def transport_list_backups(config, transport, target, replicaset):
-    base = transport_path(transport, target, PHYSICAL_ROOT, replicaset)
-    if transport == "filesystem":
-        root = Path(base)
-        if not root.exists():
-            return []
-        candidates = []
-        for source_node in sorted(root.iterdir(), key=lambda item: item.name):
-            if not source_node.is_dir() or not IDENTIFIER_RE.fullmatch(source_node.name):
-                continue
-            for server_uuid in sorted(source_node.iterdir(), key=lambda item: item.name):
-                if not server_uuid.is_dir() or not IDENTIFIER_RE.fullmatch(server_uuid.name):
-                    continue
-                for run_id_path in sorted(server_uuid.iterdir(), key=lambda item: item.name):
-                    if not run_id_path.is_dir() or not RUN_ID_RE.fullmatch(run_id_path.name):
-                        continue
-                    if not transport_is_complete_backup(config, transport, run_id_path):
-                        continue
-                    candidates.append(
-                        {
-                            "run_id": run_id_path.name,
-                            "run_at": parse_run_id(run_id_path.name),
-                            "path": run_id_path,
-                        }
-                    )
-        return candidates
+def is_complete_backup(config, candidate):
+    return all(
+        rclone_exists(config, f"{candidate}/{name}")
+        for name in ("xtrabackup_checkpoints", "provisioning-backup.json", COMPLETION_MARKER)
+    )
 
+
+def parse_run_id(value):
+    if not isinstance(value, str) or not RUN_ID_RE.fullmatch(value):
+        raise RuntimeError(f"invalid backup id: {value!r}")
+    return dt.datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+
+
+def list_backups(config):
     candidates = []
-    for name in transport_list_paths(config, transport, base):
-        if not name or name.startswith(f"{INCOMING_ROOT}/"):
-            continue
-        parts = [part for part in name.strip("/").split("/") if part]
+    for name in rclone_list_dirs(config, b2_path(config, PHYSICAL_ROOT)):
+        parts = [part for part in name.split("/") if part]
         if len(parts) != 3:
             continue
         source_node, server_uuid, run_id = parts
@@ -206,76 +124,35 @@ def transport_list_backups(config, transport, target, replicaset):
             and RUN_ID_RE.fullmatch(run_id)
         ):
             continue
-        candidate = transport_path(transport, target, PHYSICAL_ROOT, replicaset, source_node, server_uuid, run_id)
-        if transport_is_complete_backup(config, transport, candidate):
-            candidates.append(
-                {
-                    "run_id": run_id,
-                    "run_at": parse_run_id(run_id),
-                    "path": candidate,
-                }
-            )
+        candidate = b2_path(config, PHYSICAL_ROOT, source_node, server_uuid, run_id)
+        if is_complete_backup(config, candidate):
+            candidates.append({"run_id": run_id, "run_at": parse_run_id(run_id), "path": candidate})
     return candidates
 
 
-def latest_backup(config, transport, target):
-    candidates = transport_list_backups(config, transport, target, config["replicaset_name"])
+def resolve_backup(config, backup_id):
+    candidates = list_backups(config)
+    if backup_id:
+        parse_run_id(backup_id)
+        candidates = [candidate for candidate in candidates if candidate["run_id"] == backup_id]
+        if len(candidates) != 1:
+            raise RuntimeError(f"backup id is not uniquely available: {backup_id}")
+        return candidates[0]["path"]
     if not candidates:
         raise RuntimeError("no completed physical backup is available")
-    candidates.sort(key=lambda candidate: candidate["run_at"], reverse=True)
-    return candidates[0]["path"]
+    return max(candidates, key=lambda candidate: candidate["run_at"])["path"]
 
 
-def transport_fetch_backup(config, transport, backup_path, destination):
+def transport_fetch_backup(config, backup_path, destination):
     destination = Path(destination)
     if destination.exists():
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
-
-    if transport == "filesystem":
-        if not isinstance(backup_path, Path):
-            backup_path = Path(backup_path)
-        shutil.copytree(backup_path, destination, dirs_exist_ok=False)
-        return
-
-    if transport == "rclone":
-        command = ["/usr/bin/rclone", "copy", str(backup_path), str(destination)]
-        if config.get("rclone_config_path"):
-            command[1:1] = ["--config", str(config["rclone_config_path"])]
-        run(command)
-        return
-
-    remote_host, remote_path = split_rsync_target(str(backup_path))
-    run(
-        [
-            "/usr/bin/rsync",
-            "--archive",
-            "--mkpath",
-            f"{remote_host}:{remote_path}/",
-            f"{destination}/",
-        ]
-    )
-
-
-def resolve_latest_backup_path(config, transport, target, explicit_backup_path):
-    if explicit_backup_path:
-        if transport == "filesystem":
-            backup = Path(explicit_backup_path).resolve()
-            if not Path(explicit_backup_path).is_absolute():
-                raise RuntimeError("restore backup path must be absolute")
-        elif transport == "rclone":
-            if ":" not in explicit_backup_path:
-                raise RuntimeError("restore backup path must use an rclone remote target")
-        else:
-            backup = explicit_backup_path
-        if not transport_is_complete_backup(config, transport, backup):
-            raise RuntimeError("restore backup candidate is not completed")
-        return backup
-
-    return latest_backup(config, transport, target)
+    run(rclone_argv(config, "copy", str(backup_path), str(destination)))
 
 
 def update_restore_status(path, success):
+    path = Path(path)
     status = json.loads(path.read_text(encoding="utf-8"))
     status["restore_test_success"] = success
     status["restore_test_timestamp"] = timestamp()
@@ -284,27 +161,6 @@ def update_restore_status(path, success):
     os.chmod(temporary, 0o640)
     os.chown(temporary, 0, grp.getgrnam("zabbix").gr_gid)
     os.replace(temporary, path)
-
-
-def repository_is_off_host(config, transport, target):
-    if transport != "filesystem":
-        return
-
-    result = run(
-        [
-            "/usr/bin/findmnt",
-            "--noheadings",
-            "--output",
-            "FSTYPE",
-            "--target",
-            target,
-        ],
-        capture=True,
-        check=False,
-    )
-    filesystem_type = result.stdout.strip().split()[0] if result.stdout.split() else ""
-    if result.returncode != 0 or filesystem_type not in config["filesystem_types"]:
-        raise RuntimeError(f"backup destination filesystem {filesystem_type!r} is not off-host")
 
 
 def change_owner(root, user, group):
@@ -323,11 +179,7 @@ def restore_server_process(pid, scratch, socket_path):
     except (FileNotFoundError, ProcessLookupError):
         return False
     decoded = {value.decode(errors="replace") for value in arguments if value}
-    return (
-        executable == MYSQLD_PATH
-        and f"--datadir={scratch}" in decoded
-        and f"--socket={socket_path}" in decoded
-    )
+    return executable == MYSQLD_PATH and f"--datadir={scratch}" in decoded and f"--socket={socket_path}" in decoded
 
 
 def wait_for_exit(pid, timeout=30):
@@ -380,7 +232,7 @@ def stop_server(pid_path, socket_path, scratch):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
-    parser.add_argument("--backup-path")
+    parser.add_argument("--backup-id")
     args = parser.parse_args()
 
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -389,24 +241,8 @@ def main():
         fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError as error:
         lock_handle.close()
-        raise RuntimeError(
-            "another backup, restore validation, or topology operation is running"
-        ) from error
-    transport, target = parse_destination(config)
-    repository_is_off_host(config, transport, target)
-
-    backup = resolve_latest_backup_path(config, transport, target, args.backup_path)
-    if transport == "filesystem":
-        repository = Path(target).resolve()
-        backup_path = Path(backup).resolve()
-        if not backup_path.is_relative_to(repository):
-            raise RuntimeError("restore test backup must be from the configured destination repository")
-        if not (backup_path / "xtrabackup_checkpoints").is_file():
-            raise RuntimeError("restore test backup must be a prepared backup")
-        if not (backup_path / COMPLETION_MARKER).is_file():
-            raise RuntimeError("restore test backup must be marked completed")
-    else:
-        backup_path = str(backup)
+        raise RuntimeError("another backup, restore validation, or topology operation is running") from error
+    validate_config(config)
 
     scratch = Path(config["restore_directory"]).resolve()
     production_datadir = Path(config["mysql_datadir"]).resolve()
@@ -426,14 +262,16 @@ def main():
     log_path = scratch / "mysqld.log"
     status_path = Path(config["status_file"])
     success = False
-
+    backup = None
     try:
+        rclone_preflight(config)
+        backup = resolve_backup(config, args.backup_id)
         if scratch.exists():
             stop_server(pid_path, socket_path, scratch)
             shutil.rmtree(scratch)
         scratch.mkdir(parents=True, mode=0o700)
         with tempfile.TemporaryDirectory(prefix="mysql-backup-restore-", dir=scratch.parent) as source_root:
-            transport_fetch_backup(config, transport, backup, Path(source_root))
+            transport_fetch_backup(config, backup, Path(source_root))
             source_backup = Path(source_root)
             run(
                 [
@@ -460,7 +298,6 @@ def main():
                     "--daemonize",
                 ]
             )
-
             for _ in range(60):
                 query = run(
                     [
@@ -481,7 +318,6 @@ def main():
                 time.sleep(1)
             else:
                 raise RuntimeError("isolated restored mysqld did not accept SELECT 1")
-
             databases = run(
                 [
                     "/usr/bin/mysql",
@@ -509,16 +345,8 @@ def main():
             raise
         finally:
             update_restore_status(status_path, success)
-    print(
-        json.dumps(
-            {
-                "backup_path": str(backup),
-                "changed": True,
-                "restore_test_success": success,
-            },
-            sort_keys=True,
-        )
-    )
+            lock_handle.close()
+    print(json.dumps({"backup_id": args.backup_id, "backup_path": backup, "changed": True, "restore_test_success": success}, sort_keys=True))
 
 
 if __name__ == "__main__":

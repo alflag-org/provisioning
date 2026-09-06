@@ -5,7 +5,7 @@
   any_errors_fatal: true
   vars:
     mysql_replicaset_action: status
-    mysql_restore_backup_path: ""
+    mysql_restore_backup_id: ""
     mysql_backup_restore_program_path: /usr/local/sbin/mysql-restore-test
     mysql_backup_config_path: /etc/mysql-backup/config.json
 
@@ -18,8 +18,8 @@
         argv: >-
           {{
             [mysql_backup_restore_program_path, '--config', mysql_backup_config_path]
-            + (['--backup-path', mysql_restore_backup_path]
-               if mysql_restore_backup_path | length > 0 else [])
+            + (['--backup-id', mysql_restore_backup_id]
+               if mysql_restore_backup_id | length > 0 else [])
           }}
       register: mysql_restore_test_operation
       changed_when: >-

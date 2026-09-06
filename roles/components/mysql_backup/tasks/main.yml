@@ -2,63 +2,15 @@
 - name: Validate physical backup inputs
   ansible.builtin.assert:
     that:
-      - not mysql_backup_enabled | bool or mysql_backup_destination is mapping
-      - not mysql_backup_enabled | bool or mysql_backup_destination.transport in mysql_backup_destination_allowed_transports
-      - not mysql_backup_enabled | bool or mysql_backup_destination.target is string
-      - not mysql_backup_enabled | bool or mysql_backup_destination.target | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_bucket | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_prefix | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_rclone_remote | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key | string | length > 0
       - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
     fail_msg: >-
-      Physical backup is enabled, but destination transport configuration or
-      backup account secret is missing.
+      Physical backup is enabled, but B2 configuration or backup account secrets are missing.
     quiet: true
-
-- name: Validate filesystem destination mount
-  when: mysql_backup_enabled | bool and mysql_backup_destination.transport == 'filesystem'
-  block:
-    - name: Check the physical backup destination mount
-      ansible.builtin.command:
-        argv:
-          - /usr/bin/findmnt
-          - --noheadings
-          - --output
-          - FSTYPE,SOURCE
-          - --target
-          - "{{ mysql_backup_destination.target }}"
-      register: mysql_backup_destination_mount
-      changed_when: false
-      failed_when: false
-      check_mode: false
-
-    - name: Require an off-host backup filesystem
-      ansible.builtin.assert:
-        that:
-          - mysql_backup_destination_mount.rc == 0
-          - mysql_backup_destination_mount.stdout.split() | length >= 2
-          - >-
-            mysql_backup_destination_mount.stdout.split() | first | default('')
-            in mysql_backup_destination_filesystem_types
-        fail_msg: >-
-          mysql_backup_destination.target must be mounted from an off-host
-          filesystem. Found: {{ mysql_backup_destination_mount.stdout | default('no mount') }}
-
-- name: Validate rclone destination config path when set
-  ansible.builtin.stat:
-    path: "{{ mysql_backup_rclone_config_path }}"
-  register: mysql_backup_rclone_config_file
-  when: mysql_backup_enabled | bool and mysql_backup_destination.transport == 'rclone'
-
-- name: Render the MySQL backup rclone config
-  ansible.builtin.copy:
-    content: "{{ mysql_backup_rclone_config_content }}"
-    dest: "{{ mysql_backup_rclone_config_path }}"
-    owner: root
-    group: root
-    mode: "0600"
-  when:
-    - mysql_backup_enabled | bool
-    - mysql_backup_destination.transport == 'rclone'
-    - mysql_backup_rclone_config_content | default('') | string | length > 0
-  no_log: true
 
 - name: Download the pinned Percona repository package
   ansible.builtin.get_url:
@@ -108,6 +60,31 @@
   when:
     - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
 
+- name: Download the pinned rclone binary
+  ansible.builtin.get_url:
+    url: "{{ mysql_backup_rclone_url }}"
+    dest: "{{ mysql_backup_rclone_archive_path }}"
+    checksum: "{{ mysql_backup_rclone_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extract the pinned rclone binary
+  ansible.builtin.unarchive:
+    src: "{{ mysql_backup_rclone_archive_path }}"
+    dest: "{{ mysql_backup_rclone_extract_path }}"
+    remote_src: true
+    creates: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+
+- name: Install the pinned rclone binary
+  ansible.builtin.copy:
+    src: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+    dest: "{{ mysql_backup_rclone_binary }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Ensure physical backup directories exist
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -125,6 +102,15 @@
     - path: "{{ mysql_backup_staging_dir }}"
       group: root
       mode: "0700"
+
+- name: Render the B2 rclone config
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ mysql_backup_rclone_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
 
 - name: Render physical backup credentials
   ansible.builtin.template:
@@ -168,15 +154,14 @@
         "last_attempt": null,
         "last_success": null,
         "last_failure": null,
-        "destination_transport": "{{ mysql_backup_destination.transport }}",
-        "destination_target": "{{ mysql_backup_destination.target }}",
-        "destination_available": true,
+        "destination_backend": "b2",
+        "destination_target": "{{ mysql_backup_rclone_remote }}:{{ mysql_backup_b2_bucket }}/{{ mysql_backup_b2_prefix }}",
+        "destination_available": false,
         "duration": null,
         "backup_size": null,
         "backup_path": null,
         "source_node": "{{ inventory_hostname }}",
         "source_role": null,
-        "replication_lag_seconds": null,
         "transfer_success": false,
         "remote_validation_success": false,
         "prepare_success": false,

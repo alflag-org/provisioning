@@ -1,17 +1,5 @@
 ---
 mysql_backup_enabled: false
-mysql_backup_destination:
-  transport: rclone
-  target: ""
-mysql_backup_destination_allowed_transports:
-  - rclone
-  - rsync
-  - filesystem
-mysql_backup_destination_filesystem_types:
-  - nfs
-  - nfs4
-  - cifs
-  - fuse.sshfs
 mysql_backup_user: mysql_backup
 mysql_backup_password_var: mysql_backup_password
 mysql_backup_credentials_path: /etc/mysql/mysql-backup.cnf
@@ -29,23 +17,29 @@ mysql_backup_mysql_socket: /var/run/mysqld/mysqld.sock
 mysql_backup_mysql_datadir: "{{ mysql_server_datadir | default('/var/lib/mysql') }}"
 mysql_backup_binlog_dir: /var/log/mysql
 mysql_backup_replicaset_name: mysql-shared
-mysql_backup_rclone_config_path: /etc/rclone/mysql-backup.conf
-mysql_backup_rclone_config_content: ""
+mysql_backup_b2_bucket: ""
+mysql_backup_b2_prefix: mysql-shared
+mysql_backup_rclone_remote: mysql-backup
+mysql_backup_b2_application_key_id: ""
+mysql_backup_b2_application_key: ""
+mysql_backup_rclone_version: 1.75.1
+mysql_backup_rclone_url: https://downloads.rclone.org/v1.75.1/rclone-v1.75.1-linux-amd64.zip
+mysql_backup_rclone_checksum: sha256:982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab
+mysql_backup_rclone_archive_path: /var/cache/rclone-v1.75.1-linux-amd64.zip
+mysql_backup_rclone_extract_path: /var/lib/mysql-backup/rclone
+mysql_backup_rclone_binary: /usr/bin/rclone
+mysql_backup_rclone_config_path: /etc/mysql-backup/rclone.conf
 mysql_backup_schedule: "*-*-* 02:15:00"
 mysql_backup_randomized_delay_seconds: 1800
 mysql_backup_service_name: mysql-physical-backup.service
 mysql_backup_timer_name: mysql-physical-backup.timer
 mysql_topology_lock_service_name: mysql-topology-operation-lock.service
 mysql_topology_lock_runtime_max_seconds: 3600
-mysql_backup_retention_days: 14
-mysql_backup_binlog_retention_days: 21
-mysql_backup_max_replication_lag_seconds:
 mysql_backup_percona_release_url: https://repo.percona.com/apt/percona-release_1.0-9.generic_all.deb
 mysql_backup_percona_release_checksum: sha256:71d7c9d3eac749765f998520871444f3c06135c5008a46c33d1e24a52c1c6f00
 mysql_backup_percona_release_path: /var/cache/percona-release_1.0-9.generic_all.deb
 mysql_backup_packages:
   - percona-xtrabackup-84
-  - rsync
-  - rclone
+  - unzip
   - util-linux
   - zstd

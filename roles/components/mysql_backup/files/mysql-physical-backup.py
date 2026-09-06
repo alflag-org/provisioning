@@ -5,8 +5,8 @@ import fcntl
 import grp
 import hashlib
 import json
-from pathlib import Path
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -20,9 +20,7 @@ RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 PHYSICAL_ROOT = "physical"
 BINLOG_ROOT = "binlog"
-INCOMING_ROOT = ".incoming"
-MANIFEST_ROOT = "manifests"
-COMPLETION_MARKER = "COMPLETED"
+COMPLETION_MARKER = "complete.json"
 
 
 def timestamp():
@@ -30,10 +28,7 @@ def timestamp():
 
 
 def run(argv, *, capture=False, check=True):
-    kwargs = {
-        "check": check,
-        "text": True,
-    }
+    kwargs = {"check": check, "text": True}
     if capture:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.PIPE
@@ -43,13 +38,8 @@ def run(argv, *, capture=False, check=True):
     return subprocess.run(argv, **kwargs)
 
 
-def rclone_argv(config, *argv):
-    command = ["/usr/bin/rclone"]
-    rclone_config = config.get("rclone_config_path")
-    if rclone_config:
-        command.extend(["--config", str(rclone_config)])
-    command.extend(argv)
-    return command
+def rclone_argv(config, *args):
+    return [config["rclone_binary"], "--config", config["rclone_config_path"], *args]
 
 
 def mysql(config, query):
@@ -69,14 +59,12 @@ def mysql(config, query):
 
 
 def directory_size(path):
-    if not path.exists():
-        return 0
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+    return sum(item.stat().st_size for item in Path(path).rglob("*") if item.is_file())
 
 
 def file_sha256(path):
     digest = hashlib.sha256()
-    with path.open("rb") as stream:
+    with Path(path).open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -99,16 +87,13 @@ def write_json_atomic(path, document):
 
 
 def read_status(path, source_node):
-    if path.exists():
-        current = json.loads(path.read_text(encoding="utf-8"))
-    else:
-        current = {}
-
+    path = Path(path)
+    current = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     defaults = {
         "last_attempt": None,
         "last_success": None,
         "last_failure": None,
-        "destination_transport": None,
+        "destination_backend": "b2",
         "destination_target": None,
         "destination_available": False,
         "duration": None,
@@ -116,21 +101,18 @@ def read_status(path, source_node):
         "backup_path": None,
         "source_node": source_node,
         "source_role": None,
-        "replication_lag_seconds": None,
         "transfer_success": False,
         "remote_validation_success": False,
         "prepare_success": False,
         "restore_test_success": False,
         "restore_test_timestamp": None,
     }
-    merged = defaults | current
-    if "source_node" not in merged:
-        merged["source_node"] = source_node
-    return merged
+    return defaults | current
 
 
 def write_status(path, status):
-    temporary = Path(path).with_suffix(".tmp")
+    path = Path(path)
+    temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o640)
     os.chown(temporary, 0, grp.getgrnam("zabbix").gr_gid)
@@ -138,7 +120,7 @@ def write_status(path, status):
 
 
 def acquire_operation_lock(path, skip_if_busy):
-    lock_handle = path.open("w", encoding="utf-8")
+    lock_handle = Path(path).open("w", encoding="utf-8")
     try:
         fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError as error:
@@ -162,416 +144,114 @@ def validate_identifier(value, label):
         raise RuntimeError(f"invalid {label}: {value!r}")
 
 
-def split_rsync_target(target):
-    host, sep, remote_path = target.partition(":")
-    if not sep:
-        raise RuntimeError(f"invalid rsync target: {target!r}")
-    return host, remote_path
+def validate_b2_config(config):
+    for key in ("b2_bucket", "b2_prefix", "rclone_remote", "rclone_version"):
+        if not isinstance(config.get(key), str) or not config[key].strip():
+            raise RuntimeError(f"{key} is required")
+    validate_identifier(config["source_node"], "source_node")
+    if config["b2_bucket"].startswith("/") or config["b2_bucket"].endswith("/"):
+        raise RuntimeError("b2_bucket must not start or end with '/'")
+    if config["b2_prefix"].startswith("/") or config["b2_prefix"].endswith("/"):
+        raise RuntimeError("b2_prefix must not start or end with '/'")
 
 
-def parse_destination(config):
-    destination = config.get("backup_destination")
-    if not isinstance(destination, dict):
-        raise RuntimeError("backup_destination must be an object")
-
-    transport = destination.get("transport")
-    target = destination.get("target")
-
-    if not isinstance(transport, str):
-        raise RuntimeError(f"invalid transport: {transport!r}")
-
-    transport = transport.strip().lower()
-    if transport not in {"filesystem", "rsync", "rclone"}:
-        raise RuntimeError(f"unsupported transport {transport!r}")
-
-    if not isinstance(target, str) or not target:
-        raise RuntimeError("destination target is required")
-
-    if transport == "filesystem" and not target.startswith("/"):
-        raise RuntimeError("filesystem transport target must be absolute")
-
-    return transport, target
+def b2_path(config, *parts):
+    base = f"{config['rclone_remote']}:{config['b2_bucket']}/{config['b2_prefix']}".rstrip("/")
+    return "/".join([base] + [str(part).strip("/") for part in parts])
 
 
-def transport_path(transport, target, *parts):
-    if transport == "filesystem":
-        return str((Path(target) / Path(*parts)).resolve())
-    if not parts:
-        return target.rstrip("/")
-    return "/".join([target.rstrip("/")] + [str(part).strip("/") for part in parts])
+def rclone_preflight(config):
+    version = run(rclone_argv(config, "version"), capture=True, check=False)
+    if version.returncode != 0 or f"rclone v{config['rclone_version']}" not in version.stdout:
+        raise RuntimeError("rclone version or executable validation failed")
+    bucket = f"{config['rclone_remote']}:{config['b2_bucket']}"
+    bucket_check = run(rclone_argv(config, "lsd", bucket), capture=True, check=False)
+    if bucket_check.returncode != 0:
+        raise RuntimeError("B2 bucket authentication or availability check failed")
+    prefix_check = run(
+        rclone_argv(config, "lsf", b2_path(config), "--max-depth", "1"),
+        capture=True,
+        check=False,
+    )
+    if prefix_check.returncode != 0:
+        raise RuntimeError("B2 backup prefix availability check failed")
 
 
-def transport_child_path(base, *parts):
-    if isinstance(base, Path):
-        return base.joinpath(*parts)
-    return transport_path("rclone", str(base), *parts)
-
-
-def transport_exists(config, transport, path):
-    if transport == "filesystem":
-        return Path(path).exists()
-
-    if transport == "rclone":
-        result = run(rclone_argv(config, "lsf", str(path)), capture=True, check=False)
-        return result.returncode == 0
-
-    remote_host, remote_path = split_rsync_target(str(path))
-    if not remote_path:
-        return False
+def rclone_exists(config, path):
     result = run(
-        [
-            "/usr/bin/rsync",
-            "--list-only",
-            f"{remote_host}:{remote_path}",
-        ],
+        rclone_argv(config, "lsf", str(path), "--files-only"),
         capture=True,
         check=False,
     )
     return result.returncode == 0
 
 
-def transport_copy_directory(config, transport, source, destination):
-    source = Path(source)
-    if not source.is_dir():
-        raise RuntimeError(f"source path is not a directory: {source}")
-
-    if transport == "filesystem":
-        destination_path = Path(destination)
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        if destination_path.exists():
-            raise RuntimeError(f"refusing overwrite to destination directory: {destination_path}")
-        run(
-            [
-                "/usr/bin/cp",
-                "-a",
-                f"{source}/",
-                f"{destination_path}",
-            ]
-        )
-        return
-
-    if transport == "rclone":
-        run(
-            rclone_argv(
-                config,
-                "copy",
-                str(source),
-                str(destination),
-                "--copy-links",
-                "--create-empty-src-dirs",
-            )
-        )
-        return
-
-    remote_host, remote_path = split_rsync_target(str(destination))
-    run(
-        [
-            "/usr/bin/rsync",
-            "--archive",
-            "--hard-links",
-            "--numeric-ids",
-            "--sparse",
-            "--mkpath",
-            f"{source}/",
-            f"{remote_host}:{remote_path}/",
-        ]
-    )
+def rclone_copy_directory(config, source, destination):
+    run(rclone_argv(config, "copy", str(source), str(destination), "--create-empty-src-dirs"))
 
 
-def transport_copy_text(config, transport, destination, content):
+def rclone_copy_text(config, destination, content):
     with tempfile.TemporaryDirectory() as directory:
-        temporary = Path(directory) / "marker.txt"
-        temporary.write_text(content, encoding="utf-8")
-
-        if transport == "filesystem":
-            destination_path = Path(destination)
-            destination_path.parent.mkdir(parents=True, exist_ok=True)
-            temporary.replace(destination_path)
-            return
-
-        if transport == "rclone":
-            run(rclone_argv(config, "copyto", str(temporary), str(destination)))
-            return
-
-        remote_host, remote_path = split_rsync_target(str(destination))
-        run(
-            [
-                "/usr/bin/rsync",
-                "--archive",
-                "--mkpath",
-                f"{temporary}",
-                f"{remote_host}:{remote_path}",
-            ]
-        )
+        source = Path(directory) / "complete.json"
+        source.write_text(content, encoding="utf-8")
+        run(rclone_argv(config, "copyto", str(source), str(destination)))
 
 
-def transport_move_directory(config, transport, source, destination):
-    if transport == "filesystem":
-        source_path = Path(source)
-        destination_path = Path(destination)
-        if not source_path.exists():
-            return
-        if destination_path.exists():
-            raise RuntimeError(f"refusing overwrite destination: {destination_path}")
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        source_path.replace(destination_path)
-        return
-
-    if transport == "rclone":
-        run(rclone_argv(config, "move", str(source), str(destination)))
-        return
-
-    source_host, source_path = split_rsync_target(str(source))
-    destination_host, destination_path = split_rsync_target(str(destination))
-    if source_host != destination_host:
-        raise RuntimeError("transport rsync move requires matching host endpoints")
-
-    run(
-        [
-            "/usr/bin/rsync",
-            "--archive",
-            "--hard-links",
-            "--numeric-ids",
-            "--sparse",
-            "--mkpath",
-            f"{source_host}:{source_path.rstrip('/')}/",
-            f"{destination_host}:{destination_path.rstrip('/')}/",
-        ]
-    )
-    transport_remove_directory(config, "rsync", str(source))
+def rclone_read_text(config, path):
+    result = run(rclone_argv(config, "cat", str(path)), capture=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"failed to read B2 object: {path}")
+    return result.stdout
 
 
-def transport_remove_directory(config, transport, path):
-    if transport == "filesystem":
-        directory = Path(path)
-        if directory.exists():
-            shutil.rmtree(directory)
-        return
-
-    if transport == "rclone":
-        run(rclone_argv(config, "purge", str(path)), check=False)
-        return
-
-    remote_host, remote_path = split_rsync_target(str(path))
-    run(["/usr/bin/ssh", remote_host, "rm", "-rf", remote_path], check=False)
-
-
-def transport_list_paths(config, transport, root):
-    if transport == "filesystem":
-        base = Path(root)
-        if not base.exists():
-            return []
-        paths = []
-        for item in base.rglob("*"):
-            if item.is_dir():
-                paths.append(item.relative_to(base).as_posix())
-        return sorted(paths)
-
-    if transport == "rclone":
-        result = run(
-            rclone_argv(config, "lsf", str(root), "--dirs-only", "--recursive"),
-            check=False,
-            capture=True,
-        )
-        if result.returncode != 0:
-            return []
-        return [line.strip().rstrip("/") for line in result.stdout.splitlines() if line.strip()]
-
-    remote_host, remote_path = split_rsync_target(str(root))
+def rclone_check(config, source, destination):
     result = run(
-        [
-            "/usr/bin/rsync",
-            "--recursive",
-            "--list-only",
-            "--out-format=%n",
-            f"{remote_host}:{remote_path}",
-        ],
-        check=False,
+        rclone_argv(config, "check", str(source), str(destination), "--one-way"),
         capture=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("B2 checksum validation reported a mismatch")
+
+
+def rclone_list_dirs(config, root):
+    result = run(
+        rclone_argv(config, "lsf", str(root), "--dirs-only", "--recursive"),
+        capture=True,
+        check=False,
     )
     if result.returncode != 0:
         return []
-    return [
-        line.strip().rstrip("/")
-        for line in result.stdout.splitlines()
-        if line.strip()
-    ]
+    return [line.strip().rstrip("/") for line in result.stdout.splitlines() if line.strip()]
 
 
-def transport_transfer_size(config, transport, path):
-    if transport == "filesystem":
-        return directory_size(Path(path))
-
-    if transport == "rclone":
-        result = run(
-            rclone_argv(config, "size", str(path), "--json"),
-            check=False,
-            capture=True,
-        )
-        if result.returncode != 0:
-            return None
-        try:
-            payload = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            return None
-        size = payload.get("bytes")
-        if isinstance(size, int):
-            return size
-
-    return None
-
-
-def transport_read_text(config, transport, path):
-    if transport == "filesystem":
-        return Path(path).read_text(encoding="utf-8")
-
-    if transport == "rclone":
-        result = run(
-            rclone_argv(config, "cat", str(path)),
-            capture=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"failed to read remote text: {path}")
-        return result.stdout
-
-    remote_host, remote_path = split_rsync_target(str(path))
-    with tempfile.TemporaryDirectory() as directory:
-        local_target = Path(directory) / "manifest.json"
-        result = run(
-            [
-                "/usr/bin/rsync",
-                "--archive",
-                "--mkpath",
-                f"{remote_host}:{remote_path}",
-                f"{local_target}",
-            ],
-            check=False,
-            capture=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"failed to read remote text: {path}")
-        return local_target.read_text(encoding="utf-8")
-
-
-def transport_is_complete_backup(config, transport, candidate):
-    return (
-        transport_exists(config, transport, transport_child_path(candidate, "xtrabackup_checkpoints"))
-        and transport_exists(config, transport, transport_child_path(candidate, COMPLETION_MARKER))
-        and transport_exists(
-            config,
-            transport,
-            transport_child_path(candidate, "provisioning-backup.json"),
-        )
+def is_complete_backup(config, candidate):
+    return all(
+        rclone_exists(config, f"{candidate}/{name}")
+        for name in ("xtrabackup_checkpoints", "provisioning-backup.json", COMPLETION_MARKER)
     )
 
 
-def transport_list_backups(config, transport, target, replicaset):
-    base = transport_path(transport, target, PHYSICAL_ROOT, replicaset)
-    if transport == "filesystem":
-        root = Path(base)
-        if not root.exists():
-            return []
-        candidates = []
-        for source_node in sorted(root.iterdir(), key=lambda item: item.name):
-            if not source_node.is_dir() or not IDENTIFIER_RE.fullmatch(source_node.name):
-                continue
-            for server_uuid in sorted(source_node.iterdir(), key=lambda item: item.name):
-                if not server_uuid.is_dir() or not IDENTIFIER_RE.fullmatch(server_uuid.name):
-                    continue
-                for run_id_path in sorted(server_uuid.iterdir(), key=lambda item: item.name):
-                    if not run_id_path.is_dir() or not RUN_ID_RE.fullmatch(run_id_path.name):
-                        continue
-                    if not transport_is_complete_backup(config, transport, run_id_path):
-                        continue
-                    candidates.append(
-                        {
-                            "run_id": run_id_path.name,
-                            "run_at": parse_run_id(run_id_path.name),
-                            "path": run_id_path,
-                        }
-                    )
-        return candidates
-
+def list_backups(config):
+    root = b2_path(config, PHYSICAL_ROOT)
     candidates = []
-    for name in transport_list_paths(config, transport, base):
-        if not name or name.startswith(f"{INCOMING_ROOT}/"):
-            continue
-        parts = [part for part in name.strip("/").split("/") if part]
+    for name in rclone_list_dirs(config, root):
+        parts = [part for part in name.split("/") if part]
         if len(parts) != 3:
             continue
         source_node, server_uuid, run_id = parts
-        if not (
-            IDENTIFIER_RE.fullmatch(source_node)
-            and IDENTIFIER_RE.fullmatch(server_uuid)
-            and RUN_ID_RE.fullmatch(run_id)
+        if not all(
+            (
+                IDENTIFIER_RE.fullmatch(source_node),
+                IDENTIFIER_RE.fullmatch(server_uuid),
+                RUN_ID_RE.fullmatch(run_id),
+            )
         ):
             continue
-        candidate = transport_path(transport, target, PHYSICAL_ROOT, replicaset, source_node, server_uuid, run_id)
-        if transport_is_complete_backup(config, transport, candidate):
-            candidates.append(
-                {
-                    "run_id": run_id,
-                    "run_at": parse_run_id(run_id),
-                    "path": candidate,
-                }
-            )
+        candidate = b2_path(config, PHYSICAL_ROOT, source_node, server_uuid, run_id)
+        if is_complete_backup(config, candidate):
+            candidates.append({"run_id": run_id, "run_at": parse_run_id(run_id), "path": candidate})
     return candidates
-
-
-def cleanup_backups(config, transport, target):
-    retention_days = int(config.get("retention_days", 14))
-    cutoff = dt.datetime.now(UTC) - dt.timedelta(days=retention_days)
-    candidates = transport_list_backups(config, transport, target, config["replicaset_name"])
-    if not candidates:
-        return
-    candidates.sort(key=lambda candidate: candidate["run_at"], reverse=True)
-    for candidate in candidates[1:]:
-        if candidate["run_at"] < cutoff:
-            transport_remove_directory(config, transport, str(candidate["path"]))
-
-
-def cleanup_binlog_backups(config, transport, target):
-    retention_days = int(config.get("binlog_retention_days", 21))
-    cutoff = dt.datetime.now(UTC) - dt.timedelta(days=retention_days)
-    base = transport_path(transport, target, BINLOG_ROOT, config["replicaset_name"])
-
-    latest_by_server = {}
-    for name in transport_list_paths(config, transport, base):
-        parts = [part for part in name.strip("/").split("/") if part]
-        if len(parts) < 4:
-            continue
-        if parts[-2] != MANIFEST_ROOT:
-            continue
-        manifest_name = parts[-1]
-        if not manifest_name.endswith(".json"):
-            continue
-        run_id = manifest_name[:-5]
-        if not RUN_ID_RE.fullmatch(run_id):
-            continue
-
-        server_dir = transport_path(
-            transport,
-            target,
-            BINLOG_ROOT,
-            config["replicaset_name"],
-            *parts[:-2],
-        )
-        manifest_path = transport_path(transport, target, BINLOG_ROOT, config["replicaset_name"], *parts)
-        try:
-            payload = json.loads(transport_read_text(config, transport, manifest_path))
-            archived_at = payload.get("archived_at")
-            if not archived_at:
-                continue
-            archived = dt.datetime.fromisoformat(archived_at.replace("Z", "+00:00")).astimezone(UTC)
-        except (RuntimeError, ValueError, json.JSONDecodeError):
-            continue
-        current = latest_by_server.get(server_dir)
-        latest_by_server[server_dir] = archived if current is None else max(current, archived)
-
-    for server_dir, latest in latest_by_server.items():
-        if latest < cutoff:
-            transport_remove_directory(config, transport, server_dir)
 
 
 def role_state(config):
@@ -584,197 +264,61 @@ def role_state(config):
         "performance_schema.replication_applier_status LIMIT 1), 'NONE')",
     )
     read_only, super_read_only, server_uuid, gtid_executed, receiver, applier = rows[0]
-
     if read_only == "0" and super_read_only == "0":
         role = "PRIMARY"
-    elif (
-        read_only == "1"
-        and super_read_only == "1"
-        and receiver == "ON"
-        and applier == "ON"
-    ):
+    elif read_only == "1" and super_read_only == "1" and receiver == "ON" and applier == "ON":
         role = "SECONDARY"
     else:
         role = "UNKNOWN"
-
-    lag = None
-    if role == "SECONDARY":
-        lag = replication_lag_seconds(config)
-    return role, server_uuid, gtid_executed, lag
+    return role, server_uuid, gtid_executed
 
 
-def replication_lag_seconds(config):
-    try:
-        rows = mysql(
-            config,
-            "SELECT COALESCE(SECONDS_BEHIND_SOURCE, '0') "
-            "FROM performance_schema.replication_connection_status LIMIT 1",
-        )
-    except Exception:
-        return None
-    if not rows:
-        return None
-    raw = rows[0][0]
-    if raw in {"", "NULL", None}:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        return None
+def upload_backup(config, staging, source_node, server_uuid, run_id, backup_size):
+    final = b2_path(config, PHYSICAL_ROOT, source_node, server_uuid, run_id)
+    complete = f"{final}/{COMPLETION_MARKER}"
+    if rclone_exists(config, complete):
+        raise RuntimeError(f"backup run already exists: {run_id}")
+
+    rclone_copy_directory(config, staging, final)
+    rclone_check(config, staging, final)
+    manifest_path = Path(staging) / "provisioning-backup.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("backup_run_id") != run_id or manifest.get("server_uuid") != server_uuid:
+        raise RuntimeError("local backup manifest does not match its destination")
+    remote_manifest = json.loads(rclone_read_text(config, f"{final}/provisioning-backup.json"))
+    if remote_manifest != manifest:
+        raise RuntimeError("remote backup manifest does not match local staging")
+
+    completion = {
+        "backup_run_id": run_id,
+        "completed_at": timestamp(),
+        "backup_size": backup_size,
+        "manifest_sha256": file_sha256(manifest_path),
+    }
+    rclone_copy_text(config, complete, json.dumps(completion, indent=2, sort_keys=True) + "\n")
+    if not is_complete_backup(config, final):
+        raise RuntimeError("remote backup completion marker validation failed")
+    return final
 
 
-def backup_paths(config, transport, target, source_node, server_uuid, run_id):
-    validate_identifier(source_node, "source_node")
-    validate_identifier(server_uuid, "server_uuid")
-    incoming = transport_path(transport, target, INCOMING_ROOT, run_id)
-    final = transport_path(
-        transport,
-        target,
-        PHYSICAL_ROOT,
-        config["replicaset_name"],
-        source_node,
-        server_uuid,
-        run_id,
-    )
-    return incoming, final
-
-
-def transfer_backup(config, transport, target, source_node, server_uuid, run_id, staging):
-    incoming, final = backup_paths(config, transport, target, source_node, server_uuid, run_id)
-    transport_copy_directory(config, transport, staging, incoming)
-    transport_copy_text(
-        config,
-        transport,
-        transport_child_path(incoming, COMPLETION_MARKER),
-        f"completed at {timestamp()}\n",
-    )
-    transport_move_directory(config, transport, incoming, final)
-    if not transport_is_complete_backup(config, transport, final):
-        raise RuntimeError("backup transfer did not finalize as completed")
-    return final, incoming
-
-
-def validate_transfer(config, transport, final_path, staging, expected_size):
-    if not transport_is_complete_backup(config, transport, final_path):
-        raise RuntimeError("prepared backup markers are incomplete after transfer")
-
-    actual = transport_transfer_size(config, transport, final_path)
-    if actual is not None and actual != expected_size:
-        raise RuntimeError(
-            f"backup size mismatch after transfer: expected={expected_size}, actual={actual}"
-        )
-
-    if transport == "rclone":
-        result = run(
-            rclone_argv(
-                config,
-                "check",
-                str(staging),
-                str(final_path),
-                "--one-way",
-                "--size-only",
-            ),
-            check=False,
-            capture=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError("remote backup validation reported mismatch")
-
-
-def latest_backup_root(config, transport, target):
-    candidates = transport_list_backups(config, transport, target, config["replicaset_name"])
-    if not candidates:
-        return None
-    candidates.sort(key=lambda candidate: candidate["run_at"], reverse=True)
-    return candidates[0]["path"]
-
-
-def transport_fetch_backup(config, transport, backup_path, destination):
-    destination = Path(destination)
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.mkdir(parents=True)
-
-    if transport == "filesystem":
-        if not isinstance(backup_path, Path):
-            backup_path = Path(backup_path)
-        shutil.copytree(backup_path, destination, dirs_exist_ok=False)
-        return
-
-    if transport == "rclone":
-        run(rclone_argv(config, "copy", str(backup_path), str(destination)))
-        return
-
-    remote_host, remote_path = split_rsync_target(str(backup_path))
-    run(
-        [
-            "/usr/bin/rsync",
-            "--archive",
-            "--mkpath",
-            f"{remote_host}:{remote_path}/",
-            f"{destination}/",
-        ]
-    )
-
-
-def repository_is_off_host(config, transport, target):
-    if transport != "filesystem":
-        return
-
-    result = run(
-        [
-            "/usr/bin/findmnt",
-            "--noheadings",
-            "--output",
-            "FSTYPE",
-            "--target",
-            target,
-        ],
-        capture=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError("backup destination validation failed")
-    filesystem_type = result.stdout.strip().split()[0] if result.stdout.split() else ""
-    if filesystem_type not in config["filesystem_types"]:
-        raise RuntimeError("backup destination filesystem is not an accepted off-host filesystem")
-
-
-def archive_closed_binlogs(config, transport, target, source_node, server_uuid, backup_run_id):
+def archive_closed_binlogs(config, source_node, server_uuid, backup_run_id):
     mysql(config, "FLUSH BINARY LOGS")
     binlogs = mysql(config, "SHOW BINARY LOGS")
     gtid_at_archive = mysql(config, "SELECT @@GLOBAL.gtid_executed")[0][0]
-
-    transport_root = transport_path(
-        transport,
-        target,
-        BINLOG_ROOT,
-        config["replicaset_name"],
-        source_node,
-        server_uuid,
-    )
+    remote_root = b2_path(config, BINLOG_ROOT, source_node, server_uuid, backup_run_id)
     with tempfile.TemporaryDirectory() as directory:
         staging = Path(directory) / "binlog"
         staging.mkdir()
         archived = []
         for name, *_ in binlogs[:-1]:
             source = Path(config["binlog_directory"]) / name
-            target_file = staging / name
             if source.is_symlink():
                 raise RuntimeError(f"refusing a symlinked source binlog: {name}")
             if not source.is_file():
                 raise RuntimeError(f"closed source binlog disappeared before archival: {name}")
-            if target_file.exists() and not target_file.is_file():
-                raise RuntimeError(f"binlog archive target is not a regular file: {name}")
-            shutil.copy2(source, target_file)
-            archived.append(
-                {
-                    "name": name,
-                    "sha256": file_sha256(target_file),
-                    "size": target_file.stat().st_size,
-                }
-            )
-
+            target = staging / name
+            shutil.copy2(source, target)
+            archived.append({"name": name, "sha256": file_sha256(target), "size": target.stat().st_size})
         manifest = {
             "archived_at": timestamp(),
             "backup_run_id": backup_run_id,
@@ -784,20 +328,13 @@ def archive_closed_binlogs(config, transport, target, source_node, server_uuid, 
             "closed_binlogs": archived,
             "active_binlog": binlogs[-1][0] if binlogs else None,
         }
-        manifest_root = staging / MANIFEST_ROOT
+        manifest_root = staging / "manifests"
         manifest_root.mkdir()
         (manifest_root / f"{backup_run_id}.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
-        transport_copy_directory(config, transport, staging, transport_root)
-
-    if not transport_exists(
-        config,
-        transport,
-        transport_path(transport, transport_root, MANIFEST_ROOT, f"{backup_run_id}.json"),
-    ):
-        raise RuntimeError("binlog archive manifest missing after transport copy")
+        rclone_copy_directory(config, staging, remote_root)
+        rclone_check(config, staging, remote_root)
 
 
 def validate_staging_root(staging_root, production_datadir):
@@ -830,78 +367,43 @@ def main():
     args = parser.parse_args()
 
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    lock_handle = acquire_operation_lock(
-        Path(config["lock_file"]), args.skip_if_lock_busy
-    )
+    lock_handle = acquire_operation_lock(config["lock_file"], args.skip_if_lock_busy)
     if lock_handle is None:
         print(json.dumps({"changed": False, "reason": "shared lock busy"}))
         return
 
-    transport, target = parse_destination(config)
+    validate_b2_config(config)
     status_path = Path(config["status_file"])
     status = read_status(status_path, config["source_node"])
     started = time.monotonic()
-    attempt = timestamp()
     status.update(
         {
-            "last_attempt": attempt,
-            "source_node": config["source_node"],
-            "destination_transport": transport,
-            "destination_target": target,
+            "last_attempt": timestamp(),
+            "destination_backend": "b2",
+            "destination_target": b2_path(config),
             "destination_available": False,
-            "replication_lag_seconds": None,
             "transfer_success": False,
             "remote_validation_success": False,
             "prepare_success": False,
             "source_role": None,
         }
     )
-
     staging = None
-    incoming = None
-    final_backup_path = None
-
     try:
-        role, server_uuid, gtid_executed, lag = role_state(config)
+        rclone_preflight(config)
+        status["destination_available"] = True
+        role, server_uuid, gtid_executed = role_state(config)
         status["source_role"] = role
-        status["replication_lag_seconds"] = lag
-
         if role == "PRIMARY" and not args.allow_primary:
-            status["last_failure"] = None
             write_status(status_path, status)
-            print(
-                json.dumps(
-                    {
-                        "changed": False,
-                        "role": role,
-                        "reason": "current PRIMARY",
-                    },
-                    sort_keys=True,
-                )
-            )
+            print(json.dumps({"changed": False, "role": role, "reason": "current PRIMARY"}, sort_keys=True))
             return
-
         if role not in {"PRIMARY", "SECONDARY"}:
             raise RuntimeError("backup refused because the local runtime role is not healthy")
-
-        lag_threshold = config.get("replication_lag_threshold_seconds")
-        if role == "SECONDARY" and lag_threshold is not None:
-            if lag is None:
-                raise RuntimeError(
-                    "replication lag is required for secondary backups but unavailable"
-                )
-            if lag > lag_threshold:
-                raise RuntimeError(
-                    f"secondary lag {lag} exceeds threshold {lag_threshold}"
-                )
-
-        repository_is_off_host(config, transport, target)
-        status["destination_available"] = True
 
         staging_root = Path(config["staging_directory"]).resolve()
         production_datadir = Path(config["mysql_datadir"]).resolve()
         validate_staging_root(staging_root, production_datadir)
-
         run_id = dt.datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         staging = (staging_root / run_id).resolve()
         if staging.parent != staging_root:
@@ -919,8 +421,7 @@ def main():
         )
         run(["/usr/bin/xtrabackup", "--prepare", f"--target-dir={staging}"])
         status["prepare_success"] = True
-
-        binlog_info_path = staging / "xtrabackup_binlog_info"
+        binlog_info = staging / "xtrabackup_binlog_info"
         write_json_atomic(
             staging / "provisioning-backup.json",
             {
@@ -930,78 +431,37 @@ def main():
                 "source_node": config["source_node"],
                 "source_role": role,
                 "server_uuid": server_uuid,
-                "replication_lag_seconds": lag,
-                "xtrabackup_binlog_info": (
-                    binlog_info_path.read_text(encoding="utf-8").strip()
-                    if binlog_info_path.is_file()
-                    else None
-                ),
+                "xtrabackup_binlog_info": binlog_info.read_text(encoding="utf-8").strip()
+                if binlog_info.is_file()
+                else None,
             },
         )
-
-        final_backup_path, incoming = transfer_backup(
-            config,
-            transport,
-            target,
-            config["source_node"],
-            server_uuid,
-            run_id,
-            staging,
-        )
-        status["transfer_success"] = True
-        status["backup_path"] = str(final_backup_path)
-
         backup_size = directory_size(staging)
-        validate_transfer(config, transport, final_backup_path, staging, backup_size)
-        status["remote_validation_success"] = True
-
-        archive_closed_binlogs(
-            config,
-            transport,
-            target,
-            config["source_node"],
-            server_uuid,
-            run_id,
-        )
-
+        final = upload_backup(config, staging, config["source_node"], server_uuid, run_id, backup_size)
         status.update(
             {
-                "last_success": timestamp(),
-                "duration": round(time.monotonic() - started, 3),
+                "transfer_success": True,
+                "remote_validation_success": True,
+                "backup_path": str(final),
                 "backup_size": backup_size,
-                "last_failure": status.get("last_failure"),
             }
         )
-        cleanup_backups(config, transport, target)
-        cleanup_binlog_backups(config, transport, target)
+        archive_closed_binlogs(config, config["source_node"], server_uuid, run_id)
+        status.update({"last_success": timestamp(), "duration": round(time.monotonic() - started, 3)})
         write_status(status_path, status)
-
         print(
             json.dumps(
-                {
-                    "backup_path": str(final_backup_path),
-                    "changed": True,
-                    "prepare_success": True,
-                    "role": role,
-                },
+                {"backup_path": str(final), "changed": True, "prepare_success": True, "role": role},
                 sort_keys=True,
             )
         )
     except Exception:
-        status.update(
-            {
-                "last_failure": timestamp(),
-                "duration": round(time.monotonic() - started, 3),
-            }
-        )
+        status.update({"last_failure": timestamp(), "duration": round(time.monotonic() - started, 3)})
         write_status(status_path, status)
         raise
     finally:
         try:
-            if staging:
-                cleanup_local_path(staging, Path(config["staging_directory"]).resolve())
-            if incoming is not None:
-                transport_remove_directory(config, transport, incoming)
+            cleanup_local_path(staging, Path(config["staging_directory"]).resolve())
         finally:
             lock_handle.close()
 

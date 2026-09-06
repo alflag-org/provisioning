@@ -142,28 +142,25 @@ required_secrets:
 
 Keep backend identifiers and credential files in Atlas host configuration. The
 Zabbix API password must contain at least 12 characters.
-`mysql_backup_destination` defines the actual backup transport target and is non-secret.
-For example, a standard destination is:
+The backup destination is a Backblaze B2 bucket accessed through the pinned native
+rclone B2 backend. The bucket, prefix, remote name, and application key are
+explicit configuration values:
 
 ```yaml
-mysql_backup_destination:
-  transport: rclone
-  target: synology:mysql/mysql-shared
+mysql_backup_b2_bucket: mysql-backups
+mysql_backup_b2_prefix: mysql-shared
+mysql_backup_rclone_remote: mysql-backup
+mysql_backup_b2_application_key_id: <application-key-id-from-secret-store>
+mysql_backup_b2_application_key: <application-key-from-secret-store>
 ```
-
-This should be set to:
-
-- a repository root for `filesystem` transport (an absolute off-host path),
-- an rsync target (`backup@host:/export/mysql-backup`) for `rsync`, or
-- an rclone remote base (`synology:...`) for `rclone`.
 
 Zabbix's initial API bootstrap password is the vendor's installation default;
 replace it if the installation was already initialized with a different value.
 
-The destination transport/target must resolve to an allowed off-host filesystem
-when `transport: filesystem` (`nfs`, `nfs4`, `cifs`, or `fuse.sshfs`).
-Enabling backup without a valid destination fails before package or schedule
-configuration.
+The B2 application key must be scoped to the backup bucket and supplied through
+the host's secret configuration. Enabling backup without a bucket, prefix,
+remote, or both B2 application key values fails before package or schedule
+configuration. The generated rclone config is root-owned and mode `0600`.
 
 ## Backup and restore
 
@@ -181,14 +178,10 @@ Each successful job:
 
 1. takes an online physical backup in local staging;
 2. runs `xtrabackup --prepare`;
-3. copies the prepared backup to `mysql_backup_destination` through the configured
-   transport;
+3. copies the prepared backup to the B2 prefix through rclone;
 4. flushes and archives closed binary logs with node identity, server UUID, and
    GTID metadata;
 5. atomically updates `/var/lib/mysql-backup/status.json`.
-
-The standard transfer transport is `rclone + SFTP`; `rsync` and `filesystem` are
-kept as optional alternatives.
 
 Closed binary logs are copied off host only as part of a successful full-backup
 job. Transactions after the latest successful archive, including transactions
@@ -199,8 +192,8 @@ shipping.
 The destination layout keeps stable identities across role changes:
 
 ```text
-<destination_root>/mysql-shared/physical/<node>/<server-uuid>/<UTC-run-id>/
-<destination_root>/mysql-shared/binlog/<node>/<server-uuid>/
+<rclone_remote>:<b2_bucket>/<b2_prefix>/physical/<node>/<server-uuid>/<UTC-run-id>/
+<rclone_remote>:<b2_bucket>/<b2_prefix>/binlog/<node>/<server-uuid>/<UTC-run-id>/
 ```
 
 Run a normal explicit backup:
@@ -227,9 +220,9 @@ database, shuts down, and removes the scratch datadir.
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml
 
-# Validate a particular prepared backup:
+# Validate a particular prepared backup by its UTC run ID:
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml \
-  -e mysql_restore_backup_path=<destination transport path to completed backup>
+  -e mysql_restore_backup_id=<UTC-run-id>
 ```
 
 Backup, restore validation, planned switchover, and emergency promotion use the

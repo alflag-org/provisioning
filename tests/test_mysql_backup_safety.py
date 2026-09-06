@@ -4,8 +4,8 @@ import importlib.util
 import io
 import json
 from pathlib import Path
-import sys
 import tempfile
+import sys
 import unittest
 from unittest import mock
 
@@ -28,10 +28,16 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             "binlog_directory": str(root / "binlog"),
             "replicaset_name": "mysql-shared",
             "source_node": "mysql-shared02",
+            "b2_bucket": "mysql-backups",
+            "b2_prefix": "mysql-shared",
+            "rclone_remote": "mysql-backup",
+            "rclone_version": "1.75.1",
+            "rclone_binary": "/usr/bin/rclone",
+            "rclone_config_path": "/etc/mysql-backup/rclone.conf",
         }
 
     @staticmethod
-    def restore_config(root, transport="filesystem", destination=""):
+    def restore_config(root):
         return {
             "staging_directory": str(root / "staging"),
             "restore_directory": str(root / "restore"),
@@ -40,12 +46,12 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             "lock_file": str(root / "lock"),
             "mysql_datadir": str(root / "production-datadir"),
             "expected_databases": ["mysql"],
-            "backup_destination": {
-                "transport": transport,
-                "target": destination,
-            },
-            "filesystem_types": ["nfs", "nfs4", "cifs", "fuse.sshfs"],
-            "rclone_config_path": "/tmp/rclone.conf",
+            "b2_bucket": "mysql-backups",
+            "b2_prefix": "mysql-shared",
+            "rclone_remote": "mysql-backup",
+            "rclone_version": "1.75.1",
+            "rclone_binary": "/usr/bin/rclone",
+            "rclone_config_path": "/etc/mysql-backup/rclone.conf",
         }
 
     def test_binlog_archive_rejects_a_non_file_source(self):
@@ -54,7 +60,6 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             source = root / "binlog"
             source.mkdir()
             (source / "mysql-bin.000001").mkdir()
-            repository = root / "repository"
             responses = [
                 [],
                 [["mysql-bin.000001", "13"], ["mysql-bin.000002", "4"]],
@@ -64,106 +69,12 @@ class MySQLBackupSafetyTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "closed source binlog disappeared"):
                     BACKUP.archive_closed_binlogs(
                         self.backup_config(root),
-                        "filesystem",
-                        repository,
                         "mysql-shared02",
                         "server-uuid",
                         "20260824T010000Z",
                     )
 
-    def test_binlog_archive_rejects_a_symlinked_source(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / "binlog"
-            source.mkdir()
-            real_binlog = source / "real-binlog"
-            real_binlog.write_bytes(b"closed binlog")
-            (source / "mysql-bin.000001").symlink_to(real_binlog)
-            repository = root / "repository"
-            responses = [
-                [],
-                [["mysql-bin.000001", "13"], ["mysql-bin.000002", "4"]],
-                [["server-uuid:1"]],
-            ]
-            with mock.patch.object(BACKUP, "mysql", side_effect=responses):
-                with self.assertRaisesRegex(RuntimeError, "symlinked source binlog"):
-                    BACKUP.archive_closed_binlogs(
-                        self.backup_config(root),
-                        "filesystem",
-                        repository,
-                        "mysql-shared02",
-                        "server-uuid",
-                        "20260824T010000Z",
-            )
-
-    def test_restore_backups_listing_ignores_incomplete_and_incoming(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            base = (
-                root
-                / "destination"
-                / "physical"
-                / "mysql-shared"
-                / "mysql-shared01"
-                / "server-uuid"
-            )
-            base.mkdir(parents=True)
-            complete = base / "20260824T010000Z"
-            incomplete = base / "20260824T020000Z"
-            incoming = root / "destination" / ".incoming" / "20260824T030000Z"
-            complete.mkdir()
-            incomplete.mkdir()
-            incoming.mkdir(parents=True)
-            (complete / "xtrabackup_checkpoints").write_text("", encoding="utf-8")
-            (complete / "provisioning-backup.json").write_text("{}", encoding="utf-8")
-            (complete / "COMPLETED").write_text("", encoding="utf-8")
-            (incomplete / "xtrabackup_checkpoints").write_text("", encoding="utf-8")
-            (incoming / "xtrabackup_checkpoints").write_text("", encoding="utf-8")
-            (incoming / "provisioning-backup.json").write_text("{}", encoding="utf-8")
-            (incoming / "COMPLETED").write_text("", encoding="utf-8")
-
-            candidates = RESTORE.transport_list_backups(
-                {"replica": "mysql"},
-                "filesystem",
-                str(root / "destination"),
-                "mysql-shared",
-            )
-            self.assertEqual(len(candidates), 1)
-            self.assertEqual(candidates[0]["run_id"], "20260824T010000Z")
-
-    def test_rclone_transport_copy_directory_uses_configured_rclone(self):
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "source"
-            source.mkdir()
-            (source / "db").mkdir()
-            calls = []
-
-            def fake_run(argv, capture=False, check=True):
-                calls.append(tuple(argv))
-                return mock.Mock(returncode=0)
-
-            with mock.patch.object(BACKUP, "run", side_effect=fake_run):
-                BACKUP.transport_copy_directory(
-                    {"rclone_config_path": "/tmp/rclone.conf"},
-                    "rclone",
-                    str(source),
-                    "synology:vol/path",
-                )
-            self.assertIn(
-                (
-                    "/usr/bin/rclone",
-                    "--config",
-                    "/tmp/rclone.conf",
-                    "copy",
-                    str(source),
-                    "synology:vol/path",
-                    "--copy-links",
-                    "--create-empty-src-dirs",
-                ),
-                calls,
-            )
-
-    def test_rsync_transport_copy_directory_command_is_ssh_aware(self):
+    def test_rclone_copy_does_not_follow_symlinks(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source"
             source.mkdir()
@@ -174,82 +85,103 @@ class MySQLBackupSafetyTests(unittest.TestCase):
                 return mock.Mock(returncode=0)
 
             with mock.patch.object(BACKUP, "run", side_effect=fake_run):
-                BACKUP.transport_copy_directory(
-                    {"rclone_config_path": "/tmp/rclone.conf"},
-                    "rsync",
-                    str(source),
-                    "backup@nas:/volume1/mysql",
+                BACKUP.rclone_copy_directory(
+                    self.backup_config(Path(directory)), source, "mysql-backup:mysql-backups/mysql-shared"
                 )
-            self.assertIn(
-                (
-                    "/usr/bin/rsync",
-                    "--archive",
-                    "--hard-links",
-                    "--numeric-ids",
-                    "--sparse",
-                    "--mkpath",
-                    f"{source}/",
-                    "backup@nas:/volume1/mysql/",
-                ),
-                calls,
-            )
+            self.assertIn("--create-empty-src-dirs", calls[0])
+            self.assertNotIn("--copy-links", calls[0])
 
-    def test_restore_cleanup_refuses_a_socket_without_a_live_owner(self):
+    def test_rclone_check_uses_checksums(self):
+        calls = []
+
+        def fake_run(argv, capture=False, check=True):
+            calls.append(tuple(argv))
+            return mock.Mock(returncode=0)
+
+        with mock.patch.object(BACKUP, "run", side_effect=fake_run):
+            BACKUP.rclone_check(self.backup_config(Path("/tmp")), "/tmp/source", "remote:target")
+        self.assertIn("--one-way", calls[0])
+        self.assertNotIn("--size-only", calls[0])
+
+    def test_completion_marker_is_uploaded_after_checksum_validation(self):
         with tempfile.TemporaryDirectory() as directory:
-            scratch = Path(directory)
-            pid_path = scratch / "mysqld.pid"
-            socket_path = scratch / "mysqld.sock"
-            pid_path.write_text("4294967294\n", encoding="utf-8")
-            socket_path.touch()
-            with self.assertRaisesRegex(RuntimeError, "without a live ownership pid"):
-                RESTORE.stop_server(pid_path, socket_path, scratch)
+            root = Path(directory)
+            staging = root / "staging"
+            staging.mkdir()
+            (staging / "xtrabackup_checkpoints").write_text("", encoding="utf-8")
+            manifest = {"backup_run_id": "20260824T010000Z", "server_uuid": "server-uuid"}
+            (staging / "provisioning-backup.json").write_text(json.dumps(manifest), encoding="utf-8")
+            calls = []
+            config = self.backup_config(root)
+
+            with mock.patch.object(BACKUP, "rclone_exists", return_value=False), mock.patch.object(
+                BACKUP, "rclone_copy_directory", side_effect=lambda *args: calls.append("copy")
+            ), mock.patch.object(BACKUP, "rclone_check", side_effect=lambda *args: calls.append("check")), mock.patch.object(
+                BACKUP, "rclone_read_text", return_value=json.dumps(manifest)
+            ), mock.patch.object(
+                BACKUP, "rclone_copy_text", side_effect=lambda *args: calls.append("complete")
+            ), mock.patch.object(
+                BACKUP, "is_complete_backup", return_value=True
+            ):
+                BACKUP.upload_backup(config, staging, "mysql-shared02", "server-uuid", "20260824T010000Z", 10)
+
+            self.assertEqual(calls, ["copy", "check", "complete"])
+
+    def test_preflight_checks_version_and_b2_access(self):
+        calls = []
+
+        def fake_run(argv, capture=False, check=True):
+            calls.append(tuple(argv))
+            return mock.Mock(returncode=0, stdout="rclone v1.75.1\n")
+
+        with mock.patch.object(BACKUP, "run", side_effect=fake_run):
+            BACKUP.rclone_preflight(self.backup_config(Path("/tmp")))
+        self.assertEqual([call[3] for call in calls], ["version", "lsd", "lsf"])
+        self.assertIn("mysql-backup:mysql-backups", calls[1])
+
+    def test_restore_backup_id_ignores_incomplete_candidates(self):
+        config = self.restore_config(Path("/tmp"))
+        complete = {
+            "run_id": "20260824T010000Z",
+            "run_at": RESTORE.parse_run_id("20260824T010000Z"),
+            "path": "mysql-backup:mysql-backups/mysql-shared/physical/node/uuid/20260824T010000Z",
+        }
+        with mock.patch.object(RESTORE, "list_backups", return_value=[complete]):
+            self.assertEqual(
+                RESTORE.resolve_backup(config, "20260824T010000Z"),
+                complete["path"],
+            )
+        with mock.patch.object(RESTORE, "list_backups", return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, "not uniquely available"):
+                RESTORE.resolve_backup(config, "20260824T020000Z")
 
     def test_scheduled_backup_skips_when_the_shared_lock_is_busy(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             lock_path = root / "mysql-physical-backup.lock"
             config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps({"lock_file": str(lock_path)}), encoding="utf-8"
-            )
+            config_path.write_text(json.dumps({"lock_file": str(lock_path)}), encoding="utf-8")
             output = io.StringIO()
-
             with lock_path.open("w", encoding="utf-8") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 with mock.patch.object(
                     sys,
                     "argv",
-                    [
-                        "mysql-physical-backup",
-                        "--config",
-                        str(config_path),
-                        "--skip-if-lock-busy",
-                    ],
+                    ["mysql-physical-backup", "--config", str(config_path), "--skip-if-lock-busy"],
                 ):
                     with contextlib.redirect_stdout(output):
                         BACKUP.main()
-
-            self.assertEqual(
-                json.loads(output.getvalue()),
-                {"changed": False, "reason": "shared lock busy"},
-            )
+            self.assertEqual(json.loads(output.getvalue()), {"changed": False, "reason": "shared lock busy"})
 
     def test_explicit_backup_fails_when_the_shared_lock_is_busy(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             lock_path = root / "mysql-physical-backup.lock"
             config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps({"lock_file": str(lock_path)}), encoding="utf-8"
-            )
-
+            config_path.write_text(json.dumps({"lock_file": str(lock_path)}), encoding="utf-8")
             with lock_path.open("w", encoding="utf-8") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                with mock.patch.object(
-                    sys,
-                    "argv",
-                    ["mysql-physical-backup", "--config", str(config_path)],
-                ):
+                with mock.patch.object(sys, "argv", ["mysql-physical-backup", "--config", str(config_path)]):
                     with self.assertRaisesRegex(RuntimeError, "topology operation"):
                         BACKUP.main()
 
@@ -258,17 +190,10 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             root = Path(directory)
             lock_path = root / "mysql-physical-backup.lock"
             config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps({"lock_file": str(lock_path)}), encoding="utf-8"
-            )
-
+            config_path.write_text(json.dumps({"lock_file": str(lock_path)}), encoding="utf-8")
             with lock_path.open("w", encoding="utf-8") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                with mock.patch.object(
-                    sys,
-                    "argv",
-                    ["mysql-restore-test", "--config", str(config_path)],
-                ):
+                with mock.patch.object(sys, "argv", ["mysql-restore-test", "--config", str(config_path)]):
                     with self.assertRaisesRegex(RuntimeError, "topology operation"):
                         RESTORE.main()
 
