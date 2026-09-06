@@ -8,9 +8,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from contextlib import nullcontext
 
 import yaml
 
+from atlas_core.execution import get_run_directory, temporary_run_directory
 from atlas_core.secrets import (
     SecretConfigurationError,
     SecretResolutionError,
@@ -98,12 +100,13 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
     ):
         raise SecretResolutionError("required secrets could not be resolved")
     values = {variable: SecretText(resolved[name]) for variable, name in required.items()}
-    # Refuse disk-backed or substituted shared-memory storage.
-    if Path("/dev/shm").is_symlink() or not any(
-        line.split()[1:3] == ["/dev/shm", "tmpfs"]
-        for line in Path("/proc/mounts").read_text().splitlines()
-    ):
-        raise SecretConfigurationError("volatile secret storage is unavailable")
+    try:
+        managed = get_run_directory()
+    except (ValueError, OSError):
+        raise SecretConfigurationError("volatile secret storage is unavailable") from None
+    # The supervisor owns managed storage until the entire execution group stops.
+    storage = (nullcontext(Path(tempfile.mkdtemp(prefix="provision-", dir=managed)))
+               if managed is not None else temporary_run_directory())
     previous = {number: signal.getsignal(number) for number in (signal.SIGTERM, signal.SIGINT)}
 
     spawning = False
@@ -119,7 +122,7 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
     for number in previous:
         signal.signal(number, interrupted)
     try:
-        with tempfile.TemporaryDirectory(prefix="atlas-vars-", dir="/dev/shm") as directory:
+        with storage as directory:
             path = Path(directory) / "vars.yml"
             descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
@@ -146,7 +149,7 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
             try:
                 spawning = True
                 try:
-                    process = subprocess.Popen(argv, cwd=root, env=environment, start_new_session=True,
+                    process = subprocess.Popen(argv, cwd=root, env=environment, start_new_session=managed is None,
                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 finally:
                     spawning = False
@@ -157,8 +160,14 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
                 for number in previous:
                     signal.signal(number, signal.SIG_IGN)
                 if process is not None:
-                    _stop(process)
+                    if managed is None:
+                        _stop(process)
+                    else:
+                        process.kill()
+                        process.wait()
                 raise
+            if managed is None:
+                _stop(process)
             return 128 - result if result < 0 else result
     finally:
         for number, handler in previous.items():
@@ -177,7 +186,7 @@ def main(argv=None):
         if args.check:
             arguments.append("--check")
         result = run(args.playbook, declarations(args.required_secrets), arguments)
-    except (SecretConfigurationError, SecretResolutionError, OSError):
+    except (SecretConfigurationError, SecretResolutionError, OSError, ValueError):
         print("provision: secret configuration, retrieval, or execution failed", file=sys.stderr)
         return 2
     print(f"provision: Ansible exited with status {result}")

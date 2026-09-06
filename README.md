@@ -46,8 +46,12 @@ an operator's local secrets directory.
 
 Injection uses a random directory on the verified `/dev/shm` tmpfs, with directory
 mode `0700` and variable-file mode `0600`. Ansible local temporary files also use
-this volatile directory. The command removes it after completion,
-errors, SIGINT and SIGTERM. SIGKILL and host failure cannot run cleanup; restrict
+this volatile directory. Under Atlas, Ansible shares the managed process group
+and Atlas removes the directory after stopping that group, including on timeout,
+SIGINT and SIGTERM. Use the pinned Atlas revision for the supervisor as well as
+the program environment; older supervisors without managed storage are rejected.
+Direct invocation owns its process group and removes its own directory.
+SIGKILL of the supervising process and host failure cannot run cleanup; restrict
 access to the execution account and clear abandoned volatile files before reusing
 a recovered host. Disable swap or use encrypted swap on the control host.
 
