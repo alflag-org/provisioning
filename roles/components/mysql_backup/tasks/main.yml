@@ -69,6 +69,14 @@
     group: root
     mode: "0644"
 
+- name: Ensure the rclone extraction directory exists
+  ansible.builtin.file:
+    path: "{{ mysql_backup_rclone_extract_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Extract the pinned rclone binary
   ansible.builtin.unarchive:
     src: "{{ mysql_backup_rclone_archive_path }}"

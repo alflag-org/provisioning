@@ -65,7 +65,9 @@ class MySQLBackupSafetyTests(unittest.TestCase):
                 [["mysql-bin.000001", "13"], ["mysql-bin.000002", "4"]],
                 [["server-uuid:1"]],
             ]
-            with mock.patch.object(BACKUP, "mysql", side_effect=responses):
+            with mock.patch.object(BACKUP, "mysql", side_effect=responses), mock.patch.object(
+                BACKUP, "rclone_sha1_map", return_value={}
+            ):
                 with self.assertRaisesRegex(RuntimeError, "closed source binlog disappeared"):
                     BACKUP.archive_closed_binlogs(
                         self.backup_config(root),
@@ -102,6 +104,79 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             BACKUP.rclone_check(self.backup_config(Path("/tmp")), "/tmp/source", "remote:target")
         self.assertIn("--one-way", calls[0])
         self.assertNotIn("--size-only", calls[0])
+
+    def test_rclone_exists_requires_the_expected_object_name(self):
+        config = self.backup_config(Path("/tmp"))
+        responses = [
+            mock.Mock(returncode=0, stdout="other.json\n"),
+            mock.Mock(returncode=0, stdout="complete.json\n"),
+        ]
+        with mock.patch.object(BACKUP, "run", side_effect=responses):
+            self.assertFalse(BACKUP.rclone_exists(config, "remote:bucket/run/complete.json"))
+            self.assertTrue(BACKUP.rclone_exists(config, "remote:bucket/run/complete.json"))
+
+    def test_binlog_archive_reuses_matching_objects_and_shared_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "binlog"
+            source.mkdir()
+            binlog = source / "mysql-bin.000001"
+            binlog.write_bytes(b"closed binlog")
+            config = self.backup_config(root)
+            calls = []
+
+            def capture_copy(config, staging, destination):
+                calls.append((sorted(path.name for path in Path(staging).rglob("*") if path.is_file()), destination))
+
+            responses = [
+                [],
+                [["mysql-bin.000001", "13"], ["mysql-bin.000002", "4"]],
+                [["server-uuid:1"]],
+            ]
+            with mock.patch.object(BACKUP, "mysql", side_effect=responses), mock.patch.object(
+                BACKUP, "rclone_sha1_map", return_value={"mysql-bin.000001": BACKUP.file_sha1(binlog)}
+            ), mock.patch.object(BACKUP, "rclone_copy_directory", side_effect=capture_copy), mock.patch.object(
+                BACKUP, "rclone_check"
+            ):
+                BACKUP.archive_closed_binlogs(config, "mysql-shared02", "server-uuid", "20260824T010000Z")
+
+            self.assertEqual(calls[0][0], ["20260824T010000Z.json"])
+            self.assertEqual(
+                calls[0][1],
+                "mysql-backup:mysql-backups/mysql-shared/binlog/mysql-shared02/server-uuid",
+            )
+
+    def test_primary_scheduled_backup_skips_before_b2_preflight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "lock_file": str(root / "lock"),
+                        "status_file": str(root / "status.json"),
+                        "source_node": "mysql-shared01",
+                        "b2_bucket": "mysql-backups",
+                        "b2_prefix": "mysql-shared",
+                        "rclone_remote": "mysql-backup",
+                        "rclone_version": "1.75.1",
+                        "rclone_binary": "/usr/bin/rclone",
+                        "rclone_config_path": "/etc/mysql-backup/rclone.conf",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.object(BACKUP, "role_state", return_value=("PRIMARY", "uuid", "gtid")), mock.patch.object(
+                BACKUP, "rclone_preflight", side_effect=AssertionError("preflight must not run")
+            ), mock.patch.object(BACKUP, "write_status"):
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    ["mysql-physical-backup", "--config", str(config_path)],
+                ):
+                    with mock.patch("builtins.print") as output:
+                        BACKUP.main()
+            output.assert_called_once()
 
     def test_completion_marker_is_uploaded_after_checksum_validation(self):
         with tempfile.TemporaryDirectory() as directory:

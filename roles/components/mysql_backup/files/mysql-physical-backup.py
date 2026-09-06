@@ -70,6 +70,18 @@ def file_sha256(path):
     return digest.hexdigest()
 
 
+def file_sha1(path):
+    digest = hashlib.sha1()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def text_sha256(content):
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def write_json_atomic(path, document):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -178,12 +190,15 @@ def rclone_preflight(config):
 
 
 def rclone_exists(config, path):
+    parent, expected_name = str(path).rsplit("/", 1)
     result = run(
-        rclone_argv(config, "lsf", str(path), "--files-only"),
+        rclone_argv(config, "lsf", parent, "--files-only"),
         capture=True,
         check=False,
     )
-    return result.returncode == 0
+    return result.returncode == 0 and any(
+        line.strip() == expected_name for line in result.stdout.splitlines()
+    )
 
 
 def rclone_copy_directory(config, source, destination):
@@ -226,9 +241,23 @@ def rclone_list_dirs(config, root):
 
 
 def is_complete_backup(config, candidate):
-    return all(
-        rclone_exists(config, f"{candidate}/{name}")
-        for name in ("xtrabackup_checkpoints", "provisioning-backup.json", COMPLETION_MARKER)
+    if not rclone_exists(config, f"{candidate}/xtrabackup_checkpoints"):
+        return False
+    try:
+        parent, source_node, server_uuid, run_id = candidate.rsplit("/", 3)
+        manifest_text = rclone_read_text(config, f"{candidate}/provisioning-backup.json")
+        completion = json.loads(rclone_read_text(config, f"{candidate}/{COMPLETION_MARKER}"))
+        manifest = json.loads(manifest_text)
+    except (RuntimeError, ValueError, json.JSONDecodeError):
+        return False
+    return (
+        manifest.get("backup_run_id") == run_id
+        and manifest.get("source_node") == source_node
+        and manifest.get("server_uuid") == server_uuid
+        and completion.get("backup_run_id") == run_id
+        and completion.get("source_node") == source_node
+        and completion.get("server_uuid") == server_uuid
+        and completion.get("manifest_sha256") == text_sha256(manifest_text)
     )
 
 
@@ -294,6 +323,8 @@ def upload_backup(config, staging, source_node, server_uuid, run_id, backup_size
         "completed_at": timestamp(),
         "backup_size": backup_size,
         "manifest_sha256": file_sha256(manifest_path),
+        "source_node": source_node,
+        "server_uuid": server_uuid,
     }
     rclone_copy_text(config, complete, json.dumps(completion, indent=2, sort_keys=True) + "\n")
     if not is_complete_backup(config, final):
@@ -301,14 +332,42 @@ def upload_backup(config, staging, source_node, server_uuid, run_id, backup_size
     return final
 
 
+def rclone_sha1_map(config, root):
+    result = run(
+        rclone_argv(
+            config,
+            "lsf",
+            str(root),
+            "--files-only",
+            "--format",
+            "ph",
+            "--hash",
+            "SHA-1",
+            "--separator",
+            "\t",
+        ),
+        capture=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("failed to list existing B2 binlog objects")
+    hashes = {}
+    for line in result.stdout.splitlines():
+        name, separator, digest = line.partition("\t")
+        if separator and name and digest:
+            hashes[name] = digest
+    return hashes
+
+
 def archive_closed_binlogs(config, source_node, server_uuid, backup_run_id):
     mysql(config, "FLUSH BINARY LOGS")
     binlogs = mysql(config, "SHOW BINARY LOGS")
     gtid_at_archive = mysql(config, "SELECT @@GLOBAL.gtid_executed")[0][0]
-    remote_root = b2_path(config, BINLOG_ROOT, source_node, server_uuid, backup_run_id)
+    remote_root = b2_path(config, BINLOG_ROOT, source_node, server_uuid)
     with tempfile.TemporaryDirectory() as directory:
         staging = Path(directory) / "binlog"
         staging.mkdir()
+        remote_hashes = rclone_sha1_map(config, remote_root)
         archived = []
         for name, *_ in binlogs[:-1]:
             source = Path(config["binlog_directory"]) / name
@@ -316,9 +375,23 @@ def archive_closed_binlogs(config, source_node, server_uuid, backup_run_id):
                 raise RuntimeError(f"refusing a symlinked source binlog: {name}")
             if not source.is_file():
                 raise RuntimeError(f"closed source binlog disappeared before archival: {name}")
-            target = staging / name
-            shutil.copy2(source, target)
-            archived.append({"name": name, "sha256": file_sha256(target), "size": target.stat().st_size})
+            local_sha1 = file_sha1(source)
+            action = "uploaded"
+            if name in remote_hashes:
+                if remote_hashes[name] != local_sha1:
+                    raise RuntimeError(f"B2 binlog object checksum mismatch: {name}")
+                action = "existing"
+            else:
+                shutil.copy2(source, staging / name)
+            archived.append(
+                {
+                    "name": name,
+                    "sha1": local_sha1,
+                    "sha256": file_sha256(source),
+                    "size": source.stat().st_size,
+                    "action": action,
+                }
+            )
         manifest = {
             "archived_at": timestamp(),
             "backup_run_id": backup_run_id,
@@ -390,8 +463,6 @@ def main():
     )
     staging = None
     try:
-        rclone_preflight(config)
-        status["destination_available"] = True
         role, server_uuid, gtid_executed = role_state(config)
         status["source_role"] = role
         if role == "PRIMARY" and not args.allow_primary:
@@ -400,6 +471,8 @@ def main():
             return
         if role not in {"PRIMARY", "SECONDARY"}:
             raise RuntimeError("backup refused because the local runtime role is not healthy")
+        rclone_preflight(config)
+        status["destination_available"] = True
 
         staging_root = Path(config["staging_directory"]).resolve()
         production_datadir = Path(config["mysql_datadir"]).resolve()
@@ -461,7 +534,8 @@ def main():
         raise
     finally:
         try:
-            cleanup_local_path(staging, Path(config["staging_directory"]).resolve())
+            if staging:
+                cleanup_local_path(staging, Path(config["staging_directory"]).resolve())
         finally:
             lock_handle.close()
 

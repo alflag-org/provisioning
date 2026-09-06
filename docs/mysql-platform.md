@@ -162,6 +162,17 @@ the host's secret configuration. Enabling backup without a bucket, prefix,
 remote, or both B2 application key values fails before package or schedule
 configuration. The generated rclone config is root-owned and mode `0600`.
 
+Create a dedicated B2 bucket and a dedicated application key with these settings:
+
+- `Allow access to buckets`: the backup bucket only;
+- `Type of access`: `Read and Write`;
+- `File name prefix`: `mysql-shared/` (matching `mysql_backup_b2_prefix`);
+- `Allow list all bucket names`: enabled, because the preflight lists the bucket
+  before backup begins.
+
+Do not use the account master key. Keep the application key ID and key in the
+host secret configuration.
+
 ## Backup and restore
 
 Percona XtraBackup 8.4 and the same tooling are installed on both database
@@ -193,8 +204,13 @@ The destination layout keeps stable identities across role changes:
 
 ```text
 <rclone_remote>:<b2_bucket>/<b2_prefix>/physical/<node>/<server-uuid>/<UTC-run-id>/
-<rclone_remote>:<b2_bucket>/<b2_prefix>/binlog/<node>/<server-uuid>/<UTC-run-id>/
+<rclone_remote>:<b2_bucket>/<b2_prefix>/binlog/<node>/<server-uuid>/<binlog-name>
+<rclone_remote>:<b2_bucket>/<b2_prefix>/binlog/<node>/<server-uuid>/manifests/<UTC-run-id>.json
 ```
+
+Binary logs use one stable object per binlog name. An existing object with the
+same SHA-1 is skipped; an existing object with a different SHA-1 fails the job.
+Each successful archive writes a run manifest under `manifests/`.
 
 Run a normal explicit backup:
 
