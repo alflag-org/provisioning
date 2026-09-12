@@ -141,15 +141,38 @@ required_secrets:
 ```
 
 Keep backend identifiers and credential files in Atlas host configuration. The
-Zabbix API password must contain at least 12 characters. `mysql_backup_repository`
-is a non-secret absolute path to an off-host mount and belongs in inventory.
+Zabbix API password must contain at least 12 characters.
+The backup destination is a Backblaze B2 bucket accessed through the pinned native
+rclone B2 backend. The bucket, prefix, remote name, and application key are
+explicit configuration values:
+
+```yaml
+mysql_backup_b2_bucket: mysql-backups
+mysql_backup_b2_prefix: mysql-shared
+mysql_backup_rclone_remote: mysql-backup
+mysql_backup_b2_application_key_id: <application-key-id-from-secret-store>
+mysql_backup_b2_application_key: <application-key-from-secret-store>
+```
+
 Zabbix's initial API bootstrap password is the vendor's installation default;
 replace it if the installation was already initialized with a different value.
 
-`mysql_backup_repository` must resolve through `findmnt` to an allowed off-host
-filesystem (`nfs`, `nfs4`, `cifs`, or `fuse.sshfs`). Enabling backup without that
-mounted destination fails before package or schedule configuration. There is no
-local-only fallback.
+The B2 application key must be scoped to the backup bucket and supplied through
+the host's secret configuration. Enabling backup without a bucket, prefix,
+remote, or both B2 application key values fails before package or schedule
+configuration. The generated rclone config is root-owned and mode `0600`.
+
+Create a dedicated B2 bucket and a dedicated application key with these settings:
+
+- `Allow access to buckets`: the backup bucket only;
+- `Type of access`: `Read and Write`;
+- `File name prefix`: `mysql-shared/` (matching `mysql_backup_b2_prefix`);
+- `Allow list all bucket names`: enabled, because the preflight checks the bucket
+  name against the account's bucket listing before backup begins. File listings
+  stay within the configured prefix so prefix-restricted keys can be used.
+
+Do not use the account master key. Keep the application key ID and key in the
+host secret configuration.
 
 ## Backup and restore
 
@@ -167,7 +190,7 @@ Each successful job:
 
 1. takes an online physical backup in local staging;
 2. runs `xtrabackup --prepare`;
-3. copies the prepared backup to the required off-host repository;
+3. copies the prepared backup to the B2 prefix through rclone;
 4. flushes and archives closed binary logs with node identity, server UUID, and
    GTID metadata;
 5. atomically updates `/var/lib/mysql-backup/status.json`.
@@ -178,12 +201,17 @@ in the active log, are not yet off host. The recovery point therefore depends
 on the interval between successful jobs; this is not short-interval binlog
 shipping.
 
-The repository layout keeps stable identities across role changes:
+The destination layout keeps stable identities across role changes:
 
 ```text
-<repository>/mysql-shared/physical/<node>/<server-uuid>/<UTC-run-id>/
-<repository>/mysql-shared/binlog/<node>/<server-uuid>/
+<rclone_remote>:<b2_bucket>/<b2_prefix>/physical/<node>/<server-uuid>/<UTC-run-id>/
+<rclone_remote>:<b2_bucket>/<b2_prefix>/binlog/<node>/<server-uuid>/<binlog-name>
+<rclone_remote>:<b2_bucket>/<b2_prefix>/binlog/<node>/<server-uuid>/manifests/<UTC-run-id>.json
 ```
+
+Binary logs use one stable object per binlog name. An existing object with the
+same SHA-1 is skipped; an existing object with a different SHA-1 fails the job.
+Each successful archive writes a run manifest under `manifests/`.
 
 Run a normal explicit backup:
 
@@ -202,16 +230,20 @@ Check current ReplicaSet status first and replace `<current-primary>` below.
 ```
 
 Restore validation never stops or overwrites the production server. It copies a
-prepared backup into `/var/lib/mysql-backup/restore-test`, starts a
-network-disabled temporary `mysqld`, runs `SELECT 1`, checks every expected
+prepared backup from the destination backend, stages it under `/var/lib/mysql-backup`,
+starts a network-disabled temporary `mysqld`, runs `SELECT 1`, checks every expected
 database, shuts down, and removes the scratch datadir.
+Only backups with a checkpoint object and matching manifest and completion JSON
+are eligible. Both documents must match the backup's node, server UUID and run ID;
+the completion marker must contain the manifest's SHA-256 digest. Missing,
+malformed or mismatched completion metadata excludes the backup from selection.
 
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml
 
-# Validate a particular prepared backup under the configured repository:
+# Validate a particular prepared backup by its UTC run ID:
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml \
-  -e mysql_restore_backup_path=/absolute/repository/path/to/run
+  -e mysql_restore_backup_id=<UTC-run-id>
 ```
 
 Backup, restore validation, planned switchover, and emergency promotion use the

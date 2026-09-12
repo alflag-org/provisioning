@@ -1,6 +1,10 @@
 {
-  "backup_repository": {{ mysql_backup_repository | to_json }},
-  "repository_filesystem_types": {{ mysql_backup_repository_filesystem_types | to_json }},
+  "b2_bucket": {{ mysql_backup_b2_bucket | to_json }},
+  "b2_prefix": {{ mysql_backup_b2_prefix | to_json }},
+  "rclone_remote": {{ mysql_backup_rclone_remote | to_json }},
+  "rclone_version": {{ mysql_backup_rclone_version | to_json }},
+  "rclone_binary": {{ mysql_backup_rclone_binary | to_json }},
+  "rclone_config_path": {{ mysql_backup_rclone_config_path | to_json }},
   "credentials_file": {{ mysql_backup_credentials_path | to_json }},
   "staging_directory": {{ mysql_backup_staging_dir | to_json }},
   "restore_directory": {{ mysql_backup_restore_dir | to_json }},

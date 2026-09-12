@@ -2,39 +2,15 @@
 - name: Validate physical backup inputs
   ansible.builtin.assert:
     that:
-      - mysql_backup_repository is string
-      - mysql_backup_repository | length > 1
-      - mysql_backup_repository is match('^/')
+      - not mysql_backup_enabled | bool or mysql_backup_b2_bucket | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_prefix | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_rclone_remote | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id | string | length > 0
+      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key | string | length > 0
       - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
     fail_msg: >-
-      Physical backup is enabled, but its absolute off-host mysql_backup_repository or backup account secret is missing.
+      Physical backup is enabled, but B2 configuration or backup account secrets are missing.
     quiet: true
-
-- name: Check the physical backup repository mount
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/findmnt
-      - --noheadings
-      - --output
-      - FSTYPE,SOURCE
-      - --target
-      - "{{ mysql_backup_repository }}"
-  register: mysql_backup_repository_mount
-  changed_when: false
-  failed_when: false
-  check_mode: false
-
-- name: Require an off-host backup filesystem
-  ansible.builtin.assert:
-    that:
-      - mysql_backup_repository_mount.rc == 0
-      - mysql_backup_repository_mount.stdout.split() | length >= 2
-      - >-
-        mysql_backup_repository_mount.stdout.split() | first | default('')
-        in mysql_backup_repository_filesystem_types
-    fail_msg: >-
-      mysql_backup_repository must be mounted from an off-host filesystem. Found:
-      {{ mysql_backup_repository_mount.stdout | default('no mount') }}
 
 - name: Download the pinned Percona repository package
   ansible.builtin.get_url:
@@ -84,6 +60,39 @@
   when:
     - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
 
+- name: Download the pinned rclone binary
+  ansible.builtin.get_url:
+    url: "{{ mysql_backup_rclone_url }}"
+    dest: "{{ mysql_backup_rclone_archive_path }}"
+    checksum: "{{ mysql_backup_rclone_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure the rclone extraction directory exists
+  ansible.builtin.file:
+    path: "{{ mysql_backup_rclone_extract_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Extract the pinned rclone binary
+  ansible.builtin.unarchive:
+    src: "{{ mysql_backup_rclone_archive_path }}"
+    dest: "{{ mysql_backup_rclone_extract_path }}"
+    remote_src: true
+    creates: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+
+- name: Install the pinned rclone binary
+  ansible.builtin.copy:
+    src: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+    dest: "{{ mysql_backup_rclone_binary }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Ensure physical backup directories exist
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -101,6 +110,15 @@
     - path: "{{ mysql_backup_staging_dir }}"
       group: root
       mode: "0700"
+
+- name: Render the B2 rclone config
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ mysql_backup_rclone_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
 
 - name: Render physical backup credentials
   ansible.builtin.template:
@@ -144,11 +162,16 @@
         "last_attempt": null,
         "last_success": null,
         "last_failure": null,
+        "destination_backend": "b2",
+        "destination_target": "{{ mysql_backup_rclone_remote }}:{{ mysql_backup_b2_bucket }}/{{ mysql_backup_b2_prefix }}",
+        "destination_available": false,
         "duration": null,
         "backup_size": null,
         "backup_path": null,
         "source_node": "{{ inventory_hostname }}",
         "source_role": null,
+        "transfer_success": false,
+        "remote_validation_success": false,
         "prepare_success": false,
         "restore_test_success": false,
         "restore_test_timestamp": null

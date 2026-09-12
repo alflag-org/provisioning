@@ -18,12 +18,17 @@ def status_document():
         "last_attempt": "2026-08-24T01:00:00Z",
         "last_success": "2026-08-24T01:00:00Z",
         "last_failure": "2026-08-23T01:00:00Z",
+        "destination_backend": "b2",
+        "destination_target": "mysql-backup:mysql-backups/mysql-shared",
+        "destination_available": True,
         "duration": 42.5,
         "backup_size": 1024,
-        "backup_path": "/backup/mysql-shared/physical/node/uuid/run",
+        "backup_path": "mysql-backup:mysql-backups/mysql-shared/physical/node/uuid/20260824T010000Z",
         "source_node": "mysql-shared02",
         "source_role": "SECONDARY",
         "prepare_success": True,
+        "transfer_success": True,
+        "remote_validation_success": True,
         "restore_test_success": True,
         "restore_test_timestamp": "2026-08-24T02:00:00Z",
     }
@@ -49,6 +54,16 @@ class MySQLBackupStatusTests(unittest.TestCase):
             path.write_text(json.dumps(document), encoding="utf-8")
             with self.assertRaises(ValueError):
                 MODULE.read_status(path)
+
+    def test_destination_metrics_are_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status.json"
+            path.write_text(json.dumps(status_document()), encoding="utf-8")
+            status = MODULE.read_status(path)
+        self.assertEqual(MODULE.metric(status, "destination_backend"), "b2")
+        self.assertEqual(MODULE.metric(status, "destination_available"), 1)
+        self.assertEqual(MODULE.metric(status, "transfer_success"), 1)
+        self.assertEqual(MODULE.metric(status, "remote_validation_success"), 1)
 
     def test_new_status_reports_missing_ages_and_restore_failure(self):
         document = status_document()
