@@ -167,8 +167,9 @@ Create a dedicated B2 bucket and a dedicated application key with these settings
 - `Allow access to buckets`: the backup bucket only;
 - `Type of access`: `Read and Write`;
 - `File name prefix`: `mysql-shared/` (matching `mysql_backup_b2_prefix`);
-- `Allow list all bucket names`: enabled, because the preflight lists the bucket
-  before backup begins.
+- `Allow list all bucket names`: enabled, because the preflight checks the bucket
+  name against the account's bucket listing before backup begins. File listings
+  stay within the configured prefix so prefix-restricted keys can be used.
 
 Do not use the account master key. Keep the application key ID and key in the
 host secret configuration.
@@ -232,6 +233,10 @@ Restore validation never stops or overwrites the production server. It copies a
 prepared backup from the destination backend, stages it under `/var/lib/mysql-backup`,
 starts a network-disabled temporary `mysqld`, runs `SELECT 1`, checks every expected
 database, shuts down, and removes the scratch datadir.
+Only backups with a checkpoint object and matching manifest and completion JSON
+are eligible. Both documents must match the backup's node, server UUID and run ID;
+the completion marker must contain the manifest's SHA-256 digest. Missing,
+malformed or mismatched completion metadata excludes the backup from selection.
 
 ```bash
 .venv/bin/ansible-playbook playbooks/operations/mysql-restore-test.yml

@@ -176,9 +176,12 @@ def rclone_preflight(config):
     version = run(rclone_argv(config, "version"), capture=True, check=False)
     if version.returncode != 0 or f"rclone v{config['rclone_version']}" not in version.stdout:
         raise RuntimeError("rclone version or executable validation failed")
-    bucket = f"{config['rclone_remote']}:{config['b2_bucket']}"
-    bucket_check = run(rclone_argv(config, "lsd", bucket), capture=True, check=False)
-    if bucket_check.returncode != 0:
+    bucket_check = run(
+        rclone_argv(config, "lsf", f"{config['rclone_remote']}:", "--dirs-only"),
+        capture=True,
+        check=False,
+    )
+    if bucket_check.returncode != 0 or f"{config['b2_bucket']}/" not in bucket_check.stdout.splitlines():
         raise RuntimeError("B2 bucket authentication or availability check failed")
     prefix_check = run(
         rclone_argv(config, "lsf", b2_path(config), "--max-depth", "1"),
@@ -197,7 +200,7 @@ def rclone_exists(config, path):
         check=False,
     )
     return result.returncode == 0 and any(
-        line.strip() == expected_name for line in result.stdout.splitlines()
+        line == expected_name for line in result.stdout.splitlines()
     )
 
 
@@ -244,11 +247,13 @@ def is_complete_backup(config, candidate):
     if not rclone_exists(config, f"{candidate}/xtrabackup_checkpoints"):
         return False
     try:
-        parent, source_node, server_uuid, run_id = candidate.rsplit("/", 3)
+        _, source_node, server_uuid, run_id = candidate.rsplit("/", 3)
         manifest_text = rclone_read_text(config, f"{candidate}/provisioning-backup.json")
         completion = json.loads(rclone_read_text(config, f"{candidate}/{COMPLETION_MARKER}"))
         manifest = json.loads(manifest_text)
     except (RuntimeError, ValueError, json.JSONDecodeError):
+        return False
+    if not isinstance(manifest, dict) or not isinstance(completion, dict):
         return False
     return (
         manifest.get("backup_run_id") == run_id
@@ -312,7 +317,12 @@ def upload_backup(config, staging, source_node, server_uuid, run_id, backup_size
     rclone_check(config, staging, final)
     manifest_path = Path(staging) / "provisioning-backup.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("backup_run_id") != run_id or manifest.get("server_uuid") != server_uuid:
+    if not isinstance(manifest, dict) or any(
+        manifest.get(key) != value
+        for key, value in (
+            ("backup_run_id", run_id), ("source_node", source_node), ("server_uuid", server_uuid)
+        )
+    ):
         raise RuntimeError("local backup manifest does not match its destination")
     remote_manifest = json.loads(rclone_read_text(config, f"{final}/provisioning-backup.json"))
     if remote_manifest != manifest:
@@ -354,8 +364,11 @@ def rclone_sha1_map(config, root):
     hashes = {}
     for line in result.stdout.splitlines():
         name, separator, digest = line.partition("\t")
-        if separator and name and digest:
-            hashes[name] = digest
+        if not separator or not name or re.fullmatch(r"[0-9a-fA-F]{40}", digest) is None:
+            raise RuntimeError("B2 binlog listing contains an unavailable or invalid SHA-1")
+        if name in hashes:
+            raise RuntimeError(f"B2 binlog listing contains a duplicate object: {name}")
+        hashes[name] = digest.lower()
     return hashes
 
 

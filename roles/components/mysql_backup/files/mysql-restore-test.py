@@ -3,6 +3,7 @@ import argparse
 import datetime as dt
 import fcntl
 import grp
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -63,11 +64,11 @@ def rclone_preflight(config):
     if version.returncode != 0 or f"rclone v{config['rclone_version']}" not in version.stdout:
         raise RuntimeError("rclone version or executable validation failed")
     bucket_check = run(
-        rclone_argv(config, "lsd", f"{config['rclone_remote']}:{config['b2_bucket']}"),
+        rclone_argv(config, "lsf", f"{config['rclone_remote']}:", "--dirs-only"),
         capture=True,
         check=False,
     )
-    if bucket_check.returncode != 0:
+    if bucket_check.returncode != 0 or f"{config['b2_bucket']}/" not in bucket_check.stdout.splitlines():
         raise RuntimeError("B2 bucket authentication or availability check failed")
     prefix_check = run(
         rclone_argv(config, "lsf", b2_path(config), "--max-depth", "1"),
@@ -79,12 +80,20 @@ def rclone_preflight(config):
 
 
 def rclone_exists(config, path):
+    parent, expected_name = str(path).rsplit("/", 1)
     result = run(
-        rclone_argv(config, "lsf", str(path), "--files-only"),
+        rclone_argv(config, "lsf", parent, "--files-only"),
         capture=True,
         check=False,
     )
-    return result.returncode == 0
+    return result.returncode == 0 and expected_name in result.stdout.splitlines()
+
+
+def rclone_read_text(config, path):
+    result = run(rclone_argv(config, "cat", str(path)), capture=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"failed to read B2 object: {path}")
+    return result.stdout
 
 
 def rclone_list_dirs(config, root):
@@ -99,9 +108,25 @@ def rclone_list_dirs(config, root):
 
 
 def is_complete_backup(config, candidate):
-    return all(
-        rclone_exists(config, f"{candidate}/{name}")
-        for name in ("xtrabackup_checkpoints", "provisioning-backup.json", COMPLETION_MARKER)
+    if not rclone_exists(config, f"{candidate}/xtrabackup_checkpoints"):
+        return False
+    try:
+        _, source_node, server_uuid, run_id = candidate.rsplit("/", 3)
+        manifest_text = rclone_read_text(config, f"{candidate}/provisioning-backup.json")
+        completion = json.loads(rclone_read_text(config, f"{candidate}/{COMPLETION_MARKER}"))
+        manifest = json.loads(manifest_text)
+    except (RuntimeError, ValueError):
+        return False
+    if not isinstance(manifest, dict) or not isinstance(completion, dict):
+        return False
+    return (
+        manifest.get("backup_run_id") == run_id
+        and manifest.get("source_node") == source_node
+        and manifest.get("server_uuid") == server_uuid
+        and completion.get("backup_run_id") == run_id
+        and completion.get("source_node") == source_node
+        and completion.get("server_uuid") == server_uuid
+        and completion.get("manifest_sha256") == hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
     )
 
 

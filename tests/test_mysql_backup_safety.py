@@ -107,13 +107,92 @@ class MySQLBackupSafetyTests(unittest.TestCase):
 
     def test_rclone_exists_requires_the_expected_object_name(self):
         config = self.backup_config(Path("/tmp"))
-        responses = [
-            mock.Mock(returncode=0, stdout="other.json\n"),
-            mock.Mock(returncode=0, stdout="complete.json\n"),
+        for module in (BACKUP, RESTORE):
+            for output, code, expected in (
+                ("", 0, False), ("other.json\n", 0, False),
+                (" complete.json\n", 0, False), ("complete.json/\n", 0, False),
+                ("complete.json\n", 1, False), ("complete.json\n", 0, True),
+            ):
+                with self.subTest(module=module.__name__, output=output, code=code):
+                    with mock.patch.object(module, "run", return_value=mock.Mock(returncode=code, stdout=output)):
+                        self.assertEqual(module.rclone_exists(config, "remote:bucket/run/complete.json"), expected)
+
+    def test_backup_selection_validates_completion_metadata(self):
+        config = self.backup_config(Path("/tmp"))
+        run_id = "20260824T010000Z"
+        candidate = f"mysql-shared02/server-uuid/{run_id}"
+        manifest = {"backup_run_id": run_id, "source_node": "mysql-shared02", "server_uuid": "server-uuid"}
+        manifest_text = json.dumps(manifest)
+        completion = manifest | {"manifest_sha256": BACKUP.text_sha256(manifest_text)}
+        cases = [
+            (manifest_text, json.dumps(completion), True),
+            (manifest_text, "[]", False), ("null", json.dumps(completion), False),
+            (manifest_text, "{", False), ("[", json.dumps(completion), False),
+            (manifest_text, RuntimeError("missing marker"), False),
+            (manifest_text, json.dumps(completion | {"manifest_sha256": "0" * 64}), False),
         ]
-        with mock.patch.object(BACKUP, "run", side_effect=responses):
-            self.assertFalse(BACKUP.rclone_exists(config, "remote:bucket/run/complete.json"))
-            self.assertTrue(BACKUP.rclone_exists(config, "remote:bucket/run/complete.json"))
+        for field in ("backup_run_id", "source_node", "server_uuid"):
+            cases.append((manifest_text, json.dumps(completion | {field: "wrong"}), False))
+            wrong_manifest = json.dumps(manifest | {field: "wrong"})
+            cases.append((wrong_manifest, json.dumps(completion | {
+                "manifest_sha256": BACKUP.text_sha256(wrong_manifest)
+            }), False))
+        for module in (BACKUP, RESTORE):
+            for manifest_value, completion_value, expected in cases:
+                with self.subTest(module=module.__name__, manifest=manifest_value, completion=completion_value):
+                    with mock.patch.object(module, "rclone_list_dirs", return_value=[candidate]), mock.patch.object(
+                        module, "rclone_exists", return_value=True
+                    ), mock.patch.object(module, "rclone_read_text", side_effect=[manifest_value, completion_value]):
+                        self.assertEqual(bool(module.list_backups(config)), expected)
+            with mock.patch.object(module, "rclone_exists", return_value=False), mock.patch.object(
+                module, "rclone_read_text"
+            ) as read:
+                self.assertFalse(module.is_complete_backup(config, "remote:bucket/" + candidate))
+                read.assert_not_called()
+
+    def test_binlog_hash_listing_rejects_unverifiable_objects(self):
+        config = self.backup_config(Path("/tmp"))
+        for output in (
+            "mysql-bin.000001\t\n", "mysql-bin.000001\tERROR\n",
+            "mysql-bin.000001\tUNSUPPORTED\n", "mysql-bin.000001\tinvalid\n",
+            "mysql-bin.000001\n", ("mysql-bin.000001\t" + "a" * 40 + "\n") * 2,
+        ):
+            with self.subTest(output=output):
+                with mock.patch.object(BACKUP, "run", return_value=mock.Mock(returncode=0, stdout=output)):
+                    with self.assertRaises(RuntimeError):
+                        BACKUP.rclone_sha1_map(config, "remote:bucket/binlog")
+
+    def test_binlog_archive_uploads_new_objects_and_rejects_conflicts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "binlog"
+            source.mkdir()
+            (source / "mysql-bin.000001").write_bytes(b"closed binlog")
+            config = self.backup_config(root)
+            for remote_hashes in ({}, {"mysql-bin.000001": "0" * 40}):
+                responses = [[], [["mysql-bin.000001", "13"], ["mysql-bin.000002", "4"]], [["uuid:1"]]]
+
+                def capture_copy(config, staging, destination):
+                    self.assertEqual((staging / "mysql-bin.000001").read_bytes(), b"closed binlog")
+                    self.assertFalse((staging / "mysql-bin.000002").exists())
+                    manifest = json.loads((staging / "manifests/20260824T010000Z.json").read_text())
+                    self.assertEqual(manifest["closed_binlogs"][0]["action"], "uploaded")
+                    self.assertEqual(manifest["gtid_executed"], "uuid:1")
+
+                with self.subTest(remote_hashes=remote_hashes), mock.patch.object(
+                    BACKUP, "mysql", side_effect=responses
+                ), mock.patch.object(BACKUP, "rclone_sha1_map", return_value=remote_hashes), mock.patch.object(
+                    BACKUP, "rclone_copy_directory", side_effect=capture_copy
+                ) as copy, mock.patch.object(BACKUP, "rclone_check") as check:
+                    if remote_hashes:
+                        with self.assertRaisesRegex(RuntimeError, "checksum mismatch"):
+                            BACKUP.archive_closed_binlogs(config, "mysql-shared02", "server-uuid", "20260824T010000Z")
+                        copy.assert_not_called()
+                        check.assert_not_called()
+                    else:
+                        BACKUP.archive_closed_binlogs(config, "mysql-shared02", "server-uuid", "20260824T010000Z")
+                        copy.assert_called_once()
+                        check.assert_called_once()
 
     def test_binlog_archive_reuses_matching_objects_and_shared_layout(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -184,7 +263,9 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             staging = root / "staging"
             staging.mkdir()
             (staging / "xtrabackup_checkpoints").write_text("", encoding="utf-8")
-            manifest = {"backup_run_id": "20260824T010000Z", "server_uuid": "server-uuid"}
+            manifest = {
+                "backup_run_id": "20260824T010000Z", "server_uuid": "server-uuid", "source_node": "mysql-shared02"
+            }
             (staging / "provisioning-backup.json").write_text(json.dumps(manifest), encoding="utf-8")
             calls = []
             config = self.backup_config(root)
@@ -203,16 +284,23 @@ class MySQLBackupSafetyTests(unittest.TestCase):
             self.assertEqual(calls, ["copy", "check", "complete"])
 
     def test_preflight_checks_version_and_b2_access(self):
-        calls = []
+        for module in (BACKUP, RESTORE):
+            calls = []
 
-        def fake_run(argv, capture=False, check=True):
-            calls.append(tuple(argv))
-            return mock.Mock(returncode=0, stdout="rclone v1.75.1\n")
+            def fake_run(argv, capture=False, check=True):
+                calls.append(tuple(argv))
+                if argv[3] == "version":
+                    return mock.Mock(returncode=0, stdout="rclone v1.75.1\n")
+                if argv[4] == "mysql-backup:":
+                    self.assertIn("--dirs-only", argv)
+                    return mock.Mock(returncode=0, stdout="mysql-backups/\n")
+                if argv[4] == "mysql-backup:mysql-backups/mysql-shared":
+                    return mock.Mock(returncode=0, stdout="")
+                raise AssertionError("listing files outside the allowed prefix")
 
-        with mock.patch.object(BACKUP, "run", side_effect=fake_run):
-            BACKUP.rclone_preflight(self.backup_config(Path("/tmp")))
-        self.assertEqual([call[3] for call in calls], ["version", "lsd", "lsf"])
-        self.assertIn("mysql-backup:mysql-backups", calls[1])
+            with self.subTest(module=module.__name__), mock.patch.object(module, "run", side_effect=fake_run):
+                module.rclone_preflight(self.backup_config(Path("/tmp")))
+            self.assertEqual([call[3] for call in calls], ["version", "lsf", "lsf"])
 
     def test_restore_backup_id_ignores_incomplete_candidates(self):
         config = self.restore_config(Path("/tmp"))
