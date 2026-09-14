@@ -11,18 +11,47 @@
   loop: "{{ resource_cleanup_services }}"
   when: item in ansible_facts.services
 
+- name: Find retired packages recorded by dpkg
+  # Include residual configuration entries; installed-only facts miss them.
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_facts.python.executable }}"
+      - -c
+      - |
+        import fnmatch
+        import json
+        import subprocess
+        import sys
+
+        packages = subprocess.check_output(
+            ["dpkg-query", "--show", "--showformat=${binary:Package}\n"], text=True
+        ).splitlines()
+        patterns = json.loads(sys.argv[1])
+        print(json.dumps([name for name in packages
+                          if any(fnmatch.fnmatchcase(name, pattern)
+                                 for pattern in patterns)]))
+      - "{{ resource_cleanup_packages | to_json }}"
+  register: resource_cleanup_present_packages
+  changed_when: false
+  check_mode: false
+  when: resource_cleanup_packages | length > 0
+
 - name: Purge retired packages without removing unrelated dependencies
   ansible.builtin.apt:
-    name: "{{ resource_cleanup_packages }}"
+    name: "{{ resource_cleanup_present_packages.stdout | from_json }}"
     state: absent
     purge: true
     autoremove: false
-  when: resource_cleanup_packages | length > 0
+  when:
+    - resource_cleanup_packages | length > 0
+    - resource_cleanup_present_packages.stdout | from_json | length > 0
 
 - name: Apply service-specific resource cleanup
   ansible.builtin.include_tasks:
-    file: "{{ item }}"
+    file: "{{ resource_cleanup_task_file }}"
   loop: "{{ resource_cleanup_task_files }}"
+  loop_control:
+    loop_var: resource_cleanup_task_file
 
 - name: Remove retired paths
   ansible.builtin.file:

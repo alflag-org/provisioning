@@ -11,6 +11,7 @@ class ResourceCleanupTests(AnsibleTestCase):
         retained = self.directory / "retained"
         retained.write_text("keep")
         variables = {
+            "resource_cleanup_packages": ["codex-cleanup-nonexistent-*"],
             "resource_cleanup_paths": [str(retired), str(self.directory / "absent")],
             "resource_cleanup_mysql_users": ["retired_fixture"],
             "resource_cleanup_mysql_socket": str(self.directory / "missing.sock"),
