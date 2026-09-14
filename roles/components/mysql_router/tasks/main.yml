@@ -218,7 +218,7 @@
     src: mysql-router.cnf.j2
     dest: "{{ mysql_router_monitor_config_path }}"
     owner: root
-    group: zabbix
+    group: root
     mode: "0640"
   no_log: true
 
@@ -229,15 +229,6 @@
     owner: root
     group: root
     mode: "0755"
-
-- name: Configure Zabbix Router health keys
-  ansible.builtin.template:
-    src: zabbix-mysql-router.conf.j2
-    dest: /etc/zabbix/zabbix_agent2.d/mysql-router.conf
-    owner: root
-    group: zabbix
-    mode: "0640"
-  notify: Restart Zabbix Agent 2 for Router checks
 
 - name: Enable and start MySQL Router
   ansible.builtin.systemd_service:

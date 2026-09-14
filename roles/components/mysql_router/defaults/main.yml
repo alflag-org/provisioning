@@ -13,8 +13,8 @@ mysql_router_replicaset_name: mysql-shared
 mysql_router_bootstrap_port: 3306
 mysql_router_bootstrap_user: mysql_router_bootstrap
 mysql_router_bootstrap_password_var: mysql_router_bootstrap_password
-mysql_router_monitor_user: zbx_router
-mysql_router_monitor_password_var: mysql_zabbix_monitor_password
+mysql_router_monitor_user: mysql_router_monitor
+mysql_router_monitor_password_var: mysql_router_monitor_password
 mysql_router_bind_address: 127.0.0.1
 mysql_router_rw_port: 6446
 mysql_router_ro_port: 6447
@@ -25,5 +25,5 @@ mysql_router_split_socket: /run/mysqlrouter/mysql-rw-split.sock
 mysql_router_wait_for_my_writes: true
 mysql_router_wait_for_my_writes_timeout: 1
 mysql_router_status_program_path: /usr/local/libexec/mysql-router-status
-mysql_router_monitor_config_path: /etc/zabbix/mysql-router.cnf
+mysql_router_monitor_config_path: /etc/mysqlrouter/monitor.cnf
 mysql_router_require_secondary: true

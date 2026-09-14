@@ -184,7 +184,7 @@ def update_restore_status(path, success):
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o640)
-    os.chown(temporary, 0, grp.getgrnam("zabbix").gr_gid)
+    os.chown(temporary, 0, 0)
     os.replace(temporary, path)
 
 

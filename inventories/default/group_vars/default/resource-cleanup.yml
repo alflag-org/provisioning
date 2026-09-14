@@ -1,0 +1,28 @@
+---
+# Explicit retired resources, applied to every managed host. Add future removals
+# here; use group/host variables for resources with narrower ownership.
+resource_cleanup_services:
+  - zabbix-agent.service
+  - zabbix-agent2.service
+resource_cleanup_packages:
+  - zabbix-agent
+  - zabbix-agent2
+  - zabbix-agent2-plugin-*
+  - zabbix-release
+resource_cleanup_task_files:
+  - mysql-backup.yml
+resource_cleanup_paths:
+  - /etc/zabbix
+  - /var/log/zabbix
+  - /var/lib/zabbix
+  - /run/zabbix
+  - /etc/apt/sources.list.d/zabbix-7.0.sources
+  - /etc/apt/sources.list.d/zabbix.list
+  - /etc/apt/preferences.d/zabbix-7.0
+  - /etc/apt/keyrings/zabbix-7.0.asc
+  - /etc/apt/keyrings/zabbix-7.0.gpg
+  - /usr/local/libexec/mysql-platform-status
+resource_cleanup_users:
+  - zabbix
+resource_cleanup_groups:
+  - zabbix

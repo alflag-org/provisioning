@@ -1,0 +1,38 @@
+---
+# Existing backup programs must keep working after the retired group is removed,
+# including when only the cleanup playbook is applied.
+- name: Inspect existing physical backup programs
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/sbin/mysql-physical-backup
+    - /usr/local/sbin/mysql-restore-test
+  register: resource_cleanup_backup_programs
+
+- name: Remove the retired group dependency from existing backup programs
+  ansible.builtin.replace:
+    path: "{{ item.item }}"
+    regexp: 'grp\.getgrnam\("zabbix"\)\.gr_gid'
+    replace: '0'
+  loop: "{{ resource_cleanup_backup_programs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+
+- name: Inspect retained backup status paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /var/lib/mysql-backup
+    - /var/lib/mysql-backup/status.json
+  register: resource_cleanup_backup_paths
+
+- name: Transfer retained backup status paths to root
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    owner: root
+    group: root
+  loop: "{{ resource_cleanup_backup_paths.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists

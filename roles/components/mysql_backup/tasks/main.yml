@@ -105,7 +105,7 @@
       group: root
       mode: "0750"
     - path: "{{ mysql_backup_status_dir }}"
-      group: zabbix
+      group: root
       mode: "0750"
     - path: "{{ mysql_backup_staging_dir }}"
       group: root
@@ -178,7 +178,7 @@
       }
     dest: "{{ mysql_backup_status_path }}"
     owner: root
-    group: zabbix
+    group: root
     mode: "0640"
     force: false
 
@@ -212,15 +212,6 @@
     - src: mysql-topology-operation-lock.service.j2
       dest: "/etc/systemd/system/{{ mysql_topology_lock_service_name }}"
   notify: Reload systemd for MySQL backup
-
-- name: Configure Zabbix backup status keys
-  ansible.builtin.template:
-    src: zabbix-mysql-backup.conf.j2
-    dest: /etc/zabbix/zabbix_agent2.d/mysql-backup.conf
-    owner: root
-    group: zabbix
-    mode: "0640"
-  notify: Restart Zabbix Agent 2 for backup checks
 
 - name: Apply pending physical backup handlers
   ansible.builtin.meta: flush_handlers
