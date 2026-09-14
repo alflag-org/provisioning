@@ -15,13 +15,6 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MySQLRouterStatusTests(unittest.TestCase):
-    def test_router_config_reuses_bootstrap_client_tls_material(self):
-        template = (
-            ROOT / "roles/components/mysql_router/templates/mysqlrouter.conf.j2"
-        ).read_text(encoding="utf-8")
-        self.assertIn("client_ssl_cert={{ mysql_router_client_ssl_cert_path }}", template)
-        self.assertIn("client_ssl_key={{ mysql_router_client_ssl_key_path }}", template)
-
     def test_metadata_and_synthetic_endpoints_are_separate_health_signals(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state.json"

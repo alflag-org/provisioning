@@ -1,0 +1,37 @@
+---
+- name: Check for the local MySQL socket
+  ansible.builtin.stat:
+    path: "{{ resource_cleanup_mysql_socket }}"
+  register: resource_cleanup_mysql_socket_stat
+
+- name: Read the local MySQL write policy
+  ansible.mysql.mysql_query:
+    login_user: root
+    login_unix_socket: "{{ resource_cleanup_mysql_socket }}"
+    query: SELECT @@GLOBAL.read_only AS read_only, @@GLOBAL.super_read_only AS super_read_only
+  register: resource_cleanup_mysql_policy
+  check_mode: false
+  when: resource_cleanup_mysql_socket_stat.stat.exists
+
+- name: Remove retired accounts on the writable MySQL member
+  ansible.mysql.mysql_user:
+    login_user: root
+    login_unix_socket: "{{ resource_cleanup_mysql_socket }}"
+    name: "{{ item }}"
+    host_all: true
+    state: absent
+  loop: "{{ resource_cleanup_mysql_users }}"
+  when:
+    - resource_cleanup_mysql_socket_stat.stat.exists
+    - resource_cleanup_mysql_policy.query_result[0][0].read_only | int == 0
+    - resource_cleanup_mysql_policy.query_result[0][0].super_read_only | int == 0
+
+- name: Report database cleanup requiring a writable member
+  ansible.builtin.debug:
+    msg: >-
+      Database cleanup requires a running writable MySQL member. Include the
+      current PRIMARY in the target limit; its account removals replicate.
+  when: >-
+    not resource_cleanup_mysql_socket_stat.stat.exists
+    or resource_cleanup_mysql_policy.query_result[0][0].read_only | int != 0
+    or resource_cleanup_mysql_policy.query_result[0][0].super_read_only | int != 0

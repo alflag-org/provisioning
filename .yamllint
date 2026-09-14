@@ -1,6 +1,13 @@
 ---
 extends: default
 
+ignore: |
+  .git/
+  .venv/
+  .ansible/
+  .pytest_cache/
+  collections/ansible_collections/
+
 rules:
   braces:
     max-spaces-inside: 1
