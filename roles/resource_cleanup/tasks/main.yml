@@ -9,7 +9,7 @@
     state: stopped
     enabled: false
   loop: "{{ resource_cleanup_services }}"
-  when: item in ansible_facts.services
+  when: ansible_facts.services[item].status | default('not-found') != 'not-found'
 
 - name: Find retired packages recorded by dpkg
   # Include residual configuration entries; installed-only facts miss them.
