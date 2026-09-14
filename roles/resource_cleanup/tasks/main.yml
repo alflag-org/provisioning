@@ -1,15 +1,27 @@
 ---
-- name: Gather installed service names
-  ansible.builtin.service_facts:
-  when: resource_cleanup_services | length > 0
+- name: Read retired service load states
+  # Service facts can label a missing unit as failed instead of not-found.
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - --property=LoadState
+      - --value
+      - "{{ item }}"
+  loop: "{{ resource_cleanup_services }}"
+  register: resource_cleanup_service_states
+  changed_when: false
+  check_mode: false
 
 - name: Stop and disable retired services that exist
   ansible.builtin.systemd_service:
-    name: "{{ item }}"
+    name: "{{ item.item }}"
     state: stopped
     enabled: false
-  loop: "{{ resource_cleanup_services }}"
-  when: ansible_facts.services[item].status | default('not-found') != 'not-found'
+  loop: "{{ resource_cleanup_service_states.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stdout | trim != 'not-found'
 
 - name: Find retired packages recorded by dpkg
   # Include residual configuration entries; installed-only facts miss them.
