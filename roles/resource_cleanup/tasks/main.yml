@@ -1,0 +1,49 @@
+---
+- name: Gather installed service names
+  ansible.builtin.service_facts:
+  when: resource_cleanup_services | length > 0
+
+- name: Stop and disable retired services that exist
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ resource_cleanup_services }}"
+  when: item in ansible_facts.services
+
+- name: Purge retired packages without removing unrelated dependencies
+  ansible.builtin.apt:
+    name: "{{ resource_cleanup_packages }}"
+    state: absent
+    purge: true
+    autoremove: false
+  when: resource_cleanup_packages | length > 0
+
+- name: Apply service-specific resource cleanup
+  ansible.builtin.include_tasks:
+    file: "{{ item }}"
+  loop: "{{ resource_cleanup_task_files }}"
+
+- name: Remove retired paths
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ resource_cleanup_paths }}"
+
+- name: Remove retired system users
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: false
+  loop: "{{ resource_cleanup_users }}"
+
+- name: Remove retired system groups
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ resource_cleanup_groups }}"
+
+- name: Remove retired database accounts
+  ansible.builtin.include_tasks:
+    file: mysql.yml
+  when: resource_cleanup_mysql_users | length > 0
