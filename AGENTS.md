@@ -5,6 +5,8 @@
 - Inventory is the source of truth for host membership and deployment values.
   Role defaults, templates, assertions, and programs define configuration and
   behavior. Express enforceable constraints there, not only in prose.
+- Keep managed-host connections tied to inventory addresses. A fixed local
+  connection targets the invoking machine, which may be a different host.
 - Keep README and operator guides focused on purpose, basic execution, and
   operational decisions. Link to code instead of copying hostnames, addresses,
   versions, port tables, secret-variable inventories, or task sequences.
