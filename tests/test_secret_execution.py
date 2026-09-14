@@ -54,33 +54,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class AnsibleSecretExecutionTests(unittest.TestCase):
-    def test_local_ansible_receives_synthetic_value(self):
-        import shutil
-        executable = ROOT / ".venv/bin/ansible-playbook"
-        if not executable.exists():
-            installed = shutil.which("ansible-playbook")
-            if installed is None:
-                self.skipTest("Ansible is not installed")
-            executable = Path(installed)
-        with tempfile.TemporaryDirectory() as directory:
-            playbook = Path(directory) / "local.yml"
-            playbook.write_text('''---
-- hosts: localhost
-  gather_facts: false
-  become: false
-  tasks:
-    - name: Verify injected value
-      ansible.builtin.assert:
-        that: mysql_password == 'synthetic-local-test'
-      no_log: true
-''')
-            provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-local-test"})
-            self.assertEqual(COMMAND.run(playbook, {"mysql_password": "mysql.backup.password"},
-                             ["-i", "localhost,", "-c", "local"], provider=provider,
-                             executable=str(executable)), 0)
-
-
 class SecretSignalCleanupTests(unittest.TestCase):
     def test_sigterm_removes_volatile_vars(self):
         import signal

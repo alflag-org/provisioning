@@ -1,4 +1,6 @@
 [tools]
+actionlint = "1.7.12"
+shellcheck = "0.11.0"
 python = "3.13.3"
 
 [tasks.setup]
@@ -12,41 +14,17 @@ python -m venv .venv
 """
 
 [tasks.lint]
-description = "Lint provisioning YAML and Ansible content"
+description = "Validate workflows and lint all YAML, playbooks, and roles"
 run = """
-.venv/bin/yamllint \
-  .github/workflows \
-  .yamllint \
-  inventories \
-  playbooks \
-  roles \
-  collections/requirements.yml
-PATH="$PWD/.venv/bin:$PATH" ansible-lint \
-  playbooks/site.yml \
-  playbooks/bootstrap.yml \
-  playbooks/cloudflare.yml \
-  playbooks/operations/mysql-switchover.yml \
-  playbooks/operations/mysql-failover.yml \
-  playbooks/operations/mysql-backup.yml \
-  playbooks/operations/mysql-restore-test.yml
-"""
-
-[tasks.syntax]
-description = "Check playbook syntax"
-run = """
-.venv/bin/ansible-playbook --syntax-check playbooks/site.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/bootstrap.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/cloudflare.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-switchover.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-failover.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-backup.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-restore-test.yml
+actionlint
+.venv/bin/yamllint .
+PATH="$PWD/.venv/bin:$PATH" ansible-lint playbooks roles
 """
 
 [tasks.test]
-description = "Run repository unit tests"
+description = "Run behavior and inventory validation tests"
 run = ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
 
 [tasks.check]
 description = "Run repository validation"
-depends = ["lint", "syntax", "test"]
+depends = ["lint", "test"]

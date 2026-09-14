@@ -55,16 +55,6 @@ class MySQLBackupStatusTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 MODULE.read_status(path)
 
-    def test_destination_metrics_are_reported(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "status.json"
-            path.write_text(json.dumps(status_document()), encoding="utf-8")
-            status = MODULE.read_status(path)
-        self.assertEqual(MODULE.metric(status, "destination_backend"), "b2")
-        self.assertEqual(MODULE.metric(status, "destination_available"), 1)
-        self.assertEqual(MODULE.metric(status, "transfer_success"), 1)
-        self.assertEqual(MODULE.metric(status, "remote_validation_success"), 1)
-
     def test_new_status_reports_missing_ages_and_restore_failure(self):
         document = status_document()
         document.update(

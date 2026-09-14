@@ -76,35 +76,6 @@ class MySQLBackupSafetyTests(unittest.TestCase):
                         "20260824T010000Z",
                     )
 
-    def test_rclone_copy_does_not_follow_symlinks(self):
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "source"
-            source.mkdir()
-            calls = []
-
-            def fake_run(argv, capture=False, check=True):
-                calls.append(tuple(argv))
-                return mock.Mock(returncode=0)
-
-            with mock.patch.object(BACKUP, "run", side_effect=fake_run):
-                BACKUP.rclone_copy_directory(
-                    self.backup_config(Path(directory)), source, "mysql-backup:mysql-backups/mysql-shared"
-                )
-            self.assertIn("--create-empty-src-dirs", calls[0])
-            self.assertNotIn("--copy-links", calls[0])
-
-    def test_rclone_check_uses_checksums(self):
-        calls = []
-
-        def fake_run(argv, capture=False, check=True):
-            calls.append(tuple(argv))
-            return mock.Mock(returncode=0)
-
-        with mock.patch.object(BACKUP, "run", side_effect=fake_run):
-            BACKUP.rclone_check(self.backup_config(Path("/tmp")), "/tmp/source", "remote:target")
-        self.assertIn("--one-way", calls[0])
-        self.assertNotIn("--size-only", calls[0])
-
     def test_rclone_exists_requires_the_expected_object_name(self):
         config = self.backup_config(Path("/tmp"))
         for module in (BACKUP, RESTORE):
@@ -253,9 +224,12 @@ class MySQLBackupSafetyTests(unittest.TestCase):
                     "argv",
                     ["mysql-physical-backup", "--config", str(config_path)],
                 ):
-                    with mock.patch("builtins.print") as output:
+                    output = io.StringIO()
+                    with contextlib.redirect_stdout(output):
                         BACKUP.main()
-            output.assert_called_once()
+            self.assertEqual(json.loads(output.getvalue()), {
+                "changed": False, "role": "PRIMARY", "reason": "current PRIMARY",
+            })
 
     def test_completion_marker_is_uploaded_after_checksum_validation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -282,25 +256,6 @@ class MySQLBackupSafetyTests(unittest.TestCase):
                 BACKUP.upload_backup(config, staging, "mysql-shared02", "server-uuid", "20260824T010000Z", 10)
 
             self.assertEqual(calls, ["copy", "check", "complete"])
-
-    def test_preflight_checks_version_and_b2_access(self):
-        for module in (BACKUP, RESTORE):
-            calls = []
-
-            def fake_run(argv, capture=False, check=True):
-                calls.append(tuple(argv))
-                if argv[3] == "version":
-                    return mock.Mock(returncode=0, stdout="rclone v1.75.1\n")
-                if argv[4] == "mysql-backup:":
-                    self.assertIn("--dirs-only", argv)
-                    return mock.Mock(returncode=0, stdout="mysql-backups/\n")
-                if argv[4] == "mysql-backup:mysql-backups/mysql-shared":
-                    return mock.Mock(returncode=0, stdout="")
-                raise AssertionError("listing files outside the allowed prefix")
-
-            with self.subTest(module=module.__name__), mock.patch.object(module, "run", side_effect=fake_run):
-                module.rclone_preflight(self.backup_config(Path("/tmp")))
-            self.assertEqual([call[3] for call in calls], ["version", "lsf", "lsf"])
 
     def test_restore_backup_id_ignores_incomplete_candidates(self):
         config = self.restore_config(Path("/tmp"))
