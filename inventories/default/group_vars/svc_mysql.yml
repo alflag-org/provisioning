@@ -40,8 +40,12 @@ mysql_backup_enabled: true
 mysql_backup_schedule: "*-*-* 02:15:00"
 mysql_backup_randomized_delay_seconds: 1800
 
-mysql_zabbix_monitor_user: zbx_monitor
-mysql_router_monitor_user: zbx_router
+mysql_router_monitor_user: mysql_router_monitor
 
 mysql_server_databases: []
 mysql_server_users: []
+
+# Remove all host variants through the current writable ReplicaSet member.
+resource_cleanup_mysql_users:
+  - zbx_monitor
+  - zbx_router

@@ -10,19 +10,32 @@ name: CI
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: Validate provisioning
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up mise
+      - name: Install tools from mise.toml
         uses: jdx/mise-action@v4
 
-      - name: Install validation dependencies
+      - name: Cache package downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml', 'requirements*.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Set up validation environment
         run: mise run setup
 
-      - name: Validate provisioning
+      - name: Validate repository
         run: mise run check

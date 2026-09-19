@@ -41,4 +41,4 @@ mysql_backup_grants:
   - performance_schema.replication_group_members:SELECT
   - performance_schema.replication_connection_status:SELECT
   - performance_schema.replication_applier_status:SELECT
-mysql_zabbix_monitor_password_var: mysql_zabbix_monitor_password
+mysql_router_monitor_password_var: mysql_router_monitor_password

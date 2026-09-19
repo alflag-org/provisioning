@@ -1,0 +1,9 @@
+---
+resource_cleanup_services: []
+resource_cleanup_packages: []
+resource_cleanup_paths: []
+resource_cleanup_users: []
+resource_cleanup_groups: []
+resource_cleanup_task_files: []
+resource_cleanup_mysql_users: []
+resource_cleanup_mysql_socket: /var/run/mysqld/mysqld.sock

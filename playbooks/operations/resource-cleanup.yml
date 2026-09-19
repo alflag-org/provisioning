@@ -1,0 +1,6 @@
+---
+- name: Remove retired resources from managed hosts
+  hosts: default
+  gather_facts: true
+  roles:
+    - role: resource_cleanup

@@ -1,9 +1,7 @@
-# Alflag provisioning
+# Provisioning
 
-This repository is the desired state for Alflag-managed hosts. The service
-platform includes authoritative and recursive DNS, a two-node shared MySQL 8.4
-ReplicaSet with client-local Routers and physical backups, Zabbix 7.0 LTS, web
-origins, and NetBox.
+Ansible desired state for managed hosts. Host configuration lives in
+[inventory](inventories/); reusable behavior lives in [roles](roles/).
 
 ## Set up
 
@@ -13,65 +11,35 @@ mise run setup
 mise run check
 ```
 
-CI runs the same `mise run setup` and `mise run check` commands. Validation
-finds playbooks recursively under `playbooks/`, lints Ansible content under
-`playbooks/` and `roles/`, and discovers `tests/test_*.py`. YAML linting covers
-the repository and excludes paths listed in `.gitignore`; adding files does
-not require updating a CI target list.
-
-`mise run setup` installs the pinned Atlas package and its `secrets` extra.
-For an Atlas-managed program venv, install `requirements.txt` in that interpreter.
-The Atlas host owns provider configuration and bootstrap credentials; this
-repository declares logical names only. Do not put values in inventory files.
-Roles receive ordinary Ansible variables and fail when required inputs are absent.
+CI uses the same setup and validation tasks. Tests use synthetic data and local
+processes; they do not establish that a change works on deployed hosts.
 
 ## Run
 
-Register this repository as an Atlas Python program, install its dependencies in
-that program's virtual environment, and generate shims. Use `provision` with an
-explicit playbook, target limit, and required-secret declaration:
+Configure SSH and privilege escalation for the selected inventory. Register
+this repository as an Atlas Python program using [requirements.txt](requirements.txt)
+and generate its command shims. Configure secret providers on the control host.
 
-```bash
-atlas run provision playbooks/site.yml --limit <target> --required-secrets required-secrets.yml --check
-atlas run provision playbooks/site.yml --limit <target> --required-secrets required-secrets.yml
-```
-
-Create a declaration for the selected playbook and target. Include every required
-variable, including tenant-specific password variables, and no secret values:
+Select a [playbook](playbooks/) and an explicit target. Declare the secrets
+required by its roles as variable-to-provider-name mappings, without values:
 
 ```yaml
 required_secrets:
-  mysql_backup_password: mysql.backup.password
-  mysql_replicaset_admin_password: mysql.replication.password
+  service_password: service.password
 ```
 
-All declared values must resolve before Ansible starts. Missing values do not fall
-back to inventory credentials. Remove superseded local secret variable files once
-external storage and recovery have been verified. LXC provisioning does not copy
-an operator's local secrets directory.
+Replace the placeholders and inspect check-mode results before applying:
 
-Injection uses a random directory on the verified `/dev/shm` tmpfs, with directory
-mode `0700` and variable-file mode `0600`. Ansible local temporary files also use
-this volatile directory. Under Atlas, Ansible shares the managed process group
-and Atlas removes the directory after stopping that group, including on timeout,
-SIGINT and SIGTERM. Use the pinned Atlas revision for the supervisor as well as
-the program environment; older supervisors without managed storage are rejected.
-Direct invocation owns its process group and removes its own directory.
-SIGKILL of the supervising process and host failure cannot run cleanup; restrict
-access to the execution account and clear abandoned volatile files before reusing
-a recovered host. Disable swap or use encrypted swap on the control host.
+```bash
+atlas run provision '<playbook>' --limit '<target>' --required-secrets required-secrets.yml --check
+atlas run provision '<playbook>' --limit '<target>' --required-secrets required-secrets.yml
+```
 
-The command reports only the Ansible exit status. It suppresses child output,
-file logging and persistent fact caching because error output can contain secret
-values. Keep `no_log: true` on tasks handling secrets. Run syntax validation without
-secret injection for diagnostics. Do not enable callbacks or tasks that persist
-control-host credentials. Target-host credential files required by a service are
-part of that service's configuration and must have appropriate permissions.
+Missing secrets stop execution. Secret-bearing child output is suppressed;
+use local validation without secret injection for syntax diagnostics.
+Check mode may skip operations whose prerequisites are absent.
 
-Use `playbooks/bootstrap.yml` for initial provisioning and `playbooks/cloudflare.yml` for
-host-side Cloudflare components.
-
-The [shared MySQL platform](docs/mysql-platform.md) guide documents topology,
-Router endpoints, tenant declarations, required secrets, backup and restore,
-Zabbix monitoring, role DNS, planned switchovers, emergency failover, and the
-platform's asynchronous-replication limits.
+The [database guide](docs/mysql-platform.md) explains topology and recovery
+considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
+applies declared retired-resource removals; inspect the inventory declarations
+before running it. Removing a host from inventory does not destroy the machine.

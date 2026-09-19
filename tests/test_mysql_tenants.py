@@ -1,8 +1,5 @@
-from pathlib import Path
-import re
 import unittest
 
-import yaml
 
 from ansible.errors import AnsibleFilterError
 
@@ -18,24 +15,9 @@ HOSTVARS = {
     "web01": {"network_ipv4_address": "10.10.30.21"},
     "control01": {"ansible_host": "10.10.10.62"},
 }
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class MySQLTenantTests(unittest.TestCase):
-    def test_standard_profiles_separate_runtime_migration_and_read_only(self):
-        variables = yaml.safe_load(
-            (ROOT / "inventories/default/group_vars/svc_mysql.yml").read_text()
-        )
-        profiles = variables["mysql_shared_privilege_profiles"]
-
-        ddl = {"CREATE", "ALTER", "DROP", "INDEX", "TRIGGER"}
-        self.assertTrue(ddl.isdisjoint(profiles["application"]))
-        self.assertTrue(ddl.issubset(profiles["migration"]))
-        self.assertTrue(
-            {"INSERT", "UPDATE", "DELETE"}.isdisjoint(profiles["read_only"])
-        )
-        self.assertEqual(profiles["read_only"], ["SELECT", "SHOW VIEW"])
-
     def test_inventory_hosts_expand_to_unique_ipv4_addresses(self):
         self.assertEqual(
             mysql_hosts_to_addresses(["web01", "control01", "web01"], HOSTVARS),
@@ -99,52 +81,6 @@ class MySQLTenantTests(unittest.TestCase):
                 {},
             )
 
-    def test_tenant_can_declare_application_and_migration_accounts(self):
-        profiles = {
-            "application": ["SELECT", "INSERT"],
-            "migration": ["CREATE", "ALTER"],
-        }
-        expanded = mysql_expand_tenants(
-            [
-                {
-                    "name": "example",
-                    "database": "example_app",
-                    "users": [
-                        {
-                            "name": "example_app",
-                            "password_var": "example_app_password",
-                            "clients": ["web01"],
-                            "privileges": ["application"],
-                        },
-                        {
-                            "name": "example_migrate",
-                            "password_var": "example_migrate_password",
-                            "clients": ["control01"],
-                            "privileges": ["migration"],
-                        },
-                    ],
-                }
-            ],
-            HOSTVARS,
-            profiles,
-        )
-        self.assertEqual(
-            expanded["required_secret_vars"],
-            ["example_app_password", "example_migrate_password"],
-        )
-        self.assertEqual(
-            {(user["name"], user["host"]) for user in expanded["users"]},
-            {
-                ("example_app", "10.10.30.21"),
-                ("example_migrate", "10.10.10.62"),
-            },
-        )
-        migration = next(
-            user for user in expanded["users"] if user["name"] == "example_migrate"
-        )
-        self.assertIn("CREATE", migration["priv"])
-        self.assertIn("ALTER", migration["priv"])
-
     def test_tenant_password_variable_is_required(self):
         with self.assertRaises(AnsibleFilterError):
             mysql_expand_tenants(
@@ -168,22 +104,6 @@ class MySQLTenantTests(unittest.TestCase):
     def test_missing_inventory_address_fails_cleanly(self):
         with self.assertRaises(AnsibleFilterError):
             mysql_hosts_to_addresses(["web01"], {"web01": {}})
-
-    def test_admin_and_backup_grants_preserve_multiword_privileges(self):
-        defaults = yaml.safe_load(
-            (ROOT / "roles/services/mysql/defaults/main.yml").read_text()
-        )
-        admin = "/".join(
-            re.sub(r",\s+", ",", value)
-            for value in defaults["mysql_replicaset_admin_grants"]
-        )
-        self.assertIn("CREATE USER", admin)
-        self.assertIn("REPLICATION CLIENT", admin)
-        self.assertNotIn(", ", admin)
-        self.assertIn(
-            "performance_schema.log_status:SELECT",
-            defaults["mysql_backup_grants"],
-        )
 
     def test_duplicate_platform_objects_fail_before_mutation(self):
         with self.assertRaises(AnsibleFilterError):

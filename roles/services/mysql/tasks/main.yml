@@ -10,8 +10,8 @@
       - mysql_router_bootstrap_password | string | length > 0
       - mysql_backup_password is defined
       - mysql_backup_password | string | length > 0
-      - mysql_zabbix_monitor_password is defined
-      - mysql_zabbix_monitor_password | string | length > 0
+      - mysql_router_monitor_password is defined
+      - mysql_router_monitor_password | string | length > 0
       - not mysql_backup_enabled | bool or mysql_backup_b2_bucket | string | length > 0
       - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id | string | length > 0
       - not mysql_backup_enabled | bool or mysql_backup_b2_application_key | string | length > 0
@@ -76,12 +76,6 @@
               'host': 'localhost',
               'password_var': mysql_backup_password_var,
               'priv': mysql_backup_grants | join('/')
-            },
-            {
-              'name': mysql_zabbix_monitor_user,
-              'host': 'localhost',
-              'password_var': mysql_zabbix_monitor_password_var,
-              'priv': '*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW'
             }
           ]
         + mysql_replicaset_bootstrap_users
@@ -110,7 +104,7 @@
            {
              'name': mysql_router_monitor_user,
              'host': item,
-             'password_var': mysql_zabbix_monitor_password_var,
+             'password_var': mysql_router_monitor_password_var,
              'priv': '*.*:USAGE',
              'tls_requires': {'SSL': true}
            }
@@ -218,10 +212,6 @@
   ansible.builtin.include_role:
     name: components/mysql_backup
   when: mysql_backup_enabled | bool
-
-- name: Configure Zabbix MySQL monitoring  # noqa role-name[path]
-  ansible.builtin.include_role:
-    name: components/zabbix_mysql
 
 - name: Synchronize operator-facing MySQL role DNS  # noqa role-name[path]
   ansible.builtin.include_role:

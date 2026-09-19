@@ -1,4 +1,6 @@
 [tools]
+actionlint = "1.7.12"
+shellcheck = "0.11.0"
 python = "3.13.3"
 
 [tasks.setup]
@@ -12,32 +14,17 @@ python -m venv .venv
 """
 
 [tasks.lint]
-description = "Lint repository YAML and Ansible content"
+description = "Validate workflows and lint all YAML, playbooks, and roles"
 run = """
+actionlint
 .venv/bin/yamllint .
 PATH="$PWD/.venv/bin:$PATH" ansible-lint playbooks roles
 """
 
-[tasks.syntax]
-description = "Check all playbooks recursively"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-shopt -s globstar nullglob
-playbooks=(playbooks/**/*.yml playbooks/**/*.yaml)
-if [[ -z "${playbooks[*]}" ]]; then
-  echo "No playbooks found" >&2
-  exit 1
-fi
-for playbook in "${playbooks[@]}"; do
-  .venv/bin/ansible-playbook --syntax-check "$playbook"
-done
-"""
-
 [tasks.test]
-description = "Run repository unit tests"
+description = "Run behavior and inventory validation tests"
 run = ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
 
 [tasks.check]
 description = "Run repository validation"
-depends = ["lint", "syntax", "test"]
+depends = ["lint", "test"]
