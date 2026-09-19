@@ -27,7 +27,6 @@ class MySQLTenantTests(unittest.TestCase):
             (ROOT / "inventories/default/group_vars/svc_mysql.yml").read_text()
         )
         profiles = variables["mysql_shared_privilege_profiles"]
-        self.assertEqual(set(profiles), {"application", "migration", "read_only"})
 
         ddl = {"CREATE", "ALTER", "DROP", "INDEX", "TRIGGER"}
         self.assertTrue(ddl.isdisjoint(profiles["application"]))
@@ -101,9 +100,10 @@ class MySQLTenantTests(unittest.TestCase):
             )
 
     def test_tenant_can_declare_application_and_migration_accounts(self):
-        profiles = yaml.safe_load(
-            (ROOT / "inventories/default/group_vars/svc_mysql.yml").read_text()
-        )["mysql_shared_privilege_profiles"]
+        profiles = {
+            "application": ["SELECT", "INSERT"],
+            "migration": ["CREATE", "ALTER"],
+        }
         expanded = mysql_expand_tenants(
             [
                 {

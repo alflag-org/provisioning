@@ -12,35 +12,26 @@ python -m venv .venv
 """
 
 [tasks.lint]
-description = "Lint provisioning YAML and Ansible content"
+description = "Lint repository YAML and Ansible content"
 run = """
-.venv/bin/yamllint \
-  .github/workflows \
-  .yamllint \
-  inventories \
-  playbooks \
-  roles \
-  collections/requirements.yml
-PATH="$PWD/.venv/bin:$PATH" ansible-lint \
-  playbooks/site.yml \
-  playbooks/bootstrap.yml \
-  playbooks/cloudflare.yml \
-  playbooks/operations/mysql-switchover.yml \
-  playbooks/operations/mysql-failover.yml \
-  playbooks/operations/mysql-backup.yml \
-  playbooks/operations/mysql-restore-test.yml
+.venv/bin/yamllint .
+PATH="$PWD/.venv/bin:$PATH" ansible-lint playbooks roles
 """
 
 [tasks.syntax]
-description = "Check playbook syntax"
+description = "Check all playbooks recursively"
 run = """
-.venv/bin/ansible-playbook --syntax-check playbooks/site.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/bootstrap.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/cloudflare.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-switchover.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-failover.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-backup.yml
-.venv/bin/ansible-playbook --syntax-check playbooks/operations/mysql-restore-test.yml
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s globstar nullglob
+playbooks=(playbooks/**/*.yml playbooks/**/*.yaml)
+if [[ -z "${playbooks[*]}" ]]; then
+  echo "No playbooks found" >&2
+  exit 1
+fi
+for playbook in "${playbooks[@]}"; do
+  .venv/bin/ansible-playbook --syntax-check "$playbook"
+done
 """
 
 [tasks.test]

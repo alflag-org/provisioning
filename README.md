@@ -13,6 +13,12 @@ mise run setup
 mise run check
 ```
 
+CI runs the same `mise run setup` and `mise run check` commands. Validation
+finds playbooks recursively under `playbooks/`, lints Ansible content under
+`playbooks/` and `roles/`, and discovers `tests/test_*.py`. YAML linting covers
+the repository and excludes paths listed in `.gitignore`; adding files does
+not require updating a CI target list.
+
 `mise run setup` installs the pinned Atlas package and its `secrets` extra.
 For an Atlas-managed program venv, install `requirements.txt` in that interpreter.
 The Atlas host owns provider configuration and bootstrap credentials; this
