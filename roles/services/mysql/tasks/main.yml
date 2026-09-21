@@ -177,7 +177,10 @@
     label: "{{ mysql_replicaset_admin_user }}@{{ item }}"
   when: not ansible_check_mode
   run_once: true
-  delegate_to: "{{ mysql_replicaset_runtime_primary }}"
+  delegate_to: >-
+    {{ mysql_replicaset_initial_primary
+       if ansible_check_mode
+       else mysql_replicaset_runtime_primary }}
 
 - name: Manage shared MySQL accounts on the current PRIMARY
   ansible.mysql.mysql_user:
@@ -207,6 +210,11 @@
     {{ mysql_replicaset_initial_primary
        if ansible_check_mode
        else mysql_replicaset_runtime_primary }}
+
+- name: Install topology locking independently of physical backups  # noqa role-name[path]
+  ansible.builtin.include_role:
+    name: components/mysql_backup
+    tasks_from: topology_lock.yml
 
 - name: Install physical backup capability  # noqa role-name[path]
   ansible.builtin.include_role:

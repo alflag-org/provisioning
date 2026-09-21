@@ -14,7 +14,7 @@ max_idle_server_connections=64
 [logger]
 level=INFO
 
-[metadata_cache:{{ mysql_router_replicaset_name }}]
+[metadata_cache:bootstrap]
 cluster_type=rs
 router_id={{ mysql_router_id }}
 user={{ mysql_router_metadata_user }}
@@ -22,14 +22,13 @@ metadata_cluster={{ mysql_router_replicaset_name }}
 ttl=0.5
 auth_cache_ttl=-1
 auth_cache_refresh_interval=2
-use_gr_notifications=0
 ssl_mode=REQUIRED
 
 [routing:read_write]
 bind_address={{ mysql_router_bind_address }}
 bind_port={{ mysql_router_rw_port }}
 socket={{ mysql_router_rw_socket }}
-destinations=metadata-cache://{{ mysql_router_replicaset_name }}/?role=PRIMARY
+destinations=metadata-cache://bootstrap/?role=PRIMARY
 routing_strategy=first-available
 protocol=classic
 client_ssl_mode=PREFERRED
@@ -39,7 +38,7 @@ server_ssl_mode=REQUIRED
 bind_address={{ mysql_router_bind_address }}
 bind_port={{ mysql_router_ro_port }}
 socket={{ mysql_router_ro_socket }}
-destinations=metadata-cache://{{ mysql_router_replicaset_name }}/?role=SECONDARY
+destinations=metadata-cache://bootstrap/?role=SECONDARY
 routing_strategy=round-robin-with-fallback
 protocol=classic
 client_ssl_mode=PREFERRED
@@ -49,7 +48,7 @@ server_ssl_mode=REQUIRED
 bind_address={{ mysql_router_bind_address }}
 bind_port={{ mysql_router_split_port }}
 socket={{ mysql_router_split_socket }}
-destinations=metadata-cache://{{ mysql_router_replicaset_name }}/?role=PRIMARY_AND_SECONDARY
+destinations=metadata-cache://bootstrap/?role=PRIMARY_AND_SECONDARY
 routing_strategy=round-robin
 access_mode=auto
 protocol=classic

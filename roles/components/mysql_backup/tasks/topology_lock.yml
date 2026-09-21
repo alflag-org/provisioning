@@ -1,0 +1,16 @@
+---
+- name: Install the shared topology operation lock unit
+  ansible.builtin.template:
+    src: mysql-topology-operation-lock.service.j2
+    dest: "/etc/systemd/system/{{ mysql_topology_lock_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: mysql_topology_lock_unit
+
+- name: Load the shared topology operation lock unit  # noqa no-handler
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when:
+    - mysql_topology_lock_unit.changed
+    - not ansible_check_mode

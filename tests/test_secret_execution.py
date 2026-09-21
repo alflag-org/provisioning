@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from atlas_core.secrets import SecretResolutionError, SecretResolver
@@ -16,6 +17,20 @@ SPEC.loader.exec_module(COMMAND)
 
 
 class SecretExecutionTests(unittest.TestCase):
+    def test_launches_ansible_from_atlas_program_venv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            venv = Path(directory)
+            (venv / "bin").mkdir()
+            child = venv / "bin" / "ansible-playbook"
+            marker = venv / "started"
+            child.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\n")
+            child.chmod(0o700)
+            provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
+            with patch.dict(os.environ, {"ATLAS_VENV": str(venv)}):
+                self.assertEqual(COMMAND.run(Path("unused"), {"password": "mysql.backup.password"}, [],
+                                             provider=provider), 0)
+            self.assertTrue(marker.exists())
+
     def test_real_child_gets_values_without_argv_environment_or_persistent_file(self):
         with tempfile.TemporaryDirectory() as directory:
             child = Path(directory) / "child.py"

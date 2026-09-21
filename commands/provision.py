@@ -141,7 +141,10 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
                 "ANSIBLE_CALLBACKS_ENABLED": "default",
                 "ANSIBLE_LOAD_CALLBACK_PLUGINS": "False",
             })
-            binary = str(Path(sys.executable).parent / "ansible-playbook") if executable is None else executable
+            # Atlas may resolve the interpreter symlink outside the program venv.
+            bin_dir = (Path(os.environ["ATLAS_VENV"]) / "bin"
+                       if os.environ.get("ATLAS_VENV") else Path(sys.executable).parent)
+            binary = str(bin_dir / "ansible-playbook") if executable is None else executable
             argv = [binary, str(playbook), *arguments, "--extra-vars", f"@{path}"]
             # Ansible can render secrets in parser errors as well as task output.
             # Report only exit status; task output is not a safe diagnostic channel.

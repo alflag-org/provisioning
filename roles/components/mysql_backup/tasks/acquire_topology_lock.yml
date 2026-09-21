@@ -25,15 +25,15 @@
   failed_when: false
   check_mode: false
 
-- name: Require a loaded and inactive physical backup service
+- name: Require an inactive or explicitly disabled absent physical backup service
   ansible.builtin.assert:
     that:
       - >-
         mysql_backup_service_query.stdout
-        | mysql_backup_service_is_idle(mysql_backup_service_query.rc)
+        | mysql_backup_service_is_idle(mysql_backup_service_query.rc, not mysql_backup_enabled | bool)
     fail_msg: >-
       Refusing the topology operation because the physical backup service on
-      {{ inventory_hostname }} is not verifiably loaded and inactive.
+      {{ inventory_hostname }} is not verifiably inactive or absent while backups are disabled.
 
 - name: Read the topology lock holder state
   ansible.builtin.command:

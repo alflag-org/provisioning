@@ -29,7 +29,7 @@
 
 - name: Install the ReplicaSet administration program
   ansible.builtin.copy:
-    src: mysql-replicaset.js
+    src: mysql-replicaset.py
     dest: "{{ mysql_replicaset_script_path }}"
     owner: root
     group: root

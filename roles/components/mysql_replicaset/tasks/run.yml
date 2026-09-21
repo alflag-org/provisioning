@@ -57,7 +57,7 @@
           ansible.builtin.command:
             argv:
               - /usr/bin/mysqlsh
-              - --js
+              - --py
               - --file
               - "{{ mysql_replicaset_script_path }}"
           environment:

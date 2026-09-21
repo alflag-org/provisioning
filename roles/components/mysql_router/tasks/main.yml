@@ -39,7 +39,39 @@
       - "{{ mysql_router_package }}"
       - "{{ mysql_router_client_package }}"
       - python3-pexpect
+      - acl
     apt_state_force_update_cache: "{{ mysql_router_apt_pin.changed | default(false) }}"
+
+- name: Create the MySQL Router system group
+  ansible.builtin.group:
+    name: "{{ mysql_router_system_group }}"
+    system: true
+
+- name: Create the MySQL Router service account
+  ansible.builtin.user:
+    name: "{{ mysql_router_system_user }}"
+    group: "{{ mysql_router_system_group }}"
+    system: true
+    home: "{{ mysql_router_bootstrap_dir | dirname }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Create the MySQL Router configuration directory
+  ansible.builtin.file:
+    path: "{{ mysql_router_config_path | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ mysql_router_system_group }}"
+    mode: "0750"
+
+- name: Install the MySQL Router service
+  ansible.builtin.template:
+    src: mysqlrouter.service.j2
+    dest: "/etc/systemd/system/{{ mysql_router_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart MySQL Router
 
 - name: Ensure the Router bootstrap directory exists
   ansible.builtin.file:
@@ -71,6 +103,11 @@
       }}
   when: not mysql_router_bootstrap_config.stat.exists
 
+- name: Check whether the MySQL client is installed
+  ansible.builtin.stat:
+    path: /usr/bin/mysql
+  register: mysql_router_client_binary
+
 - name: Probe stable ReplicaSet members with the Router bootstrap credential
   ansible.builtin.command:
     argv:
@@ -97,7 +134,9 @@
   failed_when: false
   check_mode: false
   no_log: true
-  when: not mysql_router_bootstrap_config.stat.exists
+  when:
+    - not mysql_router_bootstrap_config.stat.exists
+    - not ansible_check_mode or mysql_router_client_binary.stat.exists
 
 - name: Select the first available stable ReplicaSet member
   ansible.builtin.set_fact:
@@ -108,7 +147,9 @@
             mysql_router_bootstrap_candidate_probes.results
           )
       }}
-  when: not mysql_router_bootstrap_config.stat.exists
+  when:
+    - not mysql_router_bootstrap_config.stat.exists
+    - not ansible_check_mode or mysql_router_client_binary.stat.exists
 
 - name: Bootstrap this Router with a generated keyring credential
   ansible.builtin.expect:
@@ -150,34 +191,32 @@
 - name: Extract the Router metadata registration and keyring paths
   ansible.builtin.set_fact:
     mysql_router_id: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?ms)^\\[metadata_cache:[^]]+\\].*?^router_id\\s*=\\s*([0-9]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?ms)^\[metadata_cache:[^]]+\].*?^router_id\s*=\s*([0-9]+)$', '\1'))[0] }}
     mysql_router_metadata_user: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?ms)^\\[metadata_cache:[^]]+\\].*?^user\\s*=\\s*([^\\r\\n]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?ms)^\[metadata_cache:[^]]+\].*?^user\s*=\s*([^\r\n]+)$', '\1'))[0] }}
     mysql_router_keyring_path: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^keyring_path\\s*=\\s*([^\\r\\n]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^keyring_path\s*=\s*([^\r\n]+)$', '\1'))[0] }}
     mysql_router_master_key_path: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^master_key_path\\s*=\\s*([^\\r\\n]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^master_key_path\s*=\s*([^\r\n]+)$', '\1'))[0] }}
     mysql_router_dynamic_state_path: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^dynamic_state\\s*=\\s*([^\\r\\n]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^dynamic_state\s*=\s*([^\r\n]+)$', '\1'))[0] }}
     mysql_router_client_ssl_cert_path: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^client_ssl_cert\\s*=\\s*([^\\r\\n]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^client_ssl_cert\s*=\s*([^\r\n]+)$', '\1'))[0] }}
     mysql_router_client_ssl_key_path: >-
-      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^client_ssl_key\\s*=\\s*([^\\r\\n]+)$', '\\1'))[0] }}
+      {{ (mysql_router_generated_config.content | b64decode | regex_search('(?m)^client_ssl_key\s*=\s*([^\r\n]+)$', '\1'))[0] }}
   when: mysql_router_bootstrap_config_after.stat.exists
 
 - name: Inspect generated Router keyring and TLS files
   ansible.builtin.stat:
     path: "{{ item.path }}"
     follow: false
-  loop:
-    - name: keyring
-      path: "{{ mysql_router_keyring_path }}"
-    - name: master key
-      path: "{{ mysql_router_master_key_path }}"
-    - name: client certificate
-      path: "{{ mysql_router_client_ssl_cert_path }}"
-    - name: client private key
-      path: "{{ mysql_router_client_ssl_key_path }}"
+  loop: >-
+    {{ [
+         {'name': 'keyring', 'path': mysql_router_keyring_path},
+         {'name': 'master key', 'path': mysql_router_master_key_path},
+         {'name': 'client certificate', 'path': mysql_router_client_ssl_cert_path},
+         {'name': 'client private key', 'path': mysql_router_client_ssl_key_path}
+       ] if mysql_router_bootstrap_config_after.stat.exists else [] }}
   loop_control:
     label: "{{ item.name }}"
   register: mysql_router_generated_file_stats
@@ -213,6 +252,12 @@
   notify: Restart MySQL Router
   when: mysql_router_bootstrap_config_after.stat.exists
 
+- name: Inspect the Router monitoring configuration directory
+  ansible.builtin.stat:
+    path: "{{ mysql_router_monitor_config_path | dirname }}"
+  register: mysql_router_monitor_directory
+  when: ansible_check_mode
+
 - name: Render the Router synthetic monitoring credential
   ansible.builtin.template:
     src: mysql-router.cnf.j2
@@ -221,6 +266,7 @@
     group: root
     mode: "0640"
   no_log: true
+  when: not ansible_check_mode or mysql_router_monitor_directory.stat.exists
 
 - name: Install the Router health program
   ansible.builtin.copy:
@@ -235,6 +281,7 @@
     name: "{{ mysql_router_service_name }}"
     state: started
     enabled: true
+    daemon_reload: true
   when:
     - mysql_router_bootstrap_config_after.stat.exists
     - not ansible_check_mode

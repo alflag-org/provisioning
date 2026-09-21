@@ -49,3 +49,5 @@
 
 - name: Validate Atlas host
   ansible.builtin.import_tasks: validate.yml
+  # Check mode does not install the CLI or render its runtime configuration.
+  when: not ansible_check_mode
