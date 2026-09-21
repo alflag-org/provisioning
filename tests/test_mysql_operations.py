@@ -18,6 +18,19 @@ class MySQLServicePolicyTests(unittest.TestCase):
                     f"LoadState={loaded}\nActiveState={active}\n", code,
                 ), expected)
 
+    def test_absent_backup_is_allowed_only_when_explicitly_disabled(self):
+        for loaded, active, code, expected in (
+            ("not-found", "inactive", 0, True),
+            ("not-found", "inactive", 1, False),
+            ("loaded", "active", 0, False),
+            ("error", "inactive", 0, False),
+            ("", "", 0, False),
+        ):
+            with self.subTest(loaded=loaded, active=active, code=code):
+                self.assertEqual(mysql_backup_service_is_idle(
+                    f"LoadState={loaded}\nActiveState={active}\n", code, allow_absent=True,
+                ), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

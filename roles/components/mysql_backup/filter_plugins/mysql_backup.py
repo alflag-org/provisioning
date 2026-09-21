@@ -13,11 +13,12 @@ def mysql_systemd_properties(stdout, rc):
     }
 
 
-def mysql_backup_service_is_idle(stdout, rc):
+def mysql_backup_service_is_idle(stdout, rc, allow_absent=False):
     state = mysql_systemd_properties(stdout, rc)
     return (
         state["query_ok"]
-        and state["load_state"] == "loaded"
+        and (state["load_state"] == "loaded"
+             or (allow_absent and state["load_state"] == "not-found"))
         and state["active_state"] == "inactive"
     )
 

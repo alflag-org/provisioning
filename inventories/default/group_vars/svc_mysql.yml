@@ -34,9 +34,8 @@ mysql_shared_privilege_profiles:
     - SHOW VIEW
 mysql_shared_tenants: []
 
-# The physical backup role fails closed until an operator supplies the B2 bucket
-# and application key through host configuration or extra variables.
-mysql_backup_enabled: true
+# Enable physical backups after configuring the B2 bucket and application key.
+mysql_backup_enabled: false
 mysql_backup_schedule: "*-*-* 02:15:00"
 mysql_backup_randomized_delay_seconds: 1800
 

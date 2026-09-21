@@ -209,8 +209,6 @@
       dest: "/etc/systemd/system/{{ mysql_backup_service_name }}"
     - src: mysql-physical-backup.timer.j2
       dest: "/etc/systemd/system/{{ mysql_backup_timer_name }}"
-    - src: mysql-topology-operation-lock.service.j2
-      dest: "/etc/systemd/system/{{ mysql_topology_lock_service_name }}"
   notify: Reload systemd for MySQL backup
 
 - name: Apply pending physical backup handlers
