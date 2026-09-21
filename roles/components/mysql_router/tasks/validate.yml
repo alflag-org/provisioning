@@ -3,6 +3,14 @@
   ansible.builtin.slurp:
     path: "{{ mysql_router_bootstrap_config_path }}"
   register: mysql_router_validation_bootstrap
+  ignore_unreachable: true
+
+- name: Require Router access before validation
+  ansible.builtin.assert:
+    that:
+      - not (mysql_router_validation_bootstrap.unreachable | default(false))
+      - mysql_router_validation_bootstrap.content is defined
+    fail_msg: Router validation host is unreachable or its bootstrap configuration is absent.
 
 - name: Resolve the Router dynamic state path for validation
   ansible.builtin.set_fact:

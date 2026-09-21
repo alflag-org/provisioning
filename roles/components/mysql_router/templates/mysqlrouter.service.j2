@@ -1,0 +1,19 @@
+[Unit]
+Description=MySQL Router
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ mysql_router_system_user }}
+Group={{ mysql_router_system_group }}
+ExecStart=/usr/bin/mysqlrouter --config={{ mysql_router_config_path }}
+RuntimeDirectory=mysqlrouter
+RuntimeDirectoryMode=0750
+LogsDirectory=mysqlrouter
+LogsDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
