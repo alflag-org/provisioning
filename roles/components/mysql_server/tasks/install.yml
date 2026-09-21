@@ -24,3 +24,15 @@
     state: started
     enabled: true
   when: not ansible_check_mode
+
+- name: Verify MySQL Shell Python AdminAPI
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mysqlsh
+      - --py
+      - --execute
+      - "assert callable(dba.get_replica_set); print('python-adminapi-ready')"
+  register: mysql_shell_python
+  changed_when: false
+  failed_when: mysql_shell_python.rc != 0 or 'python-adminapi-ready' not in mysql_shell_python.stdout
+  when: not ansible_check_mode
