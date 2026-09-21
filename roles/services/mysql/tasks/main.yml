@@ -177,7 +177,10 @@
     label: "{{ mysql_replicaset_admin_user }}@{{ item }}"
   when: not ansible_check_mode
   run_once: true
-  delegate_to: "{{ mysql_replicaset_runtime_primary }}"
+  delegate_to: >-
+    {{ mysql_replicaset_initial_primary
+       if ansible_check_mode
+       else mysql_replicaset_runtime_primary }}
 
 - name: Manage shared MySQL accounts on the current PRIMARY
   ansible.mysql.mysql_user:
