@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sys
 import socket
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -57,6 +58,21 @@ class ProvisionSummaryTests(unittest.TestCase):
         self.assertNotIn(CANARY, output)
         self.assertEqual(len(documents), 1)
         return result, output, documents[0]
+
+    def test_atlas_discovers_the_provision_command(self):
+        etc = self.directory / "etc"
+        etc.mkdir()
+        (etc / "host.yml").write_text("version: 1\nhost:\n  id: fixture\n")
+        (etc / "config.yml").write_text(
+            f"programs:\n  provisioning:\n    root: {ROOT}\n"
+            "    runtime:\n      type: python\n      venv: provisioning\n")
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("ATLAS_")}
+        environment.update(ATLAS_ETC_DIR=str(etc), ATLAS_HOME=str(self.directory / "home"),
+                           ATLAS_VAR_DIR=str(self.directory / "var"))
+        result = subprocess.run([sys.executable, "-m", "atlas.cli", "command", "list"],
+                                env=environment, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("provision", result.stdout)
 
     def test_no_changes(self):
         code, output, summary = self.execute("    - ansible.builtin.debug:\n        msg: '{{ password }}'\n", check=True)
