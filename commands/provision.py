@@ -152,7 +152,7 @@ def run(playbook, required, arguments, *, provider=None, executable=None):
             binary = str(bin_dir / "ansible-playbook") if executable is None else executable
             argv = [binary, str(playbook), *arguments, "--extra-vars", f"@{path}"]
             if executable is None:
-                argv = [str(bin_dir / "python"), str(root / "commands/ansible_runner.py"), *argv]
+                argv = [str(bin_dir / "python"), str(root / "scripts/ansible_runner.py"), *argv]
             # Ansible can render secrets in parser errors as well as task output.
             # Only the separately validated metadata summary is a diagnostic channel.
             process = None
