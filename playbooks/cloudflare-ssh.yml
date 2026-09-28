@@ -1,0 +1,8 @@
+---
+- name: Trust the Cloudflare Access SSH certificate authority
+  hosts: default
+  gather_facts: false
+  serial: 1
+
+  roles:
+    - role: foundation/cloudflare_ssh  # noqa role-name[path]

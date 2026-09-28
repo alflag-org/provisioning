@@ -8,6 +8,8 @@
 - name: Check if VM swap file exists
   ansible.builtin.stat:
     path: "{{ foundation_vm_swap_file_path }}"
+    get_checksum: false
+    get_mime: false
   register: foundation_vm_swap_file
 
 - name: Set VM swap active fact

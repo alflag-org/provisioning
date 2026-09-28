@@ -1,6 +1,6 @@
 ---
-- name: Restart Cloudflare SSH sshd
+- name: Reload Cloudflare SSH sshd
   ansible.builtin.service:
-    name: sshd
-    state: restarted
-    enabled: true
+    name: ssh
+    state: reloaded
+  when: not ansible_check_mode

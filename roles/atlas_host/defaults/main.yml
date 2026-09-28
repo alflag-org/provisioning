@@ -42,7 +42,8 @@ atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master"
 atlas_runtime_python_version: "3.14.6"
 atlas_runtime_python_executable: ""
 
-atlas_programs: {}
+atlas:
+  programs: {}
 
 atlas_manage_runtime: true
 atlas_validate_runtime: false

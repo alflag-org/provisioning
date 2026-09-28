@@ -4,5 +4,13 @@ ansible_python_interpreter: /usr/bin/python3
 
 atlas_role: control
 atlas_remove_legacy_provisioning_clone: true
+atlas:
+  programs:
+    provisioning:
+      root: /opt/provisioning
+      runtime:
+        type: python
+        python: "3.14.6"
+        venv: provisioning
 
 ssh_server_enabled: true
