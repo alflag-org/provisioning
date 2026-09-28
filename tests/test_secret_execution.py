@@ -21,6 +21,7 @@ class SecretExecutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             venv = Path(directory)
             (venv / "bin").mkdir()
+            (venv / "bin/python").symlink_to(sys.executable)
             child = venv / "bin" / "ansible-playbook"
             marker = venv / "started"
             child.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\n")
@@ -28,7 +29,8 @@ class SecretExecutionTests(unittest.TestCase):
             provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
             with patch.dict(os.environ, {"ATLAS_VENV": str(venv)}):
                 self.assertEqual(COMMAND.run(Path("unused"), {"password": "mysql.backup.password"}, [],
-                                             provider=provider), 0)
+                                             provider=provider), 2)
+            # The child ran, but a synthetic executable supplies no safe summary.
             self.assertTrue(marker.exists())
 
     def test_real_child_gets_values_without_argv_environment_or_persistent_file(self):
@@ -48,7 +50,7 @@ sys.stderr.write("synthetic-secret")
 ''')
             provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
             self.assertEqual(COMMAND.run(child, {"mysql_password": "mysql.backup.password"}, [],
-                                         provider=provider, executable=sys.executable), 0)
+                                         provider=provider, executable=sys.executable), 2)
             self.assertEqual(list(Path(directory).iterdir()), [child])
 
     def test_missing_secret_never_starts_child(self):

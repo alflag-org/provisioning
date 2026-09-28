@@ -29,7 +29,7 @@ class AtlasCleanupTests(unittest.TestCase):
         self.check_cleanup("signal", 143)
 
     def test_normal_exit_with_surviving_descendant(self):
-        self.check_cleanup("normal", 0)
+        self.check_cleanup("normal", 2)
 
     def check_cleanup(self, mode, expected):
         with tempfile.TemporaryDirectory() as directory:

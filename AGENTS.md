@@ -36,6 +36,8 @@
   Ansible. Preserve literal secret values, verified volatile storage, and cleanup
   after all consumers stop, including signal and timeout paths. Keep secret-bearing
   tasks under `no_log`; do not persist or expose child output or injected values.
+  The execution summary may contain only recap counters and changed host/action/
+  source locations. Do not add task names or result payloads to this boundary.
 - Database roles come from live ReplicaSet state. Preserve the separation between
   stable host identities, runtime roles, and client routing metadata. Normal
   convergence must not promote a primary. Keep emergency promotion explicitly

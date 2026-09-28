@@ -35,9 +35,17 @@ atlas run provision '<playbook>' --limit '<target>' --required-secrets required-
 atlas run provision '<playbook>' --limit '<target>' --required-secrets required-secrets.yml
 ```
 
-Missing secrets stop execution. Secret-bearing child output is suppressed;
-use local validation without secret injection for syntax diagnostics.
-Check mode may skip operations whose prerequisites are absent.
+Missing secrets stop execution. Ansible stdout and stderr remain suppressed.
+Provision reports per-host and total execution counts, changed hosts, and changed
+task source paths, line numbers, and module names. It never reports task names,
+arguments, result messages, or diffs. The versioned summary exists only in the
+volatile run directory and is removed with the secret inputs.
+
+Review the changed sources before applying. After applying, repeat the same check
+and inspect `changed=0`, `failed=0`, and `unreachable=0`; the exit status alone does
+not establish convergence. Check mode may skip operations whose prerequisites are
+absent. An otherwise successful run fails if its safe summary is unavailable or
+invalid. Use local validation without secret injection for syntax diagnostics.
 
 The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
