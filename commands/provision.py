@@ -13,7 +13,7 @@ from contextlib import nullcontext
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from callback_plugins.provision_summary import SummaryUnavailable, display_summary, read_summary
+from lib.provision_summary import SummaryUnavailable, display_summary, read_summary
 
 from atlas_core.execution import get_run_directory, temporary_run_directory
 from atlas_core.secrets import (

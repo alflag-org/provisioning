@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("provision_summary_command", ROOT / "commands/provision.py")
 COMMAND = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMAND)
-from callback_plugins.provision_summary import CallbackModule, SummaryUnavailable, validate_summary
+from callback_plugins.provision_summary import CallbackModule
+from lib.provision_summary import SummaryUnavailable, validate_summary
 
 CANARY = "SECRET-CANARY-do-not-disclose-9f721"
 
@@ -58,6 +59,15 @@ class ProvisionSummaryTests(unittest.TestCase):
         self.assertNotIn(CANARY, output)
         self.assertEqual(len(documents), 1)
         return result, output, documents[0]
+
+    def test_summary_reader_runs_without_ansible_or_site_packages(self):
+        code = (
+            f"import sys; sys.path.insert(0, {str(ROOT)!r}); "
+            "from lib.provision_summary import read_summary, display_summary"
+        )
+        result = subprocess.run([sys.executable, "-S", "-c", code],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_atlas_discovers_the_provision_command(self):
         etc = self.directory / "etc"
