@@ -21,7 +21,10 @@ class SecretExecutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             venv = Path(directory)
             (venv / "bin").mkdir()
-            (venv / "bin/python").symlink_to(sys.executable)
+            interpreter = venv / "bin/python"
+            interpreter.write_text(f"#!{sys.executable}\nimport os, sys\n"
+                                   f"os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n")
+            interpreter.chmod(0o700)
             child = venv / "bin" / "ansible-playbook"
             marker = venv / "started"
             child.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\n")
