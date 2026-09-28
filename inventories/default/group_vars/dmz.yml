@@ -1,4 +1,5 @@
 ---
 network_zone: dmz
-network_vlan_id: 130
-network_cidr: 10.10.30.0/24
+network_vlan_id: "{{ network_zones[network_zone].vlan_id }}"
+network_cidr: "{{ network_zones[network_zone].cidr }}"
+network_gateway: "{{ network_zones[network_zone].gateway }}"

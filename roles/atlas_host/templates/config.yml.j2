@@ -6,10 +6,10 @@ runtime:
 {% endif %}
 
 programs:
-{% if atlas_programs | length == 0 %}
+{% if atlas.programs | length == 0 %}
   {}
 {% else %}
-{% for name, program in atlas_programs.items() %}
+{% for name, program in atlas.programs.items() %}
   {{ name }}:
     root: "{{ program.root }}"
     runtime:

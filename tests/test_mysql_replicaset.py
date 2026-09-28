@@ -52,5 +52,69 @@ class ReplicaSetPolicyTests(unittest.TestCase):
         MODULE.validate_writable_topology(state, instances)
 
 
+class ReplicationAllowedHostTests(unittest.TestCase):
+    class ReplicaSet:
+        def __init__(self):
+            self.host = '192.0.2.0/24'
+            self.writes = []
+
+        def options(self):
+            return {'replicaSet': {'globalOptions': [
+                {'option': 'replicationAllowedHost', 'value': self.host},
+            ]}}
+
+        def set_option(self, option, value):
+            self.writes.append((option, value))
+            self.host = value
+
+    def test_subnet_drift_is_reported_without_mutation_in_check_mode(self):
+        replicaset = self.ReplicaSet()
+        accounts = [('one', 'replica_one', replicaset.host, True, False)]
+        result = MODULE.converge_replication_allowed_host(
+            replicaset, '198.51.100.0/24', accounts, dry_run=True,
+        )
+        self.assertEqual(result, {'changed': True, 'current': '192.0.2.0/24', 'desired': '198.51.100.0/24'})
+        self.assertEqual(replicaset.writes, [])
+        self.assertEqual(replicaset.host, '192.0.2.0/24')
+
+    def test_subnet_update_converges_once_through_adminapi(self):
+        replicaset = self.ReplicaSet()
+        accounts = [('one', 'replica_one', replicaset.host, True, False)]
+        result = MODULE.converge_replication_allowed_host(
+            replicaset, '198.51.100.0/24', accounts, dry_run=False,
+        )
+        self.assertTrue(result['changed'])
+        accounts = [('one', 'replica_one', replicaset.host, True, True)]
+        result = MODULE.converge_replication_allowed_host(
+            replicaset, '198.51.100.0/24', accounts, dry_run=False,
+        )
+        self.assertFalse(result['changed'])
+        self.assertEqual(replicaset.writes, [('replicationAllowedHost', '198.51.100.0/24')])
+
+    def test_ambiguous_metadata_is_rejected_before_mutation(self):
+        replicaset = self.ReplicaSet()
+        accounts = [('one', 'replica_one', replicaset.host, True, False)]
+        for options in [[], [{'option': 'replicationAllowedHost', 'value': '%'}] * 2]:
+            replicaset.options = lambda: {'replicaSet': {'globalOptions': options}}
+            with self.assertRaises(RuntimeError):
+                MODULE.converge_replication_allowed_host(
+                    replicaset, '198.51.100.0/24', accounts, dry_run=False,
+                )
+        self.assertEqual(replicaset.writes, [])
+
+    def test_partial_manual_account_move_fails_before_any_adminapi_write(self):
+        replicaset = self.ReplicaSet()
+        accounts = [
+            ('one', 'replica_one', '192.0.2.0/24', True, False),
+            ('two', 'replica_two', '192.0.2.0/24', False, True),
+        ]
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run), self.assertRaisesRegex(RuntimeError, 'metadata disagrees'):
+                MODULE.converge_replication_allowed_host(
+                    replicaset, '198.51.100.0/24', accounts, dry_run=dry_run,
+                )
+        self.assertEqual(replicaset.writes, [])
+
+
 if __name__ == '__main__':
     unittest.main()

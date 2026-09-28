@@ -1,0 +1,29 @@
+---
+network_zones:
+  client:
+    name: CLIENT
+    vlan_id: 100
+    cidr: 10.10.0.0/24
+    gateway: 10.10.0.1
+  mgmt:
+    name: MGMT
+    vlan_id: 110
+    cidr: 10.10.10.0/24
+    gateway: 10.10.10.1
+  infra:
+    name: INFRA
+    vlan_id: 120
+    cidr: 10.10.20.0/22
+    gateway: 10.10.20.1
+  dmz:
+    name: DMZ
+    vlan_id: 130
+    cidr: 10.10.30.0/24
+    gateway: 10.10.30.1
+  transit:
+    name: TRANSIT
+    vlan_id: 901
+    cidr: 10.255.255.0/29
+  unused_native:
+    name: UNUSED_NATIVE
+    vlan_id: 999

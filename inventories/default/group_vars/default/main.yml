@@ -14,3 +14,12 @@ atlas_validate_runtime: true
 # apt when a requested package is missing or an explicit purge is needed.
 apt_state_update_cache: true
 apt_state_cache_valid_time: 86400
+
+network_ipv4_address: "{{ ansible_host }}"
+network_prefix_length: "{{ network_cidr.split('/')[1] | int }}"
+network_address: "{{ network_ipv4_address }}/{{ network_prefix_length }}"
+network_dns_resolvers: "{{ groups['svc_dns_recursive'] | sort | map('extract', hostvars, 'ansible_host') | list }}"
+systemd_resolved_dns: "{{ network_dns_resolvers }}"
+systemd_resolved_domains:
+  - srv.alflag.internal
+  - access.internal

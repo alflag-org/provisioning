@@ -10,7 +10,7 @@ dns_authoritative_soa:
 dns_authoritative_nameservers:
   - dns-authoritative01.srv.alflag.internal.
   - dns-authoritative02.srv.alflag.internal.
-dns_authoritative_zones:
+dns_authoritative_forward_zones:
   - name: alflag.internal
     managed: true
 
@@ -24,10 +24,10 @@ dns_authoritative_zones:
     managed: true
     inventory_records: access_aliases
 
-  - name: 10.10.10.in-addr.arpa
-    managed: true
-    inventory_records: reverse_ptr
-
-  - name: 10.10.30.in-addr.arpa
-    managed: true
-    inventory_records: reverse_ptr
+dns_authoritative_reverse_zones: >-
+  {{ [network_zones.mgmt.cidr, network_zones.infra.cidr, network_zones.dmz.cidr]
+     | network_reverse_zones }}
+dns_authoritative_zones: "{{ dns_authoritative_forward_zones + dns_authoritative_reverse_zones }}"
+dns_authoritative_retired_paths:
+  - /etc/nsd/nsd.conf.d/kng01.conf
+  - "{{ dns_authoritative_zone_dir }}/10.10.30.in-addr.arpa.zone"

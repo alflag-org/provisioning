@@ -13,7 +13,7 @@ from roles.services.mysql.filter_plugins.mysql_shared import (
 
 HOSTVARS = {
     "web01": {"network_ipv4_address": "10.10.30.21"},
-    "control01": {"ansible_host": "10.10.10.62"},
+    "control01": {"ansible_host": "10.10.20.62"},
 }
 
 
@@ -21,7 +21,7 @@ class MySQLTenantTests(unittest.TestCase):
     def test_inventory_hosts_expand_to_unique_ipv4_addresses(self):
         self.assertEqual(
             mysql_hosts_to_addresses(["web01", "control01", "web01"], HOSTVARS),
-            ["10.10.30.21", "10.10.10.62"],
+            ["10.10.30.21", "10.10.20.62"],
         )
 
     def test_tenant_expansion_separates_database_accounts_and_secrets(self):

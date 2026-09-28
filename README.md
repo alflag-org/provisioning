@@ -43,3 +43,11 @@ The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
 applies declared retired-resource removals; inspect the inventory declarations
 before running it. Removing a host from inventory does not destroy the machine.
+
+The [authoritative DNS role](roles/dns_authoritative/) and
+[recursive DNS role](roles/dns_recursor/) own their complete root configurations;
+DNS snippets are not loaded separately. Declare zones and resolver policy in
+inventory, including any locally maintained settings that must survive convergence.
+Host records come from active inventory membership, and reverse zones come from
+network CIDRs. VM address configuration remains owned by Proxmox Cloud-Init;
+these roles do not write guest Netplan files.

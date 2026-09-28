@@ -12,6 +12,18 @@ server:
   harden-glue: yes
   harden-dnssec-stripped: yes
   qname-minimisation: yes
+  prefetch: {{ 'yes' if dns_recursor_prefetch else 'no' }}
+  cache-min-ttl: {{ dns_recursor_cache_min_ttl }}
+  cache-max-ttl: {{ dns_recursor_cache_max_ttl }}
+  unwanted-reply-threshold: {{ dns_recursor_unwanted_reply_threshold }}
+  auto-trust-anchor-file: "{{ dns_recursor_trust_anchor_file }}"
+{% for zone in dns_recursor_stub_zones %}
+  domain-insecure: "{{ zone.name }}"
+{% if zone.name.rstrip('.').endswith('.in-addr.arpa') %}
+  # More specific than Unbound's default RFC 1918 empty reverse zones.
+  local-zone: "{{ zone.name }}" transparent
+{% endif %}
+{% endfor %}
 {% for cidr in dns_recursor_allowed_cidrs | unique %}
   access-control: {{ cidr }} allow
 {% endfor %}
@@ -32,3 +44,6 @@ forward-zone:
 {% endfor %}
 
 {% endfor %}
+remote-control:
+  control-enable: {{ 'yes' if dns_recursor_control_enabled else 'no' }}
+  control-interface: "{{ dns_recursor_control_socket }}"

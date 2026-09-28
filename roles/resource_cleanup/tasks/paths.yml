@@ -1,0 +1,6 @@
+---
+- name: Remove declared retired paths
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ resource_cleanup_paths }}"

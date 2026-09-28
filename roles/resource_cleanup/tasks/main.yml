@@ -66,10 +66,8 @@
     loop_var: resource_cleanup_task_file
 
 - name: Remove retired paths
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop: "{{ resource_cleanup_paths }}"
+  ansible.builtin.include_tasks:
+    file: paths.yml
 
 - name: Remove retired system users
   ansible.builtin.user:

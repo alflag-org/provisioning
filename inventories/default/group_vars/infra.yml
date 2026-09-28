@@ -1,5 +1,5 @@
 ---
-network_zone: mgmt
+network_zone: infra
 network_vlan_id: "{{ network_zones[network_zone].vlan_id }}"
 network_cidr: "{{ network_zones[network_zone].cidr }}"
 network_gateway: "{{ network_zones[network_zone].gateway }}"
