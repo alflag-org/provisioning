@@ -36,6 +36,8 @@ class ProvisionSummaryTests(unittest.TestCase):
         playbook = self.directory / "fixture.yml"
         playbook.write_text(f"---\n- hosts: {host}\n  gather_facts: false\n  become: false\n"
                             f"{extra}  tasks:\n{tasks}")
+        inventory = self.directory / "inventory.yml"
+        inventory.write_text(f"all:\n  hosts:\n    {host}: {{}}\n")
         documents = []
         original = COMMAND.read_summary
 
@@ -52,7 +54,7 @@ class ProvisionSummaryTests(unittest.TestCase):
                 patch.object(COMMAND, "read_summary", inspect), contextlib.redirect_stdout(stdout), \
                 contextlib.redirect_stderr(stderr):
             result = COMMAND.run(playbook, {"password": "fixture.secret"},
-                                 ["-i", f"{host},", "-e", f"ansible_python_interpreter={sys.executable}", *(["-c", "local"] if host == "localhost" else []),
+                                 ["-i", str(inventory), "-e", f"ansible_python_interpreter={sys.executable}", *(["-c", "local"] if host == "localhost" else []),
                                   *(["--check"] if check else [])],
                                  provider=self.provider)
         output = stdout.getvalue() + stderr.getvalue()
