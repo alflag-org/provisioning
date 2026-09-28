@@ -75,6 +75,29 @@ def validate_failover_candidate(state, target):
         raise RuntimeError('The emergency failover target must be a reachable SECONDARY')
 
 
+def converge_replication_allowed_host(replicaset, desired, accounts, *, dry_run):
+    options = replicaset.options()['replicaSet']['globalOptions']
+    matches = [option['value'] for option in options if option['option'] == 'replicationAllowedHost']
+    if len(matches) != 1:
+        raise RuntimeError('ReplicaSet must report exactly one replicationAllowedHost option')
+    current = matches[0]
+    if not accounts:
+        raise RuntimeError('ReplicaSet replication account metadata is missing')
+    changed = current != desired
+    for account in accounts:
+        name, user, host, source_exists, target_exists = account
+        if not user or not host or not source_exists or (host != desired and target_exists):
+            raise RuntimeError(
+                f'Replication account metadata disagrees with existing accounts for {name}; '
+                'reconcile metadata before changing replicationAllowedHost'
+            )
+        changed = changed or host != desired
+    if changed and not dry_run:
+        # AdminAPI updates its metadata and all internally managed accounts together.
+        replicaset.set_option('replicationAllowedHost', desired)
+    return {'changed': changed, 'current': current, 'desired': desired}
+
+
 class ReplicaSetManager:
     def __init__(self, shell, dba, mysql, environment):
         self.shell, self.dba, self.mysql = shell, dba, mysql
@@ -139,6 +162,27 @@ class ReplicaSetManager:
         state['serverVariables'] = {i['name']: self.read_only_state(i) for i in self.instances}
         return state
 
+    def replication_accounts(self, primary):
+        session = self.mysql.get_session(self.connection_options(self.expected_instance(primary)))
+        try:
+            return session.run_sql(
+                "SELECT i.instance_name, "
+                "JSON_UNQUOTE(JSON_EXTRACT(i.attributes, '$.replicationAccountUser')), "
+                "JSON_UNQUOTE(JSON_EXTRACT(i.attributes, '$.replicationAccountHost')), "
+                "EXISTS(SELECT 1 FROM mysql.user u WHERE "
+                "u.User = JSON_UNQUOTE(JSON_EXTRACT(i.attributes, '$.replicationAccountUser')) "
+                "AND u.Host = JSON_UNQUOTE(JSON_EXTRACT(i.attributes, '$.replicationAccountHost'))), "
+                "EXISTS(SELECT 1 FROM mysql.user u WHERE "
+                "u.User = JSON_UNQUOTE(JSON_EXTRACT(i.attributes, '$.replicationAccountUser')) "
+                "AND u.Host = ?) "
+                "FROM mysql_innodb_cluster_metadata.instances i "
+                "JOIN mysql_innodb_cluster_metadata.clusters c ON c.cluster_id = i.cluster_id "
+                "WHERE c.cluster_name = ?",
+                [self.allowed_host, self.name],
+            ).fetch_all()
+        finally:
+            session.close()
+
     def metadata_schema_exists(self, instance):
         session = self.mysql.get_session(self.connection_options(instance))
         try:
@@ -156,6 +200,7 @@ class ReplicaSetManager:
     def run(self, action):
         self.shell.options.useWizards = False
         changed, before = False, None
+        replication_host = None
         if action == 'check':
             connected = self.connect_to_reachable_member()
             self.validate_expected_configurations()
@@ -163,7 +208,13 @@ class ReplicaSetManager:
             if rs is None:
                 return {'action': action, 'changed': False, 'exists': False, 'status': None,
                         'members': [], 'primary': None, 'secondary': None}
-            return {'action': action, 'changed': False, 'exists': True, **self.state(rs)}
+            state = self.state(rs)
+            validate_writable_topology(state, self.instances)
+            replication_host = converge_replication_allowed_host(
+                rs, self.allowed_host, self.replication_accounts(state['primary']), dry_run=True,
+            )
+            return {'action': action, 'changed': replication_host['changed'], 'exists': True,
+                    'dryRunOnly': True, 'replicationAllowedHost': replication_host, **state}
         if action == 'converge':
             seed = self.expected_instance(self.initial_primary)
             self.connect_to(seed)
@@ -191,6 +242,12 @@ class ReplicaSetManager:
                 elif member['status'] != 'ONLINE':
                     raise RuntimeError(f"{instance['name']} is {member['status']}; automatic rejoin is not unambiguous")
                 state = normalize_status(rs.status({'extended': 1}), self.instances)
+            state = self.state(rs)
+            validate_writable_topology(state, self.instances)
+            replication_host = converge_replication_allowed_host(
+                rs, self.allowed_host, self.replication_accounts(state['primary']), dry_run=self.dry_run,
+            )
+            changed = changed or replication_host['changed']
         elif action in ('status', 'switchover', 'failover'):
             self.connect_to_reachable_member()
             if action != 'failover':
@@ -230,7 +287,7 @@ class ReplicaSetManager:
                 if primary['readOnly'] != 0 or primary['superReadOnly'] != 0:
                     raise RuntimeError('Forced PRIMARY is not writable')
         return {'action': action, 'changed': changed, 'dryRunOnly': self.dry_run,
-                'exists': True, 'before': before, **current}
+                'exists': True, 'before': before, 'replicationAllowedHost': replication_host, **current}
 
 
 def main():

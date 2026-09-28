@@ -134,4 +134,5 @@
               primary: "{{ mysql_replicaset_result.primary | default('unknown') }}"
               secondary: "{{ mysql_replicaset_result.secondary | default('unknown') }}"
               after_members: "{{ mysql_replicaset_result.members | default([]) }}"
+              replication_allowed_host: "{{ mysql_replicaset_result.replicationAllowedHost | default(none) }}"
               mutation_skipped: "{{ ansible_check_mode }}"
