@@ -119,6 +119,15 @@
     - dns_authoritative_enabled | bool
     - not ansible_check_mode or dns_authoritative_config_dir_stat.stat.exists
 
+# The root configuration is complete and has no includes of legacy snippets.
+- name: Remove retired DNS configuration and zone files
+  ansible.builtin.include_role:
+    name: resource_cleanup
+    tasks_from: paths.yml
+  vars:
+    resource_cleanup_paths: "{{ dns_authoritative_retired_paths }}"
+  when: dns_authoritative_enabled | bool
+
 - name: Validate NSD configuration
   ansible.builtin.command:
     cmd: "nsd-checkconf {{ dns_authoritative_config_path }}"

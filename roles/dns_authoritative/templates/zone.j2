@@ -55,7 +55,7 @@ $INCLUDE {{ runtime_record_file }}
 {% set fqdn = host.network_primary_fqdn | default('') | regex_replace('\\.$', '') %}
 {% set address = host.network_ipv4_address | default(host.ansible_host | default('')) %}
 {% set address_parts = address.split('.') %}
-{% if fqdn and address_parts | length == 4 and (address_parts[0:3] | join('.')) == reverse_prefix %}
+{% if fqdn and address_parts | length == 4 and (address_parts[0:3] | reverse | join('.')) == reverse_prefix %}
 {{ address_parts[3] }} IN PTR {{ fqdn }}.
 {% endif %}
 {% endfor %}

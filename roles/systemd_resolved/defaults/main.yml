@@ -1,9 +1,7 @@
 ---
 systemd_resolved_enabled: false
 systemd_resolved_manage_resolv_conf: false
-systemd_resolved_dns:
-  - "10.10.10.240"
-  - "10.10.10.241"
+systemd_resolved_dns: "{{ network_dns_resolvers | default([]) }}"
 systemd_resolved_domains:
   - srv.alflag.internal
 systemd_resolved_config_dir: /etc/systemd/resolved.conf.d

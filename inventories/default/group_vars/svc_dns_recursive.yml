@@ -1,22 +1,35 @@
 ---
 dns_recursor_enabled: true
 dns_recursor_allowed_cidrs:
-  - 10.10.0.0/24
-  - 10.10.10.0/24
-  - 10.10.30.0/24
-dns_recursor_stub_zones:
-  - name: alflag.internal
-    servers:
-      - 10.10.10.242
-      - 10.10.10.243
-  - name: access.internal
-    servers:
-      - 10.10.10.242
-      - 10.10.10.243
+  - 127.0.0.0/8
+  - "{{ network_zones.client.cidr }}"
+  - "{{ network_zones.mgmt.cidr }}"
+  - "{{ network_zones.infra.cidr }}"
+  - "{{ network_zones.dmz.cidr }}"
+dns_recursor_authoritative_addresses: "{{ groups['svc_dns_authoritative'] | sort | map('extract', hostvars, 'ansible_host') | list }}"
+dns_recursor_stub_zones: >-
+  {{ (['alflag.internal', 'access.internal']
+      + ([network_zones.mgmt.cidr, network_zones.infra.cidr, network_zones.dmz.cidr]
+         | network_reverse_zones | map(attribute='name') | list))
+     | network_stub_zones(dns_recursor_authoritative_addresses) }}
 dns_recursor_validation_queries:
   - name: alflag.internal
     type: SOA
   - name: dns-authoritative01.srv.alflag.internal
     type: A
-  - name: web.access.internal
+  - name: workbench.access.internal
     type: A
+dns_recursor_retired_config_paths:
+  - /etc/unbound/unbound.conf.d/alflag-recursive.conf
+  - /etc/unbound/unbound.conf.d/daedalus-recursive.conf
+# Preserve the deployed external resolver policy when replacing the root config.
+dns_recursor_forward_zones:
+  - name: "."
+    servers:
+      - 9.9.9.9
+      - 149.112.112.112
+dns_recursor_control_enabled: false
+dns_recursor_prefetch: true
+dns_recursor_cache_min_ttl: 60
+dns_recursor_cache_max_ttl: 86400
+dns_recursor_unwanted_reply_threshold: 10000

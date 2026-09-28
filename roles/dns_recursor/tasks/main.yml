@@ -33,6 +33,15 @@
     - dns_recursor_enabled | bool
     - not ansible_check_mode or dns_recursor_config_dir_stat.stat.exists
 
+# The root configuration is complete and has no includes of legacy snippets.
+- name: Remove retired DNS configuration snippets
+  ansible.builtin.include_role:
+    name: resource_cleanup
+    tasks_from: paths.yml
+  vars:
+    resource_cleanup_paths: "{{ dns_recursor_retired_config_paths }}"
+  when: dns_recursor_enabled | bool
+
 - name: Validate Unbound configuration
   ansible.builtin.command:
     cmd: unbound-checkconf

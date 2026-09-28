@@ -6,7 +6,7 @@ mysql_server_binlog_expire_logs_seconds: 604800
 mysql_replicaset_name: mysql-shared
 mysql_replicaset_initial_primary: mysql-shared01
 mysql_replicaset_admin_user: mysql_replicaset_admin
-mysql_replicaset_replication_allowed_host: 10.10.10.0/24
+mysql_replicaset_replication_allowed_host: "{{ network_zones.infra.cidr }}"
 
 mysql_shared_privilege_profiles:
   application:
