@@ -33,7 +33,9 @@ class CallbackModule(CallbackBase):
             source = Path(source)
             if source.is_relative_to(ROOT):
                 source = source.relative_to(ROOT)
-            self._events.add((result.host.get_name(), str(source), int(line), result.task.action))
+            # YAML inventory hostnames carry Ansible origin tags. The JSON schema
+            # accepts native strings, without copying those internal annotations.
+            self._events.add((str(result.host.get_name()), str(source), int(line), result.task.action))
         except Exception:
             # Callback exceptions normally only warn; omit the summary to fail closed.
             self._invalid = True
