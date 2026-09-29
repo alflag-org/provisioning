@@ -1,0 +1,104 @@
+---
+- name: Validate managed data disk declaration
+  ansible.builtin.assert:
+    that:
+      - services_gameap_daemon_data_device is match('^/dev/disk/by-id/[^/]+$')
+      - services_gameap_daemon_data_uuid is match('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+      - services_gameap_daemon_data_size_bytes | int > 0
+
+- name: Inspect selected data disk
+  ansible.builtin.command:
+    argv: [lsblk, --json, --bytes, -o, 'PATH,TYPE,SIZE,FSTYPE,UUID,MOUNTPOINTS', "{{ services_gameap_daemon_data_device }}"]
+  register: services_gameap_daemon_disk_query
+  changed_when: false
+  check_mode: false
+
+- name: Inspect all disk signatures
+  ansible.builtin.command:
+    argv: [wipefs, --no-act, --json, "{{ services_gameap_daemon_data_device }}"]
+  register: services_gameap_daemon_disk_signatures
+  changed_when: false
+  check_mode: false
+
+- name: Decode disk inspection
+  ansible.builtin.set_fact:
+    services_gameap_daemon_disk: "{{ (services_gameap_daemon_disk_query.stdout | from_json).blockdevices | first }}"
+    services_gameap_daemon_signatures: "{{ (services_gameap_daemon_disk_signatures.stdout | from_json).signatures }}"
+
+- name: Validate data disk before any mutation
+  ansible.builtin.include_tasks: validate_storage.yml
+
+- name: Inspect existing data mount
+  ansible.builtin.command:
+    argv: [findmnt, --json, --mountpoint, /srv/gameap, -o, 'SOURCE,FSTYPE']
+  register: services_gameap_daemon_mount_query
+  changed_when: false
+  failed_when: services_gameap_daemon_mount_query.rc not in [0, 1]
+  check_mode: false
+
+- name: Refuse to replace another mounted volume
+  ansible.builtin.assert:
+    that:
+      - (services_gameap_daemon_mount_query.stdout | from_json).filesystems[0].source == services_gameap_daemon_disk.path
+      - (services_gameap_daemon_mount_query.stdout | from_json).filesystems[0].fstype == 'ext4'
+  when: services_gameap_daemon_mount_query.rc == 0
+
+- name: Inspect unmounted directory
+  ansible.builtin.stat:
+    path: /srv/gameap
+    follow: false
+  register: services_gameap_daemon_mount_directory
+
+- name: Refuse a symlink or non-directory mount target
+  ansible.builtin.assert:
+    that: services_gameap_daemon_mount_directory.stat.isdir | default(false)
+  when: services_gameap_daemon_mount_directory.stat.exists
+
+- name: Inspect content that would be hidden by the mount
+  ansible.builtin.find:
+    paths: /srv/gameap
+    hidden: true
+    file_type: any
+  register: services_gameap_daemon_unmounted_files
+  when:
+    - services_gameap_daemon_mount_query.rc == 1
+    - services_gameap_daemon_mount_directory.stat.exists
+
+- name: Refuse to hide existing data on the OS disk
+  ansible.builtin.assert:
+    that: services_gameap_daemon_unmounted_files.matched | default(0) == 0
+  when: services_gameap_daemon_mount_query.rc == 1
+
+- name: Install ext4 tooling
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: [e2fsprogs, util-linux]
+
+- name: Initialize only the declared empty data disk
+  community.general.filesystem:
+    dev: "{{ services_gameap_daemon_data_device }}"
+    fstype: ext4
+    opts: "-U {{ services_gameap_daemon_data_uuid }}"
+    force: false
+  when: services_gameap_daemon_disk.fstype is none
+
+- name: Mount data filesystem persistently by UUID
+  ansible.posix.mount:
+    path: /srv/gameap
+    src: "UUID={{ services_gameap_daemon_data_uuid }}"
+    fstype: ext4
+    opts: defaults
+    passno: "2"
+    state: mounted
+
+- name: Verify mounted filesystem identity
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --mountpoint, /srv/gameap, -o, UUID]
+  register: services_gameap_daemon_mounted_uuid
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    services_gameap_daemon_mounted_uuid.rc != 0 or
+    services_gameap_daemon_mounted_uuid.stdout | trim != services_gameap_daemon_data_uuid
+  when: not ansible_check_mode or services_gameap_daemon_mount_query.rc == 0

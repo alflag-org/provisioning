@@ -1,0 +1,100 @@
+---
+- name: Read vendor enrollment configuration
+  ansible.builtin.slurp:
+    src: /etc/gameap-daemon/gameap-daemon.yaml
+  register: services_gameap_daemon_config_raw
+  no_log: true
+
+- name: Preserve vendor identity while selecting systemd and standard paths
+  ansible.builtin.set_fact:
+    services_gameap_daemon_config: >-
+      {{ services_gameap_daemon_config_raw.content | b64decode | from_yaml
+         | combine({'process_manager': {'name': 'systemd'}, 'work_path': '/srv/gameap',
+                    'steamcmd_path': '/srv/gameap/steamcmd', 'output_log': '/var/log/gameap-daemon/output.log',
+                    'log_level': 'info'}) }}
+  no_log: true
+
+- name: Validate vendor identity before managing enrolled configuration
+  ansible.builtin.assert:
+    that:
+      - services_gameap_daemon_config.ds_id | int > 0
+      - services_gameap_daemon_config.api_key | length > 0
+      - services_gameap_daemon_config.grpc.address | length > 0
+      - not services_gameap_daemon_config.grpc.insecure | default(false) | bool
+      - services_gameap_daemon_config.ca_certificate_file == '/etc/gameap-daemon/certs/ca.crt'
+      - services_gameap_daemon_config.certificate_chain_file == '/etc/gameap-daemon/certs/server.crt'
+      - services_gameap_daemon_config.private_key_file == '/etc/gameap-daemon/certs/server.key'
+  no_log: true
+
+- name: Inspect vendor certificates
+  ansible.builtin.stat:
+    path: "/etc/gameap-daemon/certs/{{ item }}"
+  loop: [ca.crt, server.crt, server.key]
+  register: services_gameap_daemon_certificates
+
+- name: Require complete vendor certificates
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - item.stat.size | default(0) > 0
+  loop: "{{ services_gameap_daemon_certificates.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Protect vendor certificates
+  ansible.builtin.file:
+    path: "/etc/gameap-daemon/certs/{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: [ca.crt, server.crt, server.key]
+
+- name: Protect certificate directory
+  ansible.builtin.file:
+    path: /etc/gameap-daemon/certs
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write Daemon configuration preserving enrolled identity
+  ansible.builtin.copy:
+    content: "{{ services_gameap_daemon_config | to_nice_yaml }}"
+    dest: /etc/gameap-daemon/gameap-daemon.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Restart gameap-daemon
+
+- name: Apply Daemon configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start enrolled Daemon
+  ansible.builtin.systemd_service:
+    name: gameap-daemon.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Verify Daemon version
+  ansible.builtin.command:
+    argv: [/usr/bin/gameap-daemon, version]
+  changed_when: false
+  check_mode: false
+  register: services_gameap_daemon_version_result
+  failed_when: >-
+    services_gameap_daemon_version_result.rc != 0 or
+    not (services_gameap_daemon_version_result.stdout is search('(?m)^GameAP Daemon version: v?' ~
+      (services_gameap_daemon_version | regex_escape) ~ '$'))
+  when: not ansible_check_mode or not services_gameap_daemon_install_required
+
+- name: Verify Daemon service is enabled and active
+  ansible.builtin.command:
+    argv: [systemctl, "{{ item }}", gameap-daemon.service]
+  loop: [is-enabled, is-active]
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or not services_gameap_daemon_install_required

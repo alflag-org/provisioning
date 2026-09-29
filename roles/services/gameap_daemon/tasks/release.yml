@@ -1,0 +1,68 @@
+---
+- name: Inspect installed gameap-daemon binary
+  ansible.builtin.stat:
+    path: /usr/bin/gameap-daemon
+  register: services_gameap_daemon_binary
+
+- name: Read installed gameap-daemon version
+  ansible.builtin.command:
+    argv: [/usr/bin/gameap-daemon, version]
+  register: services_gameap_daemon_installed_version
+  changed_when: false
+  check_mode: false
+  when: services_gameap_daemon_binary.stat.exists
+
+- name: Determine whether the pinned release is required
+  ansible.builtin.set_fact:
+    services_gameap_daemon_install_required: >-
+      {{ not services_gameap_daemon_binary.stat.exists or
+          not (services_gameap_daemon_installed_version.stdout | default('') is search('(?m)^GameAP Daemon version: v?' ~
+          (services_gameap_daemon_version | regex_escape) ~ '$')) }}
+
+- name: Report required gameap-daemon installation in check mode
+  ansible.builtin.debug:
+    msg: The pinned release would be installed; runtime validation requires an apply.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - services_gameap_daemon_install_required
+
+- name: Install the verified gameap-daemon release
+  when:
+    - not ansible_check_mode
+    - services_gameap_daemon_install_required
+  block:
+    - name: Create temporary release directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: gameap-daemon-release-
+      register: services_gameap_daemon_release_directory
+
+    - name: Download pinned release with checksum verification
+      ansible.builtin.get_url:
+        url: "{{ services_gameap_daemon_release_url }}"
+        checksum: "{{ services_gameap_daemon_checksum }}"
+        dest: "{{ services_gameap_daemon_release_directory.path }}/release.tar.gz"
+        mode: "0600"
+
+    - name: Extract verified release
+      ansible.builtin.unarchive:
+        src: "{{ services_gameap_daemon_release_directory.path }}/release.tar.gz"
+        dest: "{{ services_gameap_daemon_release_directory.path }}"
+        remote_src: true
+
+    - name: Install gameap-daemon executable
+      ansible.builtin.copy:
+        src: "{{ services_gameap_daemon_release_directory.path }}/gameap-daemon"
+        dest: /usr/bin/gameap-daemon
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart gameap-daemon
+  always:
+    - name: Remove temporary release directory
+      ansible.builtin.file:
+        path: "{{ services_gameap_daemon_release_directory.path }}"
+        state: absent
+      when: services_gameap_daemon_release_directory.path is defined

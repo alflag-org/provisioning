@@ -1,0 +1,13 @@
+---
+- name: Reject occupied or unexpected data disks
+  ansible.builtin.assert:
+    that:
+      - services_gameap_daemon_disk.type == 'disk'
+      - services_gameap_daemon_disk.size | int == services_gameap_daemon_data_size_bytes | int
+      - services_gameap_daemon_disk.children | default([]) | length == 0
+      - services_gameap_daemon_disk.mountpoints | default([]) | reject('none') | difference(['/srv/gameap']) | length == 0
+      - >-
+        (services_gameap_daemon_disk.fstype is none and services_gameap_daemon_signatures | length == 0) or
+        (services_gameap_daemon_disk.fstype == 'ext4' and services_gameap_daemon_disk.uuid == services_gameap_daemon_data_uuid and
+         services_gameap_daemon_signatures | map(attribute='type') | unique | list == ['ext4'])
+    fail_msg: Refusing an unexpected disk, existing partitions, foreign filesystem, or another mount location.

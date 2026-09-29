@@ -1,0 +1,72 @@
+---
+- name: Enroll one GameAP Daemon explicitly
+  hosts: svc_gameap_daemon
+  gather_facts: true
+  any_errors_fatal: true
+  vars_files:
+    - ../../roles/services/gameap_panel/defaults/main.yml
+  vars:
+    services_gameap_daemon_panel: "{{ groups['svc_gameap_panel'] | first }}"
+    services_gameap_daemon_endpoint: >-
+      {{ hostvars[services_gameap_daemon_panel].services_gameap_panel_grpc_external_host |
+         default(hostvars[services_gameap_daemon_panel].ansible_host) }}:{{
+         hostvars[services_gameap_daemon_panel].services_gameap_panel_grpc_port | default(services_gameap_panel_grpc_port) }}
+  tasks:
+    - name: Require a single node and one inventory Panel
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - groups.get('svc_gameap_panel', []) | length == 1
+          - inventory_hostname not in groups['svc_gameap_panel']
+          - "'/srv/gameap' in (ansible_facts.mounts | map(attribute='mount') | list)"
+
+    - name: Inspect existing enrollment state
+      ansible.builtin.stat:
+        path: "/etc/gameap-daemon/{{ item }}"
+      loop: [gameap-daemon.yaml, certs, .enrollment-attempt]
+      register: services_gameap_daemon_enrollment_state
+
+    - name: Refuse existing or uncertain enrollment
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        fail_msg: Enrollment already exists or was attempted. Inspect Panel and node state; do not consume another credential.
+      loop: "{{ services_gameap_daemon_enrollment_state.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Explain check-mode boundary
+      ansible.builtin.debug:
+        msg: Only local prerequisites are inspected. No credential is required, requested from Panel, or consumed in check mode.
+      when: ansible_check_mode
+
+    - name: Enroll with the Panel-issued one-shot credential
+      when: not ansible_check_mode
+      block:
+        - name: Require transient credential
+          ansible.builtin.assert:
+            that:
+              - services_gameap_daemon_connect_url | default('') | length > 0
+          no_log: true
+
+        - name: Read vendor public CA through the Panel inventory connection
+          ansible.builtin.slurp:
+            src: /var/lib/gameap/certs/root.crt
+          delegate_to: "{{ services_gameap_daemon_panel }}"
+          register: services_gameap_daemon_panel_ca
+          no_log: true
+
+        - name: Exchange credential through the vendor gRPC enrollment protocol
+          ansible.builtin.command:
+            argv: [/usr/bin/python3, /usr/local/libexec/gameap-enroll.py]
+            stdin: >-
+              {{ {'connect_url': services_gameap_daemon_connect_url,
+                  'endpoint': services_gameap_daemon_endpoint,
+                  'ca_certificate': services_gameap_daemon_panel_ca.content | b64decode,
+                  'host': ansible_host} | to_json }}
+            stdin_add_newline: false
+          changed_when: true
+          no_log: true
+
+        - name: Converge and validate enrolled Daemon
+          ansible.builtin.include_role:
+            name: services/gameap_daemon  # noqa role-name[path]

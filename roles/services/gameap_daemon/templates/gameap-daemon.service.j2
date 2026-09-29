@@ -1,0 +1,23 @@
+[Unit]
+Description=GameAP Daemon
+Documentation=https://docs.gameap.com/daemon/daemon.html
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/gameap
+AssertPathIsMountPoint=/srv/gameap
+ConditionPathExists=/etc/gameap-daemon/gameap-daemon.yaml
+
+[Service]
+Type=simple
+# System-scoped game server units require root; game processes use their own user.
+User=root
+WorkingDirectory=/srv/gameap
+ExecStart=/usr/bin/gameap-daemon -c /etc/gameap-daemon/gameap-daemon.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

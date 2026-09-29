@@ -1,0 +1,7 @@
+---
+services_gameap_daemon_version: "4.1.5"
+services_gameap_daemon_checksum: "sha256:1d3a3b54a69639bd648a4ae7c75f68bb3991627a760769c33345a9bc0b63ef5d"
+services_gameap_daemon_release_url: >-
+  https://github.com/gameap/daemon/releases/download/v{{ services_gameap_daemon_version }}/gameap-daemon-v{{ services_gameap_daemon_version }}-linux-amd64.tar.gz
+# Empty means an externally provisioned data mount is required.
+services_gameap_daemon_data_device: ""

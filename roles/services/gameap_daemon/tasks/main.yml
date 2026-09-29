@@ -1,0 +1,103 @@
+---
+- name: Validate Daemon platform and release inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.architecture == 'x86_64'
+      - ansible_facts.service_mgr == 'systemd'
+      - ansible_facts.virtualization_type not in ['lxc', 'docker', 'podman', 'container']
+      - inventory_hostname not in groups.get('svc_gameap_panel', [])
+      - services_gameap_daemon_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - services_gameap_daemon_checksum is match('^sha256:[a-f0-9]{64}$')
+    fail_msg: The Daemon requires a VM with systemd and a separately mounted /srv/gameap data volume.
+
+- name: Converge the explicitly declared data volume
+  ansible.builtin.include_tasks: storage.yml
+  when: services_gameap_daemon_data_device | length > 0
+
+- name: Require an externally managed data mount when no disk is declared
+  ansible.builtin.assert:
+    that:
+      - "'/srv/gameap' in (ansible_facts.mounts | map(attribute='mount') | list)"
+  when: services_gameap_daemon_data_device | length == 0
+
+- name: Install Daemon prerequisites
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: [ca-certificates, python3, python3-grpcio, python3-protobuf, tar, unzip]
+
+- name: Create game server group
+  ansible.builtin.group:
+    name: gameap
+    system: true
+
+- name: Create game server user
+  ansible.builtin.user:
+    name: gameap
+    group: gameap
+    home: /srv/gameap
+    create_home: false
+    shell: /usr/sbin/nologin
+    system: true
+
+- name: Create Daemon directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /etc/gameap-daemon, owner: root, mode: '0700'}
+    - {path: /srv/gameap, owner: gameap, mode: '0755'}
+    - {path: /srv/gameap/steamcmd, owner: gameap, mode: '0755'}
+    - {path: /var/log/gameap-daemon, owner: root, mode: '0700'}
+    - {path: /usr/local/libexec, owner: root, mode: '0755'}
+  when: not ansible_check_mode
+
+- name: Install pinned Daemon release
+  ansible.builtin.include_tasks: release.yml
+
+- name: Install the one-shot enrollment helper
+  ansible.builtin.copy:
+    src: gameap-enroll.py
+    dest: /usr/local/libexec/gameap-enroll.py
+    owner: root
+    group: root
+    mode: "0755"
+  when: not ansible_check_mode or services_gameap_daemon_binary.stat.exists
+
+- name: Inspect enrollment configuration
+  ansible.builtin.stat:
+    path: /etc/gameap-daemon/gameap-daemon.yaml
+  register: services_gameap_daemon_config_stat
+
+- name: Inspect enrollment certificates
+  ansible.builtin.stat:
+    path: /etc/gameap-daemon/certs
+  register: services_gameap_daemon_certs_stat
+
+- name: Refuse partial enrollment
+  ansible.builtin.assert:
+    that:
+      - services_gameap_daemon_config_stat.stat.exists == services_gameap_daemon_certs_stat.stat.exists
+    fail_msg: Incomplete enrollment requires operator inspection; credentials will not be consumed again automatically.
+
+- name: Configure Daemon service
+  ansible.builtin.template:
+    src: gameap-daemon.service.j2
+    dest: /etc/systemd/system/gameap-daemon.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart gameap-daemon
+
+- name: Converge enrolled Daemon
+  ansible.builtin.include_tasks: enrolled.yml
+  when: services_gameap_daemon_config_stat.stat.exists
+
+- name: Explain required initial enrollment
+  ansible.builtin.debug:
+    msg: Daemon installed but not enrolled. Run the separate gameap-enroll-daemon operation before runtime acceptance.
+  when: not services_gameap_daemon_config_stat.stat.exists
