@@ -1,0 +1,128 @@
+---
+- name: Validate Panel platform and release inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.architecture == 'x86_64'
+      - ansible_facts.service_mgr == 'systemd'
+      - ansible_facts.virtualization_type not in ['lxc', 'docker', 'podman', 'container']
+      - inventory_hostname not in groups.get('svc_gameap_daemon', [])
+      - services_gameap_panel_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - services_gameap_panel_checksum is match('^sha256:[a-f0-9]{64}$')
+      - services_gameap_panel_grpc_external_host | length > 0
+      - services_gameap_panel_grpc_external_host is match('^[a-zA-Z0-9.-]+$')
+      - services_gameap_panel_http_port | int > 0
+      - services_gameap_panel_http_port | int < 65536
+      - services_gameap_panel_grpc_port | int > 0
+      - services_gameap_panel_grpc_port | int < 65536
+
+- name: Validate independent Panel secrets
+  ansible.builtin.assert:
+    that:
+      - services_gameap_panel_auth_secret | default('') is match('^[a-f0-9]{64}$')
+      - services_gameap_panel_encryption_key | default('') is match('^[a-f0-9]{64}$')
+      - services_gameap_panel_auth_secret != services_gameap_panel_encryption_key
+    fail_msg: Supply independent random 32-byte hex secrets through Atlas.
+  no_log: true
+
+- name: Install Panel prerequisites
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: [ca-certificates, python3, tar]
+
+- name: Create Panel group
+  ansible.builtin.group:
+    name: gameap
+    system: true
+
+- name: Create Panel user
+  ansible.builtin.user:
+    name: gameap
+    group: gameap
+    home: /var/lib/gameap
+    create_home: false
+    shell: /usr/sbin/nologin
+    system: true
+
+- name: Create Panel directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /etc/gameap, owner: root, mode: '0700'}
+    - {path: /var/lib/gameap, owner: gameap, mode: '0700'}
+    - {path: /usr/local/libexec, owner: root, mode: '0755'}
+  when: not ansible_check_mode
+
+- name: Install pinned Panel release
+  ansible.builtin.include_tasks: release.yml
+
+- name: Configure Panel
+  ansible.builtin.template:
+    src: config.env.j2
+    dest: /etc/gameap/config.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Restart gameap
+  when: not ansible_check_mode or services_gameap_panel_binary.stat.exists
+
+- name: Install Panel bootstrap helper
+  ansible.builtin.copy:
+    src: gameap-bootstrap.py
+    dest: /usr/local/libexec/gameap-bootstrap.py
+    owner: root
+    group: root
+    mode: "0755"
+  when: not ansible_check_mode or services_gameap_panel_binary.stat.exists
+
+- name: Configure Panel service
+  ansible.builtin.template:
+    src: gameap.service.j2
+    dest: /etc/systemd/system/gameap.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart gameap
+
+- name: Inspect database initialization
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /usr/local/libexec/gameap-bootstrap.py, inspect]
+  register: services_gameap_panel_seed
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or services_gameap_panel_binary.stat.exists
+
+- name: Initialize Panel with provider-supplied administrator password
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /usr/local/libexec/gameap-bootstrap.py, seed]
+    stdin: >-
+      {{ {'password': services_gameap_panel_admin_password,
+          'login': services_gameap_panel_admin_login, 'email': services_gameap_panel_admin_email} | to_json }}
+    stdin_add_newline: false
+  no_log: true
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - services_gameap_panel_seed.stdout == 'uninitialized'
+
+- name: Apply Panel configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Panel
+  ansible.builtin.systemd_service:
+    name: gameap.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Validate Panel runtime
+  ansible.builtin.include_tasks: validation.yml
+  when: not ansible_check_mode or not services_gameap_panel_install_required

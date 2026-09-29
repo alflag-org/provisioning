@@ -1,0 +1,60 @@
+---
+- name: Verify installed Panel version
+  ansible.builtin.command:
+    argv: [/usr/bin/gameap, version]
+  register: services_gameap_panel_version_result
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    services_gameap_panel_version_result.rc != 0 or
+    not (services_gameap_panel_version_result.stdout is search('(?m)^GameAP v?' ~
+      (services_gameap_panel_version | regex_escape) ~ '$'))
+
+- name: Verify Panel service is active and enabled
+  ansible.builtin.command:
+    argv: [systemctl, "{{ item }}", gameap.service]
+  loop: [is-active, is-enabled]
+  changed_when: false
+  check_mode: false
+
+- name: Verify Panel listening ports
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item }}"
+    timeout: 30
+  loop: ["{{ services_gameap_panel_http_port }}", "{{ services_gameap_panel_grpc_port }}"]
+  changed_when: false
+  check_mode: false
+
+- name: Verify Panel HTTP response
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ services_gameap_panel_http_port }}/"
+    status_code: 200
+  changed_when: false
+  check_mode: false
+
+- name: Verify Panel database and WAL
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /usr/local/libexec/gameap-bootstrap.py, verify]
+  changed_when: false
+  check_mode: false
+
+- name: Verify Panel API database health
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ services_gameap_panel_http_port }}/api/health"
+    status_code: 200
+  changed_when: false
+  check_mode: false
+
+- name: Inspect Panel configuration permissions
+  ansible.builtin.stat:
+    path: /etc/gameap/config.env
+  register: services_gameap_panel_config
+
+- name: Verify Panel configuration permissions
+  ansible.builtin.assert:
+    that:
+      - services_gameap_panel_config.stat.isreg
+      - services_gameap_panel_config.stat.uid == 0
+      - services_gameap_panel_config.stat.gid == 0
+      - services_gameap_panel_config.stat.mode == '0600'

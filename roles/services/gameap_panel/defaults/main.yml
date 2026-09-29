@@ -1,0 +1,10 @@
+---
+services_gameap_panel_version: "4.5.6"
+services_gameap_panel_checksum: "sha256:c5bcb617fba429398ded56ab42eb313761f980137278f2c779e33708c484c86b"
+services_gameap_panel_release_url: >-
+  https://github.com/gameap/gameap/releases/download/v{{ services_gameap_panel_version }}/gameap-v{{ services_gameap_panel_version }}-linux-amd64.tar.gz
+services_gameap_panel_http_port: 8025
+services_gameap_panel_grpc_port: 31718
+services_gameap_panel_grpc_external_host: "{{ ansible_host }}"
+services_gameap_panel_admin_login: admin
+services_gameap_panel_admin_email: admin@localhost
