@@ -1,0 +1,12 @@
+---
+- name: Converge GameAP Panel
+  hosts: svc_gameap_panel
+  gather_facts: true
+  roles:
+    - role: services/gameap_panel  # noqa role-name[path]
+
+- name: Converge GameAP Daemon
+  hosts: svc_gameap_daemon
+  gather_facts: true
+  roles:
+    - role: services/gameap_daemon  # noqa role-name[path]

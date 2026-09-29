@@ -47,6 +47,9 @@ not establish convergence. Check mode may skip operations whose prerequisites ar
 absent. An otherwise successful run fails if its safe summary is unavailable or
 invalid. Use local validation without secret injection for syntax diagnostics.
 
+The [GameAP guide](docs/gameap.md) covers the separate Panel and Daemon VMs,
+secret inputs, and runtime verification.
+
 The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
 applies declared retired-resource removals; inspect the inventory declarations
