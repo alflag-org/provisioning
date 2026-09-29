@@ -183,3 +183,43 @@ class LiteralSecretTests(unittest.TestCase):
             self.assertEqual(COMMAND.run(playbook, {"password": "mysql.backup.password"},
                                         ["-i", "localhost,", "-c", "local"], provider=provider,
                                         executable=str(executable)), 0)
+
+
+class TransientSecretTests(unittest.TestCase):
+    def test_transient_value_uses_existing_volatile_boundary(self):
+        import secrets
+        token = secrets.token_urlsafe(32) + '{{ literal }}'
+        with tempfile.TemporaryDirectory() as directory:
+            playbook = Path(directory) / 'transient.yml'
+            playbook.write_text('''---
+- hosts: localhost
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Verify literal one-shot value
+      ansible.builtin.assert:
+        that:
+          - setup_url.endswith('literal ' + '}' + '}')
+      no_log: true
+''')
+            self.assertEqual(COMMAND.run(
+                playbook, {}, ['-i', 'localhost,', '-c', 'local'],
+                transient={'setup_url': token}, executable=str(ROOT / '.venv/bin/ansible-playbook')), 0)
+
+    def test_transient_input_cannot_shadow_provider_or_ansible_variables(self):
+        for transient in ({'password': 'one-shot'}, {'ansible_connection': 'local'}, {'setup_url': ''}):
+            with self.subTest(keys=list(transient)):
+                with self.assertRaises(ValueError):
+                    COMMAND.run(Path('unused'), {'password': 'provider.name'}, [],
+                                transient=transient, executable='must-not-run')
+
+    def test_check_mode_never_prompts_for_one_shot_credential(self):
+        with tempfile.TemporaryDirectory() as directory:
+            declarations = Path(directory) / 'required.yml'
+            declarations.write_text('required_secrets: {}\n')
+            with patch.object(COMMAND.getpass, 'getpass', side_effect=AssertionError('must not prompt')):
+                with patch.object(COMMAND, 'run', return_value=0) as run:
+                    self.assertEqual(COMMAND.main([
+                        'unused', '--limit', 'fixture', '--required-secrets', str(declarations),
+                        '--check', '--prompt-secret', 'setup_url']), 0)
+                    self.assertEqual(run.call_args.kwargs['transient'], {})
