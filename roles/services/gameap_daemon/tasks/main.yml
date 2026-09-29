@@ -51,6 +51,7 @@
   loop:
     - {path: /etc/gameap-daemon, owner: root, mode: '0700'}
     - {path: /srv/gameap, owner: gameap, mode: '0755'}
+    - {path: /srv/gameap/servers, owner: root, mode: '0755'}
     - {path: /srv/gameap/steamcmd, owner: gameap, mode: '0755'}
     - {path: /var/log/gameap-daemon, owner: root, mode: '0700'}
     - {path: /usr/local/libexec, owner: root, mode: '0755'}
