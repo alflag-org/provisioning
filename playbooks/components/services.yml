@@ -10,3 +10,6 @@
 
 - name: Converge NetBox service
   ansible.builtin.import_playbook: services/netbox.yml
+
+- name: Converge GameAP services
+  ansible.builtin.import_playbook: services/gameap.yml

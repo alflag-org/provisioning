@@ -1,0 +1,4 @@
+---
+services_gameap_daemon_data_device: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
+services_gameap_daemon_data_size_bytes: 107374182400
+services_gameap_daemon_data_uuid: e874bd6a-7c05-47e8-9548-efa3c3932d90

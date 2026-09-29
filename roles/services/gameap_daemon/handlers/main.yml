@@ -1,0 +1,9 @@
+---
+- name: Restart gameap-daemon
+  ansible.builtin.systemd_service:
+    name: gameap-daemon.service
+    state: restarted
+    daemon_reload: true
+  when:
+    - not ansible_check_mode
+    - services_gameap_daemon_config_stat.stat.exists | default(false)

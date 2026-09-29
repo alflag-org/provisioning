@@ -1,0 +1,5 @@
+---
+required_secrets:
+  services_gameap_panel_auth_secret: gameap.panel.auth_secret
+  services_gameap_panel_encryption_key: gameap.panel.encryption_key
+  services_gameap_panel_admin_password: gameap.panel.admin_password

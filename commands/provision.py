@@ -1,12 +1,14 @@
 """Resolve declared secrets before starting Ansible with volatile extra variables."""
 
 import argparse
+import getpass
 import os
 import re
 import signal
 import subprocess
 import sys
 import tempfile
+import warnings
 from pathlib import Path
 from contextlib import nullcontext
 
@@ -93,16 +95,23 @@ def _stop(process):
     process.wait()
 
 
-def run(playbook, required, arguments, *, provider=None, executable=None):
+def run(playbook, required, arguments, *, provider=None, executable=None, transient=None):
     """Resolve all values, use owner-only volatile storage, and remove it on exit."""
-    provider = load_provider() if provider is None else provider
-    resolved = provider.get_many(list(required.values()))
+    transient = {} if transient is None else transient
+    if any(not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", key)
+           or key.startswith(("ansible_", "atlas_")) or key in required
+           or not isinstance(value, str) or not value
+           for key, value in transient.items()):
+        raise SecretConfigurationError("invalid transient secret input")
+    provider = load_provider() if provider is None and required else provider
+    resolved = provider.get_many(list(required.values())) if required else {}
     if not isinstance(resolved, dict) or any(
         not isinstance(resolved.get(name), str) or not resolved[name]
         for name in required.values()
     ):
         raise SecretResolutionError("required secrets could not be resolved")
     values = {variable: SecretText(resolved[name]) for variable, name in required.items()}
+    values.update({variable: SecretText(value) for variable, value in transient.items()})
     try:
         managed = get_run_directory()
     except (ValueError, OSError):
@@ -200,13 +209,28 @@ def main(argv=None):
     parser.add_argument("--required-secrets", type=Path, required=True)
     parser.add_argument("--limit", required=True)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--prompt-secret", action="append", default=[], metavar="VARIABLE",
+                        help="read a one-shot secret without terminal echo; never requested in check mode")
     args = parser.parse_args(argv)
     try:
         arguments = ["--limit", args.limit]
         if args.check:
             arguments.append("--check")
-        result = run(args.playbook, declarations(args.required_secrets), arguments)
-    except (SecretConfigurationError, SecretResolutionError, OSError, ValueError):
+        required = declarations(args.required_secrets)
+        if (len(set(args.prompt_secret)) != len(args.prompt_secret)
+                or any(not re.fullmatch(r"[a-z][a-z0-9_]*", key)
+                       or key.startswith(("ansible_", "atlas_")) or key in required
+                       for key in args.prompt_secret)):
+            raise SecretConfigurationError("invalid transient secret declaration")
+        transient = {}
+        if not args.check:
+            # Fail closed if getpass cannot disable echo; never fall back to stdin echo.
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                for key in args.prompt_secret:
+                    transient[key] = getpass.getpass(f"{key}: ")
+        result = run(args.playbook, required, arguments, transient=transient)
+    except (SecretConfigurationError, SecretResolutionError, OSError, ValueError, EOFError, getpass.GetPassWarning):
         print("provision: secret configuration, retrieval, or execution failed", file=sys.stderr)
         return 2
     return result

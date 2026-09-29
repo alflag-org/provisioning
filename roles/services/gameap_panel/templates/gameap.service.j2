@@ -1,0 +1,30 @@
+[Unit]
+Description=GameAP Panel
+Documentation=https://docs.gameap.com
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=gameap
+Group=gameap
+WorkingDirectory=/var/lib/gameap
+EnvironmentFile=/etc/gameap/config.env
+# Refuse an unseeded database before upstream can generate and log a password.
+ExecStartPre=/usr/bin/python3 /usr/local/libexec/gameap-bootstrap.py verify
+ExecStart=/usr/bin/gameap
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+RuntimeDirectory=gameap
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/gameap
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
