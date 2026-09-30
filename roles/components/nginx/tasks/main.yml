@@ -1,0 +1,61 @@
+---
+- name: Install nginx without starting the distribution default site
+  ansible.builtin.include_role:
+    name: apt_state
+  vars:
+    apt_state_packages: "{{ nginx_package }}"
+    apt_state_policy_rc_d: 101
+
+- name: Inspect nginx check-mode prerequisites
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ nginx_binary }}"
+    - "{{ nginx_config_dir }}"
+    - "{{ nginx_fragment_dir }}"
+  register: nginx_prerequisites
+  when: ansible_check_mode
+
+- name: Explain deferred nginx configuration on a fresh host
+  ansible.builtin.debug:
+    msg: >-
+      Check mode cannot validate or render nginx before its package and configuration
+      directories exist. Apply installs the package without starting its default site,
+      renders and validates the base configuration, then enables nginx.
+  when:
+    - ansible_check_mode
+    - not (nginx_prerequisites.results | map(attribute='stat.exists') | min)
+
+- name: Ensure nginx service fragment directory exists
+  ansible.builtin.file:
+    path: "{{ nginx_fragment_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Only conf.d is imported. Package-owned sites-enabled entries are left untouched
+# and inactive; services own their individual conf.d fragments.
+- name: Render nginx base configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "{{ nginx_binary }} -t -c %s"
+  notify: nginx configuration changed
+  when: >-
+    not ansible_check_mode or
+    (nginx_prerequisites.results | map(attribute='stat.exists') | min)
+
+- name: Validate nginx configuration before starting
+  ansible.builtin.import_tasks: validate.yml
+  when: not ansible_check_mode
+
+- name: Enable and start nginx
+  ansible.builtin.systemd_service:
+    name: "{{ nginx_service_name }}"
+    state: started
+    enabled: true
+  when: not ansible_check_mode

@@ -1,0 +1,9 @@
+---
+- name: Validate complete nginx configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ nginx_binary }}"
+      - -t
+      - -c
+      - "{{ nginx_config_path }}"
+  changed_when: false

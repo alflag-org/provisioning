@@ -1,0 +1,23 @@
+user {{ nginx_user }};
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log;
+include {{ nginx_config_dir }}/modules-enabled/*.conf;
+
+events {
+    worker_connections {{ nginx_worker_connections }};
+}
+
+http {
+    include {{ nginx_config_dir }}/mime.types;
+    default_type application/octet-stream;
+
+    sendfile on;
+    tcp_nopush on;
+    gzip on;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    include {{ nginx_fragment_dir }}/*.conf;
+}

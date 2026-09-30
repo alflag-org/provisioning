@@ -1,0 +1,9 @@
+---
+nginx_package: nginx
+nginx_binary: /usr/sbin/nginx
+nginx_service_name: nginx
+nginx_user: www-data
+nginx_config_dir: /etc/nginx
+nginx_config_path: "{{ nginx_config_dir }}/nginx.conf"
+nginx_fragment_dir: "{{ nginx_config_dir }}/conf.d"
+nginx_worker_connections: 768

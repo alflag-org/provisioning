@@ -1,0 +1,7 @@
+---
+- name: Converge standard Web host middleware
+  hosts: web_hosts
+  gather_facts: true
+
+  roles:
+    - role: components/nginx  # noqa role-name[path]
