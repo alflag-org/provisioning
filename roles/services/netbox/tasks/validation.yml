@@ -1,15 +1,8 @@
 ---
-- name: Validate the complete Caddy configuration
-  ansible.builtin.command:
-    argv:
-      - "{{ caddy_binary }}"
-      - validate
-      - --config
-      - "{{ caddy_config_path }}"
-      - --adapter
-      - caddyfile
-  changed_when: false
-  check_mode: false
+- name: Validate the complete nginx configuration
+  ansible.builtin.include_role:
+    name: components/nginx  # noqa role-name[path]
+    tasks_from: validate
   when: not ansible_check_mode
 
 - name: Check NetBox dependency and frontend service activity
@@ -18,7 +11,7 @@
       - systemctl
       - is-active
       - "{{ item }}"
-  loop: "{{ services_netbox_required_services + [caddy_service_name ~ '.service'] }}"
+  loop: "{{ services_netbox_required_services + [nginx_service_name ~ '.service'] }}"
   register: services_netbox_service_activity
   changed_when: false
   check_mode: false
@@ -42,7 +35,7 @@
       - systemctl
       - is-enabled
       - "{{ item }}"
-  loop: "{{ services_netbox_required_services + [caddy_service_name ~ '.service'] }}"
+  loop: "{{ services_netbox_required_services + [nginx_service_name ~ '.service'] }}"
   register: services_netbox_service_enablement
   changed_when: false
   check_mode: false
@@ -76,27 +69,11 @@
       127.0.0.1:{{ services_netbox_gunicorn_port }}.
   when: not ansible_check_mode
 
-- name: Gather installed package facts
-  ansible.builtin.package_facts:
-    manager: auto
-  when: not ansible_check_mode
-
-- name: Require nginx to be absent from the NetBox host
-  ansible.builtin.assert:
-    that:
-      - >-
-        ansible_facts.packages.keys()
-        | select('match', '^nginx($|-)')
-        | list
-        | length == 0
-    fail_msg: "nginx packages are installed on the NetBox host."
-  when: not ansible_check_mode
-
-- name: Verify the NetBox login page through Caddy
+- name: Verify the NetBox login page through nginx
   ansible.builtin.uri:
     url: "http://{{ services_netbox_frontend_health_address }}{{ services_netbox_health_path }}"
     headers:
-      Host: "{{ services_netbox_caddy_site_addresses[0] }}"
+      Host: "{{ services_netbox_nginx_server_names[0] }}"
     method: GET
     status_code: 200
     timeout: 10
@@ -108,11 +85,11 @@
   until: services_netbox_frontend_health_check.status | default(0) == 200
   when: not ansible_check_mode
 
-- name: Verify NetBox static files through Caddy
+- name: Verify NetBox static files through nginx
   ansible.builtin.uri:
-    url: "http://{{ services_netbox_frontend_health_address }}{{ services_netbox_caddy_static_path }}"
+    url: "http://{{ services_netbox_frontend_health_address }}{{ services_netbox_frontend_static_path }}"
     headers:
-      Host: "{{ services_netbox_caddy_site_addresses[0] }}"
+      Host: "{{ services_netbox_nginx_server_names[0] }}"
     method: GET
     status_code: 200
     timeout: 10
