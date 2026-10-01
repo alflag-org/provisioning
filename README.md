@@ -50,6 +50,9 @@ invalid. Use local validation without secret injection for syntax diagnostics.
 The [GameAP guide](docs/gameap.md) covers the separate Panel and Daemon VMs,
 secret inputs, and runtime verification.
 
+The [workload host guide](docs/workload-hosts.md) defines Web and application host
+classification, standard middleware, and conventions for adding services.
+
 The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
 applies declared retired-resource removals; inspect the inventory declarations

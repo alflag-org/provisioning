@@ -2,9 +2,6 @@
 - name: Converge DNS services
   ansible.builtin.import_playbook: services/dns.yml
 
-- name: Converge web origin services
-  ansible.builtin.import_playbook: services/web.yml
-
 - name: Converge shared MySQL data services
   ansible.builtin.import_playbook: services/mysql.yml
 

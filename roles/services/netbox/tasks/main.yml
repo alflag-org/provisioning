@@ -15,12 +15,13 @@
     that:
       - services_netbox_frontend_health_address is string
       - services_netbox_frontend_health_address | length > 0
-      - services_netbox_caddy_site_addresses is sequence
-      - services_netbox_caddy_site_addresses | length > 0
+      - services_netbox_nginx_server_names is sequence
+      - services_netbox_nginx_server_names is not string
+      - services_netbox_nginx_server_names | length > 0
       - services_netbox_gunicorn_bind_address == '127.0.0.1'
       - services_netbox_gunicorn_port | int > 0
     fail_msg: >-
-      NetBox requires internal Caddy site addresses and a loopback-only Gunicorn bind.
+      NetBox requires internal nginx server names and a loopback-only Gunicorn bind.
 
 - name: Install NetBox native dependencies
   ansible.builtin.include_role:
@@ -65,22 +66,22 @@
   ansible.builtin.include_tasks:
     file: services.yml
 
-- name: Reuse the generic Caddy component
+- name: Configure the nginx component
   ansible.builtin.include_role:
-    name: components/caddy  # noqa role-name[path]
+    name: components/nginx  # noqa role-name[path]
     public: true
 
-- name: Render the NetBox Caddy fragment
+- name: Render the NetBox nginx fragment
   ansible.builtin.template:
-    src: netbox.caddy.j2
-    dest: "{{ caddy_fragment_dir }}/{{ services_netbox_caddy_fragment_name }}"
+    src: nginx.conf.j2
+    dest: "{{ nginx_fragment_dir }}/{{ services_netbox_nginx_fragment_name }}"
     owner: root
     group: root
     mode: "0644"
-  notify: caddy configuration changed
+  notify: nginx configuration changed
   when: not ansible_check_mode
 
-- name: Apply pending Caddy configuration handlers
+- name: Validate and reload the NetBox frontend
   ansible.builtin.meta: flush_handlers
 
 # Initial administrator creation remains an explicit operator action because this role does not

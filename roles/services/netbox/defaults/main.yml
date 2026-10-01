@@ -76,13 +76,15 @@ services_netbox_allowed_hosts:
   - localhost
   - 127.0.0.1
 
-services_netbox_caddy_fragment_name: netbox.caddy
-services_netbox_caddy_site_addresses:
+services_netbox_nginx_fragment_name: netbox.conf
+services_netbox_nginx_listen_address: "{{ network_ipv4_address | default(ansible_host) }}"
+services_netbox_nginx_port: 80
+services_netbox_nginx_server_names:
   - "{{ network_primary_fqdn | default(inventory_hostname) }}"
   - "{{ inventory_hostname }}"
   - "{{ network_ipv4_address | default(ansible_host) }}"
-services_netbox_caddy_static_path: /static/netbox.js
-services_netbox_frontend_health_address: "{{ network_ipv4_address | default(ansible_host) }}"
+services_netbox_frontend_static_path: /static/netbox.js
+services_netbox_frontend_health_address: "{{ services_netbox_nginx_listen_address }}:{{ services_netbox_nginx_port }}"
 services_netbox_health_path: /login/
 services_netbox_health_retries: 60
 services_netbox_health_delay: 5
