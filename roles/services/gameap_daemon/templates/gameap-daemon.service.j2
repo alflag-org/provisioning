@@ -17,7 +17,9 @@ Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
 KillMode=control-group
-UMask=0077
+# The root daemon creates parent directories traversed by game server users.
+# Credentials have explicit restrictive modes independent of this umask.
+UMask=0022
 
 [Install]
 WantedBy=multi-user.target
