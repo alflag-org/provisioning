@@ -58,7 +58,10 @@ if pid == 0:
 os.close(w)
 os.read(r, 5)
 os.close(r)
-pathlib.Path(os.environ["TEST_READY"]).write_text(json.dumps({"pids": [os.getpid(), pid], "path": sys.argv[-1][1:]}))
+marker = pathlib.Path(os.environ["TEST_READY"])
+pending = marker.with_suffix(".tmp")
+pending.write_text(json.dumps({"pids": [os.getpid(), pid], "path": sys.argv[-1][1:]}))
+pending.replace(marker)
 if os.environ["TEST_MODE"] != "normal":
     time.sleep(60)
 ''')

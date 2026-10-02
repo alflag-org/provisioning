@@ -2,8 +2,6 @@
 collections:
   - name: ansible.mysql
     version: ">=3.10.0"
-  - name: community.postgresql
-    version: ">=4.2.0"
   - name: community.general
     version: ">=11.0.0"
   - name: ansible.posix

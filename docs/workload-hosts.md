@@ -52,9 +52,6 @@ directory is valid and nginx can start without an HTTP listener.
 Each service owns a uniquely named `.conf` file in `nginx_fragment_dir`. It owns
 the server names, listen addresses, ports, static paths, and upstream routes in
 that file. It must not replace `nginx.conf` or manage other services' fragments.
-See [NetBox's fragment](../roles/services/netbox/templates/nginx.conf.j2) and
-[its integration tasks](../roles/services/netbox/tasks/main.yml) for an existing
-static-file and loopback-proxy example.
 
 Include `components/nginx` with `public: true` before rendering a fragment to
 declare the middleware dependency, including on hosts outside `web_hosts`.
