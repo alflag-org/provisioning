@@ -51,12 +51,13 @@
     - not ansible_check_mode
 
 - name: Install Percona XtraBackup 8.4 and transfer tools
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: "{{ mysql_backup_packages }}"
-    apt_state_force_update_cache: >-
-      {{ mysql_backup_percona_repository_enable.changed | default(false) }}
+  ansible.builtin.apt:
+    name: "{{ mysql_backup_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: >-
+      {{ 0 if (mysql_backup_percona_repository_enable.changed | default(false)) | bool else apt_cache_valid_time | default(86400) }}
+  become: true
   when:
     - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
 

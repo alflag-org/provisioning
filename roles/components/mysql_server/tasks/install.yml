@@ -12,11 +12,13 @@
   register: mysql_server_apt_pin
 
 - name: Install MySQL 8.4 server and administration packages
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: "{{ mysql_server_packages }}"
-    apt_state_force_update_cache: "{{ mysql_server_apt_pin.changed | default(false) }}"
+  ansible.builtin.apt:
+    name: "{{ mysql_server_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: >-
+      {{ 0 if (mysql_server_apt_pin.changed | default(false)) | bool else apt_cache_valid_time | default(86400) }}
+  become: true
 
 - name: Start mysql-server
   ansible.builtin.systemd_service:

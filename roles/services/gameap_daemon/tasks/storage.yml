@@ -70,10 +70,12 @@
   when: services_gameap_daemon_mount_query.rc == 1
 
 - name: Install ext4 tooling
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: [e2fsprogs, util-linux]
+  ansible.builtin.apt:
+    name: [e2fsprogs, util-linux]
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+  become: true
 
 - name: Initialize only the declared empty data disk
   community.general.filesystem:

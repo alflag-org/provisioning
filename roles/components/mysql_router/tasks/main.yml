@@ -32,15 +32,17 @@
   register: mysql_router_apt_pin
 
 - name: Install MySQL Router 8.4 and bootstrap dependencies
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages:
+  ansible.builtin.apt:
+    name:
       - "{{ mysql_router_package }}"
       - "{{ mysql_router_client_package }}"
       - python3-pexpect
       - acl
-    apt_state_force_update_cache: "{{ mysql_router_apt_pin.changed | default(false) }}"
+    state: present
+    update_cache: true
+    cache_valid_time: >-
+      {{ 0 if (mysql_router_apt_pin.changed | default(false)) | bool else apt_cache_valid_time | default(86400) }}
+  become: true
 
 - name: Create the MySQL Router system group
   ansible.builtin.group:

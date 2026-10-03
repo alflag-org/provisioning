@@ -2,7 +2,6 @@
 - name: Validate mysql-server inputs
   ansible.builtin.include_tasks:
     file: preflight.yml
-  when: not mysql_server_preflight_completed | default(false)
 
 - name: Install mysql-server
   ansible.builtin.include_tasks:

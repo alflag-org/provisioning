@@ -1,19 +1,32 @@
 ---
-- name: Set VM hostname
-  ansible.builtin.include_tasks:
-    file: hostname.yml
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ hostname | default(inventory_hostname) }}"
+  become: true
 
 - name: Configure VM timezone
   ansible.builtin.include_tasks:
     file: timezone.yml
 
-- name: Configure VM locale
-  ansible.builtin.include_tasks:
-    file: locale.yml
+- name: Enable ja_JP.UTF-8 locale
+  ansible.builtin.lineinfile:
+    path: /etc/locale.gen
+    regexp: '^#?\s*ja_JP\.UTF-8\s+UTF-8$'
+    line: ja_JP.UTF-8 UTF-8
+    create: false
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Generate VM ja_JP.UTF-8 locale
+  become: true
 
 - name: Install VM base packages
-  ansible.builtin.include_tasks:
-    file: packages.yml
+  ansible.builtin.apt:
+    name: "{{ foundation_vm_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+  become: true
 
 - name: Configure QEMU guest agent
   ansible.builtin.include_tasks:

@@ -4,21 +4,38 @@
     name: foundation/operator
     public: true
 
-- name: Configure LXC locale
-  ansible.builtin.include_tasks:
-    file: locale.yml
+- name: Enable ja_JP.UTF-8 locale
+  ansible.builtin.lineinfile:
+    path: /etc/locale.gen
+    regexp: '^#?\s*ja_JP\.UTF-8\s+UTF-8$'
+    line: ja_JP.UTF-8 UTF-8
+    create: false
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Generate LXC ja_JP.UTF-8 locale
+  become: "{{ foundation_lxc_become_root }}"
   when: not foundation_lxc_skip_locale | bool
 
 - name: Install LXC base packages
-  ansible.builtin.include_tasks:
-    file: packages.yml
+  ansible.builtin.apt:
+    name: "{{ foundation_lxc_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+  become: "{{ foundation_lxc_become_root }}"
 
 - name: Configure LXC unattended upgrades
   ansible.builtin.include_tasks:
     file: unattended_upgrades.yml
   when: not foundation_lxc_skip_unattended_upgrades | bool
 
-- name: Prepare LXC operator home
-  ansible.builtin.include_tasks:
-    file: home.yml
+- name: Ensure operator repos directory exists
+  ansible.builtin.file:
+    path: "{{ foundation_operator_home }}/repos"
+    state: directory
+    owner: "{{ foundation_operator_user }}"
+    group: "{{ foundation_operator_group }}"
+    mode: "0755"
+  become: "{{ foundation_lxc_become_root }}"
   when: not foundation_lxc_skip_home | bool

@@ -1,10 +1,12 @@
 ---
 - name: Install nginx without starting the distribution default site
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: "{{ nginx_package }}"
-    apt_state_policy_rc_d: 101
+  ansible.builtin.apt:
+    name: "{{ nginx_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+    policy_rc_d: 101
+  become: true
 
 - name: Inspect nginx check-mode prerequisites
   ansible.builtin.stat:
