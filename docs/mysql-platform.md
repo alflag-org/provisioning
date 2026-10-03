@@ -55,10 +55,3 @@ values. [Component roles](../roles/components/) define defaults, configuration,
 and operation constraints; the [database service role](../roles/services/mysql/)
 combines them. Consult these sources for versions, endpoints, secret variables,
 account privileges, backup destinations, and schedules.
-
-Normal convergence updates the replication account subnet through MySQL Shell's
-AdminAPI after verifying a healthy writable topology. Check mode reports the
-planned subnet change without updating accounts. Both paths require working
-administrator source grants and consistent replication account metadata.
-If accounts were moved manually without updating metadata, reconcile that state
-before convergence; provisioning refuses a partial account rewrite.
