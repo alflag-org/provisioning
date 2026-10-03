@@ -43,15 +43,14 @@
 - name: Build local ReplicaSet bootstrap accounts
   ansible.builtin.set_fact:
     mysql_replicaset_bootstrap_users: >-
-      {{ (mysql_replicaset_bootstrap_users | default([])) + [
-           {
+      {{ mysql_replicaset_admin_allowed_addresses
+         | map('community.general.dict_kv', 'host')
+         | map('combine', {
              'name': mysql_replicaset_admin_user,
-             'host': item,
              'password_var': 'mysql_replicaset_admin_password',
              'priv': mysql_replicaset_admin_grants | map('regex_replace', ',\\s+', ',') | join('/')
-           }
-         ] }}
-  loop: "{{ mysql_replicaset_admin_allowed_addresses }}"
+           })
+         | list }}
 
 - name: Resolve MySQL Router monitor source addresses
   ansible.builtin.set_fact:
