@@ -1,0 +1,18 @@
+---
+- name: Inspect the Talos interpreter without following its symlink
+  ansible.builtin.stat:
+    path: "{{ talos_venv }}/bin/python"
+    follow: false
+  register: talos_interpreter
+
+- name: Copy the managed interpreter into the Talos virtual environment
+  # Atlas resolves interpreter symlinks, which otherwise bypasses the venv.
+  ansible.builtin.copy:
+    src: "{{ atlas_home }}/runtimes/python/{{ talos_python_version }}/bin/python"
+    dest: "{{ talos_venv }}/bin/python"
+    remote_src: true
+    owner: "{{ talos_owner }}"
+    group: "{{ talos_group }}"
+    mode: "0755"
+    follow: false
+  when: not ansible_check_mode or talos_interpreter.stat.exists

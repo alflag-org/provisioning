@@ -2,9 +2,11 @@
 
 import getpass
 import grp
+import hashlib
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -14,6 +16,45 @@ from ansible_support import ROOT, AnsibleTestCase
 
 
 class TalosDeploymentTests(AnsibleTestCase):
+    def test_resolved_interpreter_keeps_venv_imports_without_changing_the_base(self):
+        base = Path(sys.executable).resolve()
+        original_hash = hashlib.sha256(base.read_bytes()).digest()
+        original_owner = base.stat().st_uid
+        venv = self.directory / "venv"
+        subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True)
+        python = venv / "bin/python"
+        site_packages = Path(subprocess.check_output([
+            str(python), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))",
+        ], text=True).strip())
+        (site_packages / "talos_import_probe.py").write_text("VALUE = 'venv-only'\n")
+        probe = "import talos_import_probe; print(talos_import_probe.VALUE)"
+        before = subprocess.run([str(python.resolve()), "-c", probe], capture_output=True)
+        self.assertNotEqual(before.returncode, 0)
+        runtime = self.directory / "atlas/runtimes/python/test/bin"
+        runtime.mkdir(parents=True)
+        (runtime / "python").symlink_to(base)
+        playbook = self.directory / "interpreter.yml"
+        playbook.write_text(yaml.safe_dump([{
+            "name": "Keep Atlas execution inside the Talos venv", "hosts": "default", "gather_facts": False,
+            "vars": {
+                "atlas_home": str(self.directory / "atlas"), "talos_python_version": "test",
+                "talos_venv": str(venv), "talos_owner": getpass.getuser(),
+                "talos_group": grp.getgrgid(os.getgid()).gr_name,
+                "ansible_remote_tmp": str(self.directory / "remote-tmp"),
+            },
+            "tasks": [{"name": "Prepare interpreter", "ansible.builtin.include_role": {
+                "name": str(ROOT / "roles/components/talos"), "tasks_from": "interpreter.yml",
+            }}],
+        }]))
+        self.assert_success(self.run_playbook(playbook))
+        self.assertFalse(python.is_symlink())
+        self.assertEqual(subprocess.check_output([str(python.resolve()), "-c", probe], text=True).strip(), "venv-only")
+        self.assertEqual(hashlib.sha256(base.read_bytes()).digest(), original_hash)
+        self.assertEqual(base.stat().st_uid, original_owner)
+        repeated = self.run_playbook(playbook)
+        self.assert_success(repeated)
+        self.assertIn("changed=0", repeated.stdout)
+
     def run_prepare(self, directory, config, dirty=False):
         source = directory / "source"
         source.mkdir()
@@ -70,7 +111,7 @@ class TalosDeploymentTests(AnsibleTestCase):
     def test_credential_keys_are_rejected_before_creating_deployment_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             config = self.config()
-            config["proxmox"]["api_token_secret"] = "unprepared"
+            config["proxmox"]["api_token_secret"] = None
             result, checkout, output = self.run_prepare(Path(temporary), config)
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(checkout.exists())

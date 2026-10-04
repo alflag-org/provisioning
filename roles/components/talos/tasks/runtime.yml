@@ -16,6 +16,9 @@
   become: true
   become_user: "{{ talos_owner }}"
 
+- name: Keep the selected interpreter inside the Talos virtual environment
+  ansible.builtin.import_tasks: interpreter.yml
+
 - name: Inspect the installed Talos revision marker
   ansible.builtin.stat:
     path: "{{ talos_venv }}/.talos-revision"
