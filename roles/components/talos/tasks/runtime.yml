@@ -35,11 +35,12 @@
          or talos_checkout.changed | default(false) }}
 
 - name: Install the selected Talos package and its pinned requirements
-  ansible.builtin.pip:
-    name: "{{ talos_root }}"
-    virtualenv: "{{ talos_venv }}"
+  # Atlas renames a staged venv; generated pip shebangs can retain its old path.
+  ansible.builtin.command:
+    argv: ["{{ talos_venv }}/bin/python", -m, pip, install, "{{ talos_root }}"]
   become: true
   become_user: "{{ talos_owner }}"
+  changed_when: true
   when:
     - talos_install_required
     - not ansible_check_mode
