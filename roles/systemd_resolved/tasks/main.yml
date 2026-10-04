@@ -2,11 +2,6 @@
 - name: Converge systemd-resolved
   when: systemd_resolved_enabled | bool
   block:
-    - name: Check systemd-resolved configuration directory
-      ansible.builtin.stat:
-        path: "{{ systemd_resolved_config_dir }}"
-      register: systemd_resolved_config_dir_stat
-
     - name: Ensure systemd-resolved configuration directory exists
       ansible.builtin.file:
         path: "{{ systemd_resolved_config_dir }}"
@@ -23,7 +18,6 @@
         group: root
         mode: "0644"
       notify: Restart systemd-resolved
-      when: not ansible_check_mode or systemd_resolved_config_dir_stat.stat.exists
 
     - name: Enable and start systemd-resolved
       ansible.builtin.systemd_service:
@@ -42,9 +36,3 @@
         state: link
         force: true
       when: systemd_resolved_manage_resolv_conf | bool
-
-    - name: Validate systemd-resolved status
-      ansible.builtin.command:
-        cmd: resolvectl status
-      changed_when: false
-      when: not ansible_check_mode

@@ -5,4 +5,3 @@ foundation_lxc_packages:
 foundation_lxc_become_root: "{{ ansible_user != 'root' }}"
 foundation_lxc_skip_locale: false
 foundation_lxc_skip_unattended_upgrades: false
-foundation_lxc_skip_home: false

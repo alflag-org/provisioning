@@ -23,7 +23,11 @@
 
 - name: Install VM base packages
   ansible.builtin.apt:
-    name: "{{ foundation_vm_packages }}"
+    name: >-
+      {{ foundation_vm_packages
+         + ([] if foundation_vm_skip_unattended_upgrades | bool
+                  or ansible_facts.get('virtualization_type', '') == 'lxc'
+            else ['unattended-upgrades']) }}
     state: present
     update_cache: true
     cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
@@ -39,6 +43,7 @@
 - name: Ensure VM operator account  # noqa role-name[path]
   ansible.builtin.include_role:
     name: foundation/operator
+    public: true
 
 - name: Configure VM swap policy
   ansible.builtin.include_tasks:
@@ -48,8 +53,15 @@
     - ansible_facts.get('virtualization_type', '') != 'lxc'
 
 - name: Configure VM unattended upgrades
-  ansible.builtin.include_tasks:
-    file: unattended_upgrades.yml
+  ansible.builtin.copy:
+    src: "{{ (role_path | dirname) ~ '/files/etc/apt/apt.conf.d/' ~ item }}"
+    dest: "/etc/apt/apt.conf.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [20auto-upgrades, 50unattended-upgrades]
+  become: true
+  notify: Restart VM unattended-upgrades
   when:
     - not foundation_vm_skip_unattended_upgrades | bool
     - ansible_facts.get('virtualization_type', '') != 'lxc'

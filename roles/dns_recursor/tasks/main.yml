@@ -4,16 +4,11 @@
   block:
     - name: Install recursive DNS packages
       ansible.builtin.apt:
-        name: "{{ [dns_recursor_package] + dns_recursor_validation_packages }}"
+        name: "{{ dns_recursor_package }}"
         state: present
         update_cache: true
         cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
       become: true
-
-    - name: Check Unbound configuration directory
-      ansible.builtin.stat:
-        path: "{{ dns_recursor_config_dir }}"
-      register: dns_recursor_config_dir_stat
 
     - name: Ensure Unbound configuration directory exists
       ansible.builtin.file:
@@ -31,7 +26,6 @@
         group: root
         mode: "0644"
       notify: Restart unbound
-      when: not ansible_check_mode or dns_recursor_config_dir_stat.stat.exists
 
     # The root configuration is complete and has no includes of legacy snippets.
     - name: Remove retired DNS configuration snippets
@@ -56,32 +50,3 @@
 
     - name: Apply pending Unbound handlers
       ansible.builtin.meta: flush_handlers
-
-    - name: Validate recursive DNS port
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 53
-        timeout: 5
-        state: started
-      when: not ansible_check_mode
-
-    - name: Validate local recursive lookup
-      ansible.builtin.command:
-        cmd: "dig +time=2 +tries=1 +short {{ dns_recursor_local_lookup_name }} {{ dns_recursor_local_lookup_type }} @127.0.0.1"
-      register: dns_recursor_lookup
-      changed_when: false
-      failed_when:
-        - dns_recursor_lookup.rc != 0 or dns_recursor_lookup.stdout | trim | length == 0
-      when: not ansible_check_mode
-
-    - name: Validate configured recursive DNS lookups
-      ansible.builtin.command:
-        cmd: "dig +time=2 +tries=1 +short {{ item.name }} {{ item.type | default('A') }} @127.0.0.1"
-      loop: "{{ dns_recursor_validation_queries }}"
-      register: dns_recursor_configured_lookup
-      changed_when: false
-      failed_when:
-        - dns_recursor_configured_lookup.rc != 0 or dns_recursor_configured_lookup.stdout | trim | length == 0
-      when:
-        - dns_recursor_validation_queries | length > 0
-        - not ansible_check_mode

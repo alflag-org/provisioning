@@ -19,23 +19,20 @@
 
 - name: Install LXC base packages
   ansible.builtin.apt:
-    name: "{{ foundation_lxc_packages }}"
+    name: "{{ foundation_lxc_packages + ([] if foundation_lxc_skip_unattended_upgrades | bool else ['unattended-upgrades']) }}"
     state: present
     update_cache: true
     cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
   become: "{{ foundation_lxc_become_root }}"
 
 - name: Configure LXC unattended upgrades
-  ansible.builtin.include_tasks:
-    file: unattended_upgrades.yml
-  when: not foundation_lxc_skip_unattended_upgrades | bool
-
-- name: Ensure operator repos directory exists
-  ansible.builtin.file:
-    path: "{{ foundation_operator_home }}/repos"
-    state: directory
-    owner: "{{ foundation_operator_user }}"
-    group: "{{ foundation_operator_group }}"
-    mode: "0755"
+  ansible.builtin.copy:
+    src: "{{ (role_path | dirname) ~ '/files/etc/apt/apt.conf.d/' ~ item }}"
+    dest: "/etc/apt/apt.conf.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [20auto-upgrades, 50unattended-upgrades]
   become: "{{ foundation_lxc_become_root }}"
-  when: not foundation_lxc_skip_home | bool
+  notify: Restart LXC unattended-upgrades
+  when: not foundation_lxc_skip_unattended_upgrades | bool

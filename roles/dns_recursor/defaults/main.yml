@@ -1,8 +1,6 @@
 ---
 dns_recursor_enabled: false
 dns_recursor_package: unbound
-dns_recursor_validation_packages:
-  - dnsutils
 dns_recursor_service_name: unbound
 dns_recursor_config_dir: /etc/unbound
 dns_recursor_config_path: "{{ dns_recursor_config_dir }}/unbound.conf"
@@ -12,9 +10,6 @@ dns_recursor_allowed_cidrs:
   - 127.0.0.0/8
 dns_recursor_stub_zones: []
 dns_recursor_forward_zones: []
-dns_recursor_local_lookup_name: "."
-dns_recursor_local_lookup_type: NS
-dns_recursor_validation_queries: []
 dns_recursor_retired_config_paths: []
 dns_recursor_trust_anchor_file: /var/lib/unbound/root.key
 dns_recursor_control_socket: /run/unbound.ctl

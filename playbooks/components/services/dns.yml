@@ -5,6 +5,4 @@
 
   roles:
     - role: dns_recursor
-      when: dns_recursor_enabled | default(false)
     - role: dns_authoritative
-      when: dns_authoritative_enabled | default(false)

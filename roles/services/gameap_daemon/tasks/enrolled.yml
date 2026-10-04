@@ -90,11 +90,3 @@
     not (services_gameap_daemon_version_result.stdout is search('(?m)^GameAP Daemon version: v?' ~
       (services_gameap_daemon_version | regex_escape) ~ '$'))
   when: not ansible_check_mode or not services_gameap_daemon_install_required
-
-- name: Verify Daemon service is enabled and active
-  ansible.builtin.command:
-    argv: [systemctl, "{{ item }}", gameap-daemon.service]
-  loop: [is-enabled, is-active]
-  changed_when: false
-  check_mode: false
-  when: not ansible_check_mode or not services_gameap_daemon_install_required

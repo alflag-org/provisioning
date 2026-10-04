@@ -11,16 +11,6 @@
         policy_rc_d: "{{ 101 if dns_authoritative_zones | length == 0 else omit }}"
       become: true
 
-    - name: Check authoritative DNS config directory
-      ansible.builtin.stat:
-        path: "{{ dns_authoritative_config_dir }}"
-      register: dns_authoritative_config_dir_stat
-
-    - name: Check authoritative DNS zone directory
-      ansible.builtin.stat:
-        path: "{{ dns_authoritative_zone_dir }}"
-      register: dns_authoritative_zone_dir_stat
-
     - name: Ensure authoritative DNS zone directory exists
       ansible.builtin.file:
         path: "{{ dns_authoritative_zone_dir }}"
@@ -89,7 +79,6 @@
       when:
         - not (item.managed | default(false) | bool)
         - item.text is defined
-        - not ansible_check_mode or dns_authoritative_zone_dir_stat.stat.exists
 
     - name: Render managed authoritative DNS zones
       ansible.builtin.include_tasks:
@@ -99,7 +88,6 @@
         loop_var: dns_authoritative_managed_zone
       when:
         - dns_authoritative_managed_zone.managed | default(false) | bool
-        - not ansible_check_mode or dns_authoritative_zone_dir_stat.stat.exists
 
     - name: Render authoritative DNS configuration
       ansible.builtin.template:
@@ -109,7 +97,6 @@
         group: root
         mode: "0644"
       notify: Restart nsd
-      when: not ansible_check_mode or dns_authoritative_config_dir_stat.stat.exists
 
     # The root configuration is complete and has no includes of legacy snippets.
     - name: Remove retired DNS configuration and zone files

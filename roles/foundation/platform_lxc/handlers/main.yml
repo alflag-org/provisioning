@@ -5,6 +5,7 @@
     state: restarted
     enabled: true
   become: "{{ foundation_lxc_become_root }}"
+  when: not ansible_check_mode
 
 - name: Generate LXC ja_JP.UTF-8 locale
   ansible.builtin.command:

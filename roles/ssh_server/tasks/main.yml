@@ -19,11 +19,6 @@
           ssh_server_allow_tcp_forwarding must be the string no, local, or yes.
         quiet: true
 
-    - name: Check sshd drop-in directory
-      ansible.builtin.stat:
-        path: "{{ ssh_server_config_dropin_dir }}"
-      register: ssh_server_dropin_dir
-
     - name: Ensure sshd drop-in directory exists
       ansible.builtin.file:
         path: "{{ ssh_server_config_dropin_dir }}"
@@ -40,7 +35,6 @@
         group: root
         mode: "0644"
       notify: Restart SSH service
-      when: not ansible_check_mode or ssh_server_dropin_dir.stat.exists
 
     - name: Validate sshd configuration
       ansible.builtin.command:

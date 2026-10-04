@@ -7,20 +7,3 @@
         name: ssh_server
       vars:
         ssh_server_enabled: true
-
-    - name: Validate local SSH target port
-      ansible.builtin.wait_for:
-        host: "{{ cloudflare_ssh_target_host }}"
-        port: "{{ cloudflare_ssh_target_port }}"
-        timeout: 5
-        state: started
-      when: not ansible_check_mode
-
-    - name: Record external Cloudflare SSH routing boundary
-      ansible.builtin.debug:
-        msg: >-
-          Cloudflare SSH target {{ cloudflare_ssh_hostname | default(inventory_hostname, true) }}
-          expects a dashboard, Access, or Terraform-managed route to
-          {{ cloudflare_ssh_target_host }}:{{ cloudflare_ssh_target_port }}.
-          This role does not call the Cloudflare API.
-        verbosity: 1

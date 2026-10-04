@@ -35,6 +35,11 @@
 
 ## Implementation constraints
 
+- Convergence declares desired resources and applies their differences. Keep only
+  checks needed to select configuration, protect existing data and credentials,
+  or reject invalid configuration before activation. Keep status displays and
+  connectivity tests outside normal convergence; explicit operational workflows
+  may verify the result of their mutation.
 - Host classification, network placement, and service intent are independent.
   Services own their middleware and runtime dependencies; host classification
   must not introduce application runtimes unrelated to the selected services.

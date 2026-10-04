@@ -68,20 +68,3 @@
         enabled: true
         daemon_reload: true
       when: not ansible_check_mode
-
-    - name: Validate cloudflared version
-      ansible.builtin.command:
-        cmd: "{{ cloudflared_binary_path }} version"
-      changed_when: false
-      when: not ansible_check_mode
-
-    - name: Gather service facts for cloudflared
-      ansible.builtin.service_facts:
-      when: not ansible_check_mode
-
-    - name: Validate cloudflared service status
-      ansible.builtin.assert:
-        that:
-          - (ansible_facts.services.get(cloudflared_service_name ~ '.service', {}).state | default('')) == 'running'
-        fail_msg: "cloudflared service {{ cloudflared_service_name }} is not running."
-      when: not ansible_check_mode

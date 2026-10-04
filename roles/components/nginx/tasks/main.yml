@@ -8,26 +8,6 @@
     policy_rc_d: 101
   become: true
 
-- name: Inspect nginx check-mode prerequisites
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - "{{ nginx_binary }}"
-    - "{{ nginx_config_dir }}"
-    - "{{ nginx_fragment_dir }}"
-  register: nginx_prerequisites
-  when: ansible_check_mode
-
-- name: Explain deferred nginx configuration on a fresh host
-  ansible.builtin.debug:
-    msg: >-
-      Check mode cannot validate or render nginx before its package and configuration
-      directories exist. Apply installs the package without starting its default site,
-      renders and validates the base configuration, then enables nginx.
-  when:
-    - ansible_check_mode
-    - not (nginx_prerequisites.results | map(attribute='stat.exists') | min)
-
 - name: Ensure nginx service fragment directory exists
   ansible.builtin.file:
     path: "{{ nginx_fragment_dir }}"
@@ -47,9 +27,6 @@
     mode: "0644"
     validate: "{{ nginx_binary }} -t -c %s"
   notify: nginx configuration changed
-  when: >-
-    not ansible_check_mode or
-    (nginx_prerequisites.results | map(attribute='stat.exists') | min)
 
 - name: Validate nginx configuration before starting
   ansible.builtin.import_tasks: validate.yml

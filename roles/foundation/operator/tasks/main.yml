@@ -36,24 +36,13 @@
     state: present
   become: "{{ foundation_operator_become_root }}"
 
-- name: Ensure operator .ssh directory exists
-  ansible.builtin.file:
-    path: "{{ foundation_operator_home }}/.ssh"
-    state: directory
-    owner: "{{ foundation_operator_user }}"
-    group: "{{ foundation_operator_group }}"
-    mode: "0700"
-  become: "{{ foundation_operator_become_root }}"
-  when: foundation_operator_manage_authorized_keys | bool
-
 - name: Install operator authorized keys
-  ansible.builtin.lineinfile:
+  ansible.posix.authorized_key:
+    user: "{{ foundation_operator_user }}"
     path: "{{ foundation_operator_home }}/.ssh/authorized_keys"
-    line: "{{ lookup('ansible.builtin.file', item) | trim }}"
-    create: true
-    owner: "{{ foundation_operator_user }}"
-    group: "{{ foundation_operator_group }}"
-    mode: "0600"
+    key: "{{ lookup('ansible.builtin.file', item) | trim }}"
+    manage_dir: true
+    exclusive: false
     state: present
   become: "{{ foundation_operator_become_root }}"
   loop: "{{ foundation_operator_authorized_key_files }}"

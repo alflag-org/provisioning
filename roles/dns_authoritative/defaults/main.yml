@@ -15,7 +15,5 @@ dns_authoritative_initial_serial: 1
 dns_authoritative_soa: {}
 dns_authoritative_nameservers: []
 dns_authoritative_record_source_group: default
-dns_authoritative_server_identity_zone: srv.alflag.internal
-dns_authoritative_access_zone: access.internal
 dns_authoritative_zones: []
 dns_authoritative_retired_paths: []
