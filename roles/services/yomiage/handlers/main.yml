@@ -1,0 +1,4 @@
+---
+- name: Restart running yomiage
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/restart.yml"
+  when: not ansible_check_mode

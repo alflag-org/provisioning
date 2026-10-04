@@ -1,0 +1,62 @@
+---
+- name: Require yomiage application assignment and billing endpoint
+  ansible.builtin.assert:
+    that:
+      - application_services | default([]) | type_debug == 'list'
+      - "'yomiage' in application_services"
+      - services_yomiage_billing_api_url | default('') is match('^https://[^/\s]+')
+      - services_yomiage_hmac_key_id | default('') | length > 0
+      - services_yomiage_log_level | length > 0
+    fail_msg: Assign yomiage and supply the HTTPS billing API URL and HMAC key ID in inventory.
+
+- name: Require yomiage credentials before mutation
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item | length > 0
+      - "'\u0000' not in item"
+    fail_msg: Supply all yomiage credentials through the existing secret provider.
+  loop:
+    - "{{ services_yomiage_discord_token | default('') }}"
+    - "{{ services_yomiage_google_tts_api_key | default('') }}"
+    - "{{ services_yomiage_cf_access_client_id | default('') }}"
+    - "{{ services_yomiage_cf_access_client_secret | default('') }}"
+    - "{{ services_yomiage_hmac_key | default('') }}"
+  no_log: true
+
+- name: Prepare the pinned yomiage release
+  ansible.builtin.import_tasks: release.yml
+
+- name: Create yomiage configuration directory
+  # The application component assigns its group later; retain it on repeat runs.
+  ansible.builtin.file:
+    path: /etc/yomiage
+    state: directory
+    owner: root
+    mode: "0750"
+
+- name: Inspect yomiage configuration check-mode prerequisite
+  ansible.builtin.stat:
+    path: /etc/yomiage
+  register: services_yomiage_configuration_directory
+  when: ansible_check_mode
+
+- name: Configure yomiage environment for the shared systemd instance
+  ansible.builtin.template:
+    src: environment.j2
+    dest: /etc/yomiage/environment
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Restart running yomiage
+  when: not ansible_check_mode or services_yomiage_configuration_directory.stat.isdir | default(false)
+
+- name: Explain deferred yomiage configuration on a fresh host
+  ansible.builtin.debug:
+    msg: The environment file would be installed after its configuration directory is created during apply.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not (services_yomiage_configuration_directory.stat.isdir | default(false))

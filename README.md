@@ -49,6 +49,14 @@ invalid. Use local validation without secret injection for syntax diagnostics.
 
 The [GameAP guide](docs/gameap.md) explains enrollment and recovery decisions.
 
+Simple foreground applications can use the shared
+[application service component](roles/components/application_service/). Services
+prepare their executable and configuration before that component enables their
+systemd instances. Processes requiring special systemd behavior use dedicated units.
+Removing an assignment retains deployed resources; retire them explicitly through
+resource cleanup. The [yomiage guide](docs/yomiage.md) covers its configuration
+and operational prerequisites.
+
 The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
 applies declared retired-resource removals; inspect the inventory declarations

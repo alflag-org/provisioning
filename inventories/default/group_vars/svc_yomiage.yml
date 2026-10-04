@@ -1,0 +1,6 @@
+---
+application_services:
+  - yomiage
+
+services_yomiage_version: "0.1.4"
+services_yomiage_release_checksum: "978cefe6796d0b65c762114e495abbee45a3e69cfb705ff17208033599a373ce"

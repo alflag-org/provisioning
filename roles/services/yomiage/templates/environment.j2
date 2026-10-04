@@ -1,0 +1,14 @@
+{% macro setting(name, value) -%}
+{{ name }}="{{ value | replace('\\', '\\\\') | replace('"', '\\"') }}"
+{%- endmacro %}
+{{ setting('YOMIAGE_BOT_DISCORD_TOKEN', services_yomiage_discord_token) }}
+{{ setting('YOMIAGE_BOT_GOOGLE_TTS_API_KEY', services_yomiage_google_tts_api_key) }}
+YOMIAGE_BOT_TTS_PROVIDER=google
+YOMIAGE_BOT_AUDIO_CACHE_DIR=/var/lib/yomiage/cache
+YOMIAGE_BOT_BILLING_ENABLED=true
+{{ setting('YOMIAGE_BOT_BILLING_API_BASE_URL', services_yomiage_billing_api_url) }}
+{{ setting('YOMIAGE_BOT_BILLING_API_CF_ACCESS_CLIENT_ID', services_yomiage_cf_access_client_id) }}
+{{ setting('YOMIAGE_BOT_BILLING_API_CF_ACCESS_CLIENT_SECRET', services_yomiage_cf_access_client_secret) }}
+{{ setting('YOMIAGE_BOT_BILLING_HMAC_KEY_ID', services_yomiage_hmac_key_id) }}
+{{ setting('YOMIAGE_BOT_BILLING_HMAC_KEY', services_yomiage_hmac_key) }}
+{{ setting('RUST_LOG', services_yomiage_log_level) }}

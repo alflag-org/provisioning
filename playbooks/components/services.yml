@@ -7,3 +7,9 @@
 
 - name: Converge GameAP services
   ansible.builtin.import_playbook: services/gameap.yml
+
+- name: Prepare yomiage application
+  ansible.builtin.import_playbook: services/yomiage.yml
+
+- name: Converge generic application services after service-specific preparation
+  ansible.builtin.import_playbook: services/applications.yml

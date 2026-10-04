@@ -1,0 +1,12 @@
+---
+- name: Inspect yomiage activity before restarting
+  ansible.builtin.command:
+    argv: [systemctl, show, --property=ActiveState, --value, application@yomiage.service]
+  register: services_yomiage_activity
+  changed_when: false
+
+- name: Restart the existing active yomiage instance
+  ansible.builtin.systemd_service:
+    name: application@yomiage.service
+    state: restarted
+  when: services_yomiage_activity.stdout | trim == 'active'

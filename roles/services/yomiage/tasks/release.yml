@@ -1,0 +1,117 @@
+---
+- name: Validate yomiage release platform and integrity inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.architecture == 'x86_64'
+      - ansible_facts.service_mgr == 'systemd'
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version is version('24.04', '>=')
+      - services_yomiage_version is match('^[0-9]+\.[0-9]+\.[0-9]+\Z')
+      - services_yomiage_release_checksum is match('^[a-f0-9]{64}\Z')
+
+- name: Stage and verify the private GitHub release on the controller
+  # Controller staging is temporary input preparation, not managed-host state.
+  # gh uses the controller's existing authentication without passing tokens in argv.
+  block:
+    - name: Create temporary controller release directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: yomiage-release-
+      register: services_yomiage_release_directory
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      check_mode: false
+
+    - name: Download the pinned private release using controller GitHub authentication
+      ansible.builtin.command:
+        argv:
+          - gh
+          - release
+          - download
+          - "v{{ services_yomiage_version }}"
+          - --repo
+          - viasnake/yomiage
+          - --pattern
+          - "discord-yomiage-v{{ services_yomiage_version }}-x86_64-unknown-linux-gnu.tar.gz"
+          - --dir
+          - "{{ services_yomiage_release_directory.path }}"
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      check_mode: false
+
+    - name: Calculate downloaded release checksum
+      ansible.builtin.stat:
+        path: "{{ services_yomiage_release_directory.path }}/discord-yomiage-v{{ services_yomiage_version }}-x86_64-unknown-linux-gnu.tar.gz"
+        checksum_algorithm: sha256
+      register: services_yomiage_archive
+      delegate_to: localhost
+      become: false
+
+    - name: Verify the pinned release checksum before host mutation
+      ansible.builtin.assert:
+        that:
+          - services_yomiage_archive.stat.checksum == services_yomiage_release_checksum
+        fail_msg: The downloaded yomiage release does not match its inventory checksum.
+
+    - name: Extract the verified controller release
+      ansible.builtin.unarchive:
+        src: "{{ services_yomiage_archive.stat.path }}"
+        dest: "{{ services_yomiage_release_directory.path }}"
+        remote_src: true
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      check_mode: false
+
+    - name: Install yomiage runtime libraries
+      ansible.builtin.apt:
+        name: [ca-certificates, libssl3t64, libopus0]
+        state: present
+        update_cache: true
+        cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+
+    - name: Create yomiage release directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /opt/yomiage
+        - /opt/yomiage/releases
+        - "/opt/yomiage/releases/{{ services_yomiage_version }}"
+
+    - name: Install the verified yomiage executable
+      ansible.builtin.copy:
+        src: "{{ services_yomiage_release_directory.path }}/discord-yomiage"
+        dest: "/opt/yomiage/releases/{{ services_yomiage_version }}/discord-yomiage"
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart running yomiage
+
+    - name: Select the installed yomiage release
+      ansible.builtin.file:
+        src: "/opt/yomiage/releases/{{ services_yomiage_version }}"
+        dest: /opt/yomiage/current
+        state: link
+        owner: root
+        group: root
+        # In check mode the preceding release directory creation is only predicted.
+        force: "{{ ansible_check_mode }}"
+      notify: Restart running yomiage
+
+  always:
+    - name: Remove temporary controller release inputs
+      ansible.builtin.file:
+        path: "{{ services_yomiage_release_directory.path }}"
+        state: absent
+      changed_when: false
+      when: services_yomiage_release_directory.path is defined
+      delegate_to: localhost
+      become: false
+      check_mode: false
