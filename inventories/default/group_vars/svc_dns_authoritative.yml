@@ -23,6 +23,10 @@ dns_authoritative_forward_zones:
   - name: access.internal
     managed: true
     inventory_records: access_aliases
+    records:
+      - name: proxmox
+        type: A
+        value: 10.10.10.11
 
 dns_authoritative_reverse_zones: >-
   {{ [network_zones.mgmt.cidr, network_zones.infra.cidr, network_zones.dmz.cidr]
