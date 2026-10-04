@@ -135,7 +135,7 @@ class MySQLBootstrapAccountTests(AnsibleTestCase):
             "gather_facts": False,
             "vars": {
                 "mysql_replicaset_admin_user": "fixture_admin",
-                "mysql_replicaset_admin_grants": ["*.*:SELECT,INSERT"],
+                "mysql_replicaset_admin_grants": ["*.*:SELECT, INSERT"],
             },
             "tasks": [
                 {"ansible.builtin.set_fact": {

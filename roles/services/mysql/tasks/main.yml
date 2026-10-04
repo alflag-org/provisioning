@@ -48,19 +48,13 @@
          | map('combine', {
              'name': mysql_replicaset_admin_user,
              'password_var': 'mysql_replicaset_admin_password',
-             'priv': mysql_replicaset_admin_grants | map('regex_replace', ',\\s+', ',') | join('/')
+             'priv': mysql_replicaset_admin_grants | map('regex_replace', ',\s+', ',') | join('/')
            })
          | list }}
 
-- name: Resolve MySQL Router monitor source addresses
+- name: Resolve MySQL Router source addresses
   ansible.builtin.set_fact:
-    mysql_router_monitor_addresses: >-
-      {{ groups['mysql_router_clients'] | mysql_hosts_to_addresses(hostvars) }}
-  run_once: true
-
-- name: Resolve MySQL Router bootstrap source addresses
-  ansible.builtin.set_fact:
-    mysql_router_bootstrap_addresses: >-
+    mysql_router_client_addresses: >-
       {{ groups['mysql_router_clients'] | mysql_hosts_to_addresses(hostvars) }}
   run_once: true
 
@@ -93,7 +87,7 @@
              'tls_requires': {'SSL': true}
            }
          ] }}
-  loop: "{{ mysql_router_bootstrap_addresses }}"
+  loop: "{{ mysql_router_client_addresses }}"
   run_once: true
 
 - name: Add host-restricted Router monitoring accounts
@@ -108,7 +102,7 @@
              'tls_requires': {'SSL': true}
            }
          ] }}
-  loop: "{{ mysql_router_monitor_addresses }}"
+  loop: "{{ mysql_router_client_addresses }}"
   run_once: true
 
 - name: Validate the complete shared database list
@@ -169,7 +163,7 @@
     state: absent
   loop: >-
     {{
-      mysql_router_bootstrap_addresses
+      mysql_router_client_addresses
       | difference(mysql_replicaset_admin_allowed_addresses)
     }}
   loop_control:

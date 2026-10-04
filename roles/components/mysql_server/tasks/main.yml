@@ -7,9 +7,14 @@
   ansible.builtin.include_tasks:
     file: install.yml
 
-- name: Configure mysql-server
-  ansible.builtin.include_tasks:
-    file: configure.yml
+- name: Render mysql-server configuration
+  ansible.builtin.template:
+    src: mysqld.cnf.j2
+    dest: "{{ mysql_server_config_path }}"
+    owner: "{{ mysql_server_config_owner }}"
+    group: "{{ mysql_server_config_group }}"
+    mode: "{{ mysql_server_config_mode }}"
+  notify: Restart mysql
   when: mysql_server_manage_config | bool
 
 - name: Apply pending mysql-server handlers
@@ -41,14 +46,7 @@
     - [/usr/bin/mysqlsh, --version]
   register: mysql_server_component_versions
   changed_when: false
-  when: not ansible_check_mode
-
-- name: Require MySQL Server and Shell 8.4
-  ansible.builtin.assert:
-    that:
-      - item.stdout is search('8\\.4\\.')
-    fail_msg: "Installed MySQL component is outside the required 8.4 series: {{ item.stdout }}"
-  loop: "{{ mysql_server_component_versions.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item[0] | default('mysql component') }}"
+  failed_when: >-
+    mysql_server_component_versions.rc != 0 or
+    not (mysql_server_component_versions.stdout is search('8[.]4[.]'))
   when: not ansible_check_mode
