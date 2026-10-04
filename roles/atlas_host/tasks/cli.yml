@@ -6,6 +6,7 @@
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
     recurse: true
+    follow: false
   become: "{{ atlas_become_root }}"
 
 - name: Create Atlas CLI directories

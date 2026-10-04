@@ -10,7 +10,34 @@
     path: "{{ foundation_vm_swap_file_path }}"
     get_checksum: false
     get_mime: false
+    follow: false
   register: foundation_vm_swap_file
+
+- name: Refuse non-regular VM swap paths
+  ansible.builtin.assert:
+    that:
+      - foundation_vm_swap_file.stat.isreg | default(false)
+      - not foundation_vm_swap_file.stat.islnk | default(false)
+    fail_msg: Refusing to manage a VM swap path that is not a regular file.
+  when: foundation_vm_swap_file.stat.exists
+
+- name: Read existing VM swap signature
+  ansible.builtin.command:
+    argv: [blkid, -p, -s, TYPE, -o, value, "{{ foundation_vm_swap_file_path }}"]
+  register: foundation_vm_swap_signature
+  become: true
+  changed_when: false
+  check_mode: false
+  failed_when: foundation_vm_swap_signature.rc not in [0, 2]
+  when: foundation_vm_swap_file.stat.exists
+
+- name: Refuse existing files without a swap signature
+  ansible.builtin.assert:
+    that:
+      - foundation_vm_swap_signature.rc == 0
+      - foundation_vm_swap_signature.stdout | trim == 'swap'
+    fail_msg: Refusing to overwrite or remove an existing file without a swap signature.
+  when: foundation_vm_swap_file.stat.exists
 
 - name: Set VM swap active fact
   ansible.builtin.set_fact:
