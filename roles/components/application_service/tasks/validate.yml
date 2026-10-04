@@ -1,0 +1,49 @@
+---
+- name: Validate application assignment type
+  ansible.builtin.assert:
+    that:
+      - application_services | type_debug == 'list'
+    fail_msg: application_services must be a list of application names.
+
+- name: Validate application names
+  ansible.builtin.assert:
+    that:
+      - item is string
+      # app- plus the instance name must fit a 32-character Linux account name.
+      - item is match('^[a-z][a-z0-9-]{0,27}\Z')
+    fail_msg: Application names must use lowercase letters, digits and hyphens, start with a letter, and contain at most 28 characters.
+  loop: "{{ application_services }}"
+
+- name: Reject duplicate application names
+  ansible.builtin.assert:
+    that:
+      - application_services | unique | length == application_services | length
+    fail_msg: application_services must not contain duplicate names.
+
+- name: Validate application service platform
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.service_mgr == 'systemd'
+    fail_msg: Generic applications require Linux with systemd.
+  when: application_services | length > 0
+
+- name: Inspect all application run sources on the controller
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/applications/{{ item }}/run"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  delegate_to: localhost
+  become: false
+  loop: "{{ application_services }}"
+  register: application_service_run_sources
+
+- name: Require regular run sources before any host mutation
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+    fail_msg: "Missing or non-regular run source for {{ item.item }}. Add files/applications/{{ item.item }}/run to the application_service role."
+  loop: "{{ application_service_run_sources.results }}"
+  loop_control:
+    label: "{{ item.item }}"

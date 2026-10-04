@@ -1,0 +1,17 @@
+[Unit]
+Description=Application %i
+
+[Service]
+Type=exec
+User=app-%i
+Group=app-%i
+WorkingDirectory=/var/lib/%i
+EnvironmentFile=-/etc/%i/environment
+ExecStart=/opt/%i/run
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

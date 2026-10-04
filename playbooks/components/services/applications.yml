@@ -1,0 +1,7 @@
+---
+- name: Converge generic applications
+  hosts: default
+  gather_facts: true
+
+  roles:
+    - role: components/application_service  # noqa role-name[path]

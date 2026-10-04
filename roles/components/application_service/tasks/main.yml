@@ -1,0 +1,98 @@
+---
+- name: Validate generic application inputs before mutation
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Converge declared application services
+  when: application_services | length > 0
+  block:
+    - name: Create application system groups
+      ansible.builtin.group:
+        name: "app-{{ item }}"
+        system: true
+      loop: "{{ application_services }}"
+
+    - name: Create application non-login system users
+      ansible.builtin.user:
+        name: "app-{{ item }}"
+        group: "app-{{ item }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: "/var/lib/{{ item }}"
+        create_home: false
+      loop: "{{ application_services }}"
+      register: application_service_users
+
+    - name: Refuse root application accounts
+      ansible.builtin.assert:
+        that:
+          - item.uid | int > 0
+        fail_msg: "Application account app-{{ item.item }} must not have UID 0."
+      loop: "{{ application_service_users.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: not ansible_check_mode
+
+    - name: Create application configuration directories
+      ansible.builtin.file:
+        path: "/etc/{{ item }}"
+        state: directory
+        owner: root
+        group: "app-{{ item }}"
+        mode: "0750"
+      loop: "{{ application_services }}"
+
+    - name: Create application executable directories
+      ansible.builtin.file:
+        path: "/opt/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop: "{{ application_services }}"
+
+    - name: Create application state directories
+      ansible.builtin.file:
+        path: "/var/lib/{{ item }}"
+        state: directory
+        owner: "app-{{ item }}"
+        group: "app-{{ item }}"
+        mode: "0750"
+      loop: "{{ application_services }}"
+
+    - name: Install Provisioning-owned application run files
+      ansible.builtin.copy:
+        src: "applications/{{ item }}/run"
+        dest: "/opt/{{ item }}/run"
+        owner: root
+        group: root
+        mode: "0755"
+      loop: "{{ application_services }}"
+      register: application_service_runs
+
+    - name: Install the common application systemd template
+      ansible.builtin.template:
+        src: application@.service.j2
+        dest: /etc/systemd/system/application@.service
+        owner: root
+        group: root
+        mode: "0644"
+      register: application_service_unit
+
+    - name: Reload systemd after common application template changes
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when:
+        - not ansible_check_mode
+        - application_service_unit.changed
+
+    # One action per instance combines run and template changes without a second
+    # restart. An inactive instance is also started by state=restarted.
+    - name: Enable and converge application instances
+      ansible.builtin.systemd_service:
+        name: "application@{{ item.item }}.service"
+        enabled: true
+        state: "{{ 'restarted' if application_service_unit.changed or item.changed else 'started' }}"
+      loop: "{{ application_service_runs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: not ansible_check_mode
