@@ -1,12 +1,76 @@
 ---
-- name: Generate Atlas command shims
-  ansible.builtin.command:
-    cmd: "{{ atlas_cli_bin }} shim generate"
-  environment:
-    PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    PYENV_ROOT: "{{ atlas_pyenv_root }}"
-    TMPDIR: "{{ atlas_tmp_dir }}"
-    PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
+- name: Create the Atlas shim directory
+  ansible.builtin.file:
+    path: "{{ atlas_home }}/shims"
+    state: directory
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0755"
+    follow: false
+  become: "{{ atlas_become_operator }}"
+
+- name: Inspect command discovery prerequisites in check mode
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ atlas_cli_bin }}"
+    - "{{ atlas_etc_dir }}/config.yml"
+  register: atlas_shim_prerequisites
+  when: ansible_check_mode
+
+- name: Manage shims from the configured command catalog
+  when: >-
+    not ansible_check_mode or
+    ((atlas_shim_prerequisites.results | map(attribute='stat.exists') | min)
+     and not (atlas_config.changed | default(false)))
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
-  changed_when: true
+  block:
+    - name: Discover configured Atlas commands
+      ansible.builtin.command:
+        argv: ["{{ atlas_cli_bin }}", command, list]
+      register: atlas_commands
+      changed_when: false
+      check_mode: false
+
+    - name: Find Atlas-owned shims
+      ansible.builtin.find:
+        paths: "{{ atlas_home }}/shims"
+        contains: '^# atlas-shim: generated$'
+        file_type: file
+      register: atlas_owned_shims
+
+    - name: Inspect desired shim paths
+      ansible.builtin.stat:
+        path: "{{ atlas_home }}/shims/{{ item }}"
+        follow: false
+      loop: "{{ atlas_commands.stdout_lines }}"
+      register: atlas_shim_paths
+
+    - name: Refuse to replace files not owned by Atlas
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists or (atlas_home ~ '/shims/' ~ item.item) in (atlas_owned_shims.files | map(attribute='path') | list)
+        fail_msg: Refusing to replace a non-Atlas file or symlink in the shim directory.
+      loop: "{{ atlas_shim_paths.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Render Atlas command shims
+      ansible.builtin.template:
+        src: shim.j2
+        dest: "{{ atlas_home }}/shims/{{ item }}"
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+        mode: "0755"
+        follow: false
+      loop: "{{ atlas_commands.stdout_lines }}"
+
+    - name: Remove retired Atlas-owned shims
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ atlas_owned_shims.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: item.path | basename not in atlas_commands.stdout_lines

@@ -1,0 +1,49 @@
+---
+- name: Install missing pyenv Python
+  ansible.builtin.command:
+    argv: ["{{ atlas_pyenv_root }}/bin/pyenv", install, --skip-existing, "{{ atlas_runtime_version }}"]
+    creates: "{{ atlas_runtime_source }}"
+  become: "{{ atlas_become_operator }}"
+  become_user: "{{ atlas_operator_user }}"
+  when: >-
+    not (atlas_runtime_python_executable | length > 0
+         and atlas_runtime_version == (atlas_runtime_python_version | default('configured', true)))
+
+- name: Create Atlas runtime directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0755"
+    follow: false
+  loop:
+    - "{{ atlas_home }}/runtimes"
+    - "{{ atlas_home }}/runtimes/python"
+    - "{{ atlas_home }}/runtimes/python/{{ atlas_runtime_version }}"
+    - "{{ atlas_home }}/runtimes/python/{{ atlas_runtime_version }}/bin"
+  become: "{{ atlas_become_operator }}"
+
+- name: Inspect the selected Python
+  ansible.builtin.stat:
+    path: "{{ atlas_runtime_source }}"
+    follow: true
+  register: atlas_runtime_source_state
+
+- name: Require an executable Python source
+  ansible.builtin.assert:
+    that:
+      - atlas_runtime_source_state.stat.exists
+      - atlas_runtime_source_state.stat.isreg | default(false)
+      - atlas_runtime_source_state.stat.executable | default(false)
+    fail_msg: The selected Atlas Python source must be an executable file.
+  when: not ansible_check_mode or atlas_runtime_source_state.stat.exists
+
+- name: Link the selected Atlas Python
+  ansible.builtin.file:
+    src: "{{ atlas_runtime_source }}"
+    dest: "{{ atlas_home }}/runtimes/python/{{ atlas_runtime_version }}/bin/python"
+    state: link
+    follow: false
+  become: "{{ atlas_become_operator }}"
+  when: not ansible_check_mode or atlas_runtime_source_state.stat.exists

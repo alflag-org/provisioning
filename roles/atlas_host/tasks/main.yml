@@ -1,7 +1,4 @@
 ---
-- name: Check host management prerequisites
-  ansible.builtin.import_tasks: preflight.yml
-
 - name: Remove the legacy Atlas installation
   ansible.builtin.import_tasks: cleanup.yml
   when: atlas_remove_legacy_installation | bool
@@ -32,22 +29,53 @@
 - name: Install pyenv
   ansible.builtin.import_tasks: pyenv.yml
 
-- name: Configure environment
-  ansible.builtin.import_tasks: env.yml
+- name: Remove the separate pyenv profile block
+  ansible.builtin.blockinfile:
+    path: "{{ atlas_operator_profile }}"
+    marker: "# {mark} ANSIBLE MANAGED PYENV"
+    state: absent
+    create: true
+    mode: "0644"
+  become: "{{ atlas_become_operator }}"
+
+- name: Configure Atlas environment profile
+  ansible.builtin.blockinfile:
+    path: "{{ atlas_operator_profile }}"
+    marker: "# {mark} ANSIBLE MANAGED ATLAS ENV"
+    create: true
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0644"
+    block: |
+      export PYENV_ROOT={{ atlas_pyenv_root | quote }}
+      export PATH="{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/shims:$PATH"
+      export ATLAS_HOME={{ atlas_home | quote }}
+      export ATLAS_ETC_DIR={{ atlas_etc_dir | quote }}
+      export ATLAS_VAR_DIR={{ atlas_var_dir | quote }}
+      export TMPDIR={{ atlas_tmp_dir | quote }}
+      export PYTHON_BUILD_CACHE_PATH={{ atlas_python_build_cache_path | quote }}
+      eval "$(pyenv init - bash)"
+  become: "{{ atlas_become_operator }}"
 
 - name: Render Atlas configuration
   ansible.builtin.import_tasks: config.yml
 
-- name: Install Atlas CLI
-  ansible.builtin.import_tasks: cli.yml
+- name: Manage Atlas CLI and generated resources
+  environment:
+    PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    PYENV_ROOT: "{{ atlas_pyenv_root }}"
+    ATLAS_HOME: "{{ atlas_home }}"
+    ATLAS_ETC_DIR: "{{ atlas_etc_dir }}"
+    ATLAS_VAR_DIR: "{{ atlas_var_dir }}"
+    TMPDIR: "{{ atlas_tmp_dir }}"
+    PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
+  block:
+    - name: Install Atlas CLI
+      ansible.builtin.import_tasks: cli.yml
 
-- name: Manage Atlas runtime
-  ansible.builtin.import_tasks: runtime.yml
+    - name: Manage Atlas runtime
+      ansible.builtin.import_tasks: runtime.yml
+      when: atlas_manage_runtime | bool
 
-- name: Generate Atlas command shims
-  ansible.builtin.import_tasks: shims.yml
-
-- name: Validate Atlas host
-  ansible.builtin.import_tasks: validate.yml
-  # Check mode does not install the CLI or render its runtime configuration.
-  when: not ansible_check_mode
+    - name: Manage Atlas command shims
+      ansible.builtin.import_tasks: shims.yml

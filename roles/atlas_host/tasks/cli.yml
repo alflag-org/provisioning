@@ -28,23 +28,24 @@
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
 
-- name: Upgrade pip in Atlas CLI venv
-  ansible.builtin.command:
-    cmd: "{{ atlas_cli_venv }}/bin/python -m pip install --upgrade pip"
-  environment:
-    TMPDIR: "{{ atlas_tmp_dir }}"
+# Atlas follows the configured source; retain its existing upgrade policy.
+- name: Upgrade pip in Atlas CLI venv  # noqa package-latest
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ atlas_cli_venv }}"
+    virtualenv_command: "{{ atlas_cli_python }} -m venv"
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
-  changed_when: false
 
-- name: Install Atlas CLI
-  ansible.builtin.command:
-    cmd: "{{ atlas_cli_venv }}/bin/python -m pip install --upgrade {{ atlas_cli_source }}"
-  environment:
-    TMPDIR: "{{ atlas_tmp_dir }}"
+- name: Install Atlas CLI  # noqa package-latest
+  ansible.builtin.pip:
+    name: "{{ atlas_cli_source }}"
+    state: latest
+    virtualenv: "{{ atlas_cli_venv }}"
+    virtualenv_command: "{{ atlas_cli_python }} -m venv"
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
-  changed_when: true
 
 - name: Link atlas command
   ansible.builtin.file:

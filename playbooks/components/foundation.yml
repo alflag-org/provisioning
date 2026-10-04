@@ -9,8 +9,22 @@
     - role: foundation/platform_lxc  # noqa role-name[path]
       when: "'platform_lxc' in group_names"
     - role: atlas_host
+      vars:
+        atlas_manage_operator_account: >-
+          {{ hostvars[inventory_hostname].atlas_manage_operator_account | default(true)
+             and not (
+               ('platform_vm' in group_names or 'platform_lxc' in group_names)
+               and atlas_operator_user == foundation_operator_user
+               and atlas_operator_group == foundation_operator_group
+               and atlas_operator_home == foundation_operator_home
+               and atlas_operator_shell == foundation_operator_shell
+               and atlas_operator_groups | sort == foundation_operator_groups | sort
+               and atlas_manage_operator_authorized_keys == foundation_operator_manage_authorized_keys
+               and atlas_operator_authorized_key_files | sort == foundation_operator_authorized_key_files | sort
+               and atlas_manage_operator_sudoers == foundation_operator_manage_sudoers
+               and atlas_operator_sudoers_path == foundation_operator_sudoers_path
+               and atlas_operator_sudoers_content == foundation_operator_sudoers_content
+             ) }}
     - role: ssh_server
-      when: ssh_server_enabled | default(false)
     - role: systemd_resolved
-      when: systemd_resolved_enabled | default(false)
     - role: resource_cleanup  # noqa role-name[path]

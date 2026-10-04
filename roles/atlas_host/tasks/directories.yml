@@ -6,6 +6,7 @@
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
     mode: "0755"
+    follow: false
   loop:
     - "{{ atlas_etc_dir }}"
     - "{{ atlas_home }}"

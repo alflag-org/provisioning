@@ -1,0 +1,4 @@
+#!/bin/sh
+# atlas-shim: generated
+set -eu
+exec {{ atlas_cli_bin | quote }} run {{ item | quote }} "$@"
