@@ -2,6 +2,8 @@
 required_secrets:
   services_yomiage_discord_token: yomiage.discord.token
   services_yomiage_google_tts_api_key: yomiage.google_tts.api_key
+  services_yomiage_billing_api_url: yomiage.billing.api_url
+  services_yomiage_hmac_key_id: yomiage.billing.hmac_key_id
   services_yomiage_cf_access_client_id: yomiage.billing.cf_access_client_id
   services_yomiage_cf_access_client_secret: yomiage.billing.cf_access_client_secret
   services_yomiage_hmac_key: yomiage.billing.hmac_key

@@ -1,13 +1,11 @@
 ---
-- name: Require yomiage application assignment and billing endpoint
+- name: Require yomiage application assignment
   ansible.builtin.assert:
     that:
       - application_services | default([]) | type_debug == 'list'
       - "'yomiage' in application_services"
-      - services_yomiage_billing_api_url | default('') is match('^https://[^/\s]+')
-      - services_yomiage_hmac_key_id | default('') | length > 0
       - services_yomiage_log_level | length > 0
-    fail_msg: Assign yomiage and supply the HTTPS billing API URL and HMAC key ID in inventory.
+    fail_msg: Assign yomiage and supply a log level.
 
 - name: Require yomiage credentials before mutation
   ansible.builtin.assert:
@@ -19,9 +17,18 @@
   loop:
     - "{{ services_yomiage_discord_token | default('') }}"
     - "{{ services_yomiage_google_tts_api_key | default('') }}"
+    - "{{ services_yomiage_billing_api_url | default('') }}"
+    - "{{ services_yomiage_hmac_key_id | default('') }}"
     - "{{ services_yomiage_cf_access_client_id | default('') }}"
     - "{{ services_yomiage_cf_access_client_secret | default('') }}"
     - "{{ services_yomiage_hmac_key | default('') }}"
+  no_log: true
+
+- name: Require an HTTPS yomiage billing endpoint
+  ansible.builtin.assert:
+    that:
+      - services_yomiage_billing_api_url is match('^https://[^/\s]+')
+    fail_msg: Supply an HTTPS billing API URL through the existing secret provider.
   no_log: true
 
 - name: Prepare the pinned yomiage release

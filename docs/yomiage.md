@@ -7,9 +7,9 @@ release integrity inputs belong to [inventory](../inventories/default/group_vars
 
 ## Configure the application
 
-Configure the deployed billing API's HTTPS URL and HMAC key ID in inventory,
-following the [role's required inputs](../roles/services/yomiage/tasks/main.yml).
-The HMAC secret must match that same key ID. Optional settings belong to the
+Resolve the deployed billing API's HTTPS URL and HMAC key ID through the same
+secret provider as the application credentials. The HMAC secret must match that
+same key ID. Optional settings belong to the
 [role defaults](../roles/services/yomiage/defaults/main.yml).
 
 The Bot requests the `MESSAGE_CONTENT` intent. Enable Message Content Intent on
@@ -17,7 +17,8 @@ the application's Bot page in the Discord Developer Portal, following the
 [official gateway guidance](https://github.com/discord/discord-api-docs/blob/main/developers/events/gateway.mdx).
 Give the Bot access to the test text and voice channels before testing commands.
 
-Store application credentials in the Bitwarden Secrets Manager project selected
+Store application credentials, the billing API URL, and the HMAC key ID in the
+Bitwarden Secrets Manager project selected
 by the controller's existing `/etc/atlas/secrets.yml`. Give its machine account
 read access to those records. Add an entry under `mappings` for every logical
 name in the [secret declaration](../inventories/default/secret-requirements/yomiage.yml):
@@ -32,7 +33,7 @@ Extend the existing mappings rather than replacing them. Keep `provider`,
 `config`, and unrelated mappings intact. The controller's configured credential
 file contains the Bitwarden machine-account access token; it is separate from
 the Discord token and must remain caller-owned with mode `0600`. Neither the
-provider token nor application credential values belong in inventory, Git,
+provider token nor resolved application inputs belong in inventory, Git,
 command arguments, or chat.
 
 `atlas secret check` verifies retrieval without displaying values. Missing
