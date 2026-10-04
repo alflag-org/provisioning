@@ -1,8 +1,0 @@
----
-- name: Preserve the control-plane lifecycle boundary
-  hosts: control_plane_nodes
-  gather_facts: false
-
-  tasks:
-    - name: Preserve the control-plane lifecycle boundary
-      ansible.builtin.meta: noop

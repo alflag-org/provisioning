@@ -1,33 +1,31 @@
 ---
-- name: Validate existing SSH configuration
-  ansible.builtin.command: /usr/sbin/sshd -t
-  changed_when: false
-  check_mode: false
+- name: Configure Cloudflare SSH certificate trust
   when: not foundation_cloudflare_ssh_skip_sshd | bool
+  block:
+    - name: Validate existing SSH configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+      check_mode: false
 
-- name: Install Cloudflare SSH CA
-  ansible.builtin.copy:
-    src: ./etc/ssh/ca.pub
-    dest: /etc/ssh/ca.pub
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload Cloudflare SSH sshd
-  when: not foundation_cloudflare_ssh_skip_sshd | bool
+    - name: Install Cloudflare SSH CA
+      ansible.builtin.copy:
+        src: ./etc/ssh/ca.pub
+        dest: /etc/ssh/ca.pub
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload Cloudflare SSH sshd
 
-- name: Install Cloudflare SSH sshd drop-in
-  ansible.builtin.copy:
-    src: ./etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
-    dest: /etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload Cloudflare SSH sshd
-  when: not foundation_cloudflare_ssh_skip_sshd | bool
+    - name: Install Cloudflare SSH sshd drop-in
+      ansible.builtin.copy:
+        src: ./etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
+        dest: /etc/ssh/sshd_config.d/00-cloudflare-ssh.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload Cloudflare SSH sshd
 
-- name: Validate installed SSH configuration
-  ansible.builtin.command: /usr/sbin/sshd -t
-  changed_when: false
-  when:
-    - not foundation_cloudflare_ssh_skip_sshd | bool
-    - not ansible_check_mode
+    - name: Validate installed SSH configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+      when: not ansible_check_mode

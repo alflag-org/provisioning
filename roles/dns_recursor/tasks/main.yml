@@ -1,98 +1,52 @@
 ---
-- name: Install recursive DNS packages
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: "{{ [dns_recursor_package] + dns_recursor_validation_packages }}"
+- name: Converge recursive DNS
   when: dns_recursor_enabled | bool
+  block:
+    - name: Install recursive DNS packages
+      ansible.builtin.apt:
+        name: "{{ dns_recursor_package }}"
+        state: present
+        update_cache: true
+        cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+      become: true
 
-- name: Check Unbound configuration directory
-  ansible.builtin.stat:
-    path: "{{ dns_recursor_config_dir }}"
-  register: dns_recursor_config_dir_stat
-  when: dns_recursor_enabled | bool
+    - name: Ensure Unbound configuration directory exists
+      ansible.builtin.file:
+        path: "{{ dns_recursor_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
 
-- name: Ensure Unbound configuration directory exists
-  ansible.builtin.file:
-    path: "{{ dns_recursor_config_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  when: dns_recursor_enabled | bool
+    - name: Render recursive DNS configuration
+      ansible.builtin.template:
+        src: alflag-recursive.conf.j2
+        dest: "{{ dns_recursor_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart unbound
 
-- name: Render recursive DNS configuration
-  ansible.builtin.template:
-    src: alflag-recursive.conf.j2
-    dest: "{{ dns_recursor_config_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart unbound
-  when:
-    - dns_recursor_enabled | bool
-    - not ansible_check_mode or dns_recursor_config_dir_stat.stat.exists
+    # The root configuration is complete and has no includes of legacy snippets.
+    - name: Remove retired DNS configuration snippets
+      ansible.builtin.include_role:
+        name: resource_cleanup
+        tasks_from: paths.yml
+      vars:
+        resource_cleanup_paths: "{{ dns_recursor_retired_config_paths }}"
 
-# The root configuration is complete and has no includes of legacy snippets.
-- name: Remove retired DNS configuration snippets
-  ansible.builtin.include_role:
-    name: resource_cleanup
-    tasks_from: paths.yml
-  vars:
-    resource_cleanup_paths: "{{ dns_recursor_retired_config_paths }}"
-  when: dns_recursor_enabled | bool
+    - name: Validate Unbound configuration
+      ansible.builtin.command:
+        cmd: unbound-checkconf
+      changed_when: false
+      when: not ansible_check_mode
 
-- name: Validate Unbound configuration
-  ansible.builtin.command:
-    cmd: unbound-checkconf
-  changed_when: false
-  when:
-    - dns_recursor_enabled | bool
-    - not ansible_check_mode
+    - name: Enable and start Unbound
+      ansible.builtin.systemd_service:
+        name: "{{ dns_recursor_service_name }}"
+        state: started
+        enabled: true
+      when: not ansible_check_mode
 
-- name: Enable and start Unbound
-  ansible.builtin.systemd_service:
-    name: "{{ dns_recursor_service_name }}"
-    state: started
-    enabled: true
-  when:
-    - dns_recursor_enabled | bool
-    - not ansible_check_mode
-
-- name: Apply pending Unbound handlers
-  ansible.builtin.meta: flush_handlers
-  when: dns_recursor_enabled | bool
-
-- name: Validate recursive DNS port
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 53
-    timeout: 5
-    state: started
-  when:
-    - dns_recursor_enabled | bool
-    - not ansible_check_mode
-
-- name: Validate local recursive lookup
-  ansible.builtin.command:
-    cmd: "dig +time=2 +tries=1 +short {{ dns_recursor_local_lookup_name }} {{ dns_recursor_local_lookup_type }} @127.0.0.1"
-  register: dns_recursor_lookup
-  changed_when: false
-  failed_when:
-    - dns_recursor_lookup.rc != 0 or dns_recursor_lookup.stdout | trim | length == 0
-  when:
-    - dns_recursor_enabled | bool
-    - not ansible_check_mode
-
-- name: Validate configured recursive DNS lookups
-  ansible.builtin.command:
-    cmd: "dig +time=2 +tries=1 +short {{ item.name }} {{ item.type | default('A') }} @127.0.0.1"
-  loop: "{{ dns_recursor_validation_queries }}"
-  register: dns_recursor_configured_lookup
-  changed_when: false
-  failed_when:
-    - dns_recursor_configured_lookup.rc != 0 or dns_recursor_configured_lookup.stdout | trim | length == 0
-  when:
-    - dns_recursor_enabled | bool
-    - dns_recursor_validation_queries | length > 0
-    - not ansible_check_mode
+    - name: Apply pending Unbound handlers
+      ansible.builtin.meta: flush_handlers

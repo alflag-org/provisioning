@@ -7,13 +7,8 @@ ansible_become: true
 
 network_primary_fqdn: "{{ inventory_hostname }}.srv.alflag.internal"
 
-# Atlas is a required part of every managed host's foundation.
-atlas_validate_runtime: true
-
-# Apt package updates are handled by unattended-upgrades. Ansible only invokes
-# apt when a requested package is missing or an explicit purge is needed.
-apt_state_update_cache: true
-apt_state_cache_valid_time: 86400
+# Package upgrades are handled by unattended-upgrades.
+apt_cache_valid_time: 86400
 
 network_ipv4_address: "{{ ansible_host }}"
 network_prefix_length: "{{ network_cidr.split('/')[1] | int }}"

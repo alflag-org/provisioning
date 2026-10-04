@@ -1,6 +1,0 @@
----
-- name: Install VM base packages
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: "{{ foundation_vm_packages }}"

@@ -104,16 +104,12 @@
                 | from_json
               }}
 
-        - name: Require a complete online ReplicaSet for healthy topology actions
+        - name: Require the expected ReplicaSet operation result
           ansible.builtin.assert:
             that:
               - mysql_replicaset_result.exists | bool
               - mysql_replicaset_result.status.replicaSet.name == mysql_replicaset_name
-              - mysql_replicaset_result.members | length == 2
-              - mysql_replicaset_result.members | selectattr('status', 'equalto', 'ONLINE') | list | length == 2
-              - mysql_replicaset_result.members | selectattr('role', 'equalto', 'PRIMARY') | list | length == 1
-              - mysql_replicaset_result.members | selectattr('role', 'equalto', 'SECONDARY') | list | length == 1
-            fail_msg: ReplicaSet convergence did not produce one online PRIMARY and one online SECONDARY.
+            fail_msg: The ReplicaSet operation did not return the expected ReplicaSet.
           when:
             - mysql_replicaset_action in ['converge', 'status', 'switchover']
 

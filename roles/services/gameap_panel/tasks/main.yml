@@ -26,10 +26,12 @@
   no_log: true
 
 - name: Install Panel prerequisites
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: [ca-certificates, python3, tar]
+  ansible.builtin.apt:
+    name: [ca-certificates, python3, tar]
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+  become: true
 
 - name: Create Panel group
   ansible.builtin.group:

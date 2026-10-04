@@ -51,47 +51,68 @@
     - not ansible_check_mode
 
 - name: Install Percona XtraBackup 8.4 and transfer tools
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: "{{ mysql_backup_packages }}"
-    apt_state_force_update_cache: >-
-      {{ mysql_backup_percona_repository_enable.changed | default(false) }}
+  ansible.builtin.apt:
+    name: "{{ mysql_backup_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: >-
+      {{ 0 if (mysql_backup_percona_repository_enable.changed | default(false)) | bool else apt_cache_valid_time | default(86400) }}
+  become: true
   when:
     - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
 
-- name: Download the pinned rclone binary
-  ansible.builtin.get_url:
-    url: "{{ mysql_backup_rclone_url }}"
-    dest: "{{ mysql_backup_rclone_archive_path }}"
-    checksum: "{{ mysql_backup_rclone_checksum }}"
-    owner: root
-    group: root
-    mode: "0644"
+- name: Require Percona XtraBackup 8.4
+  ansible.builtin.command:
+    argv: [/usr/bin/xtrabackup, --version]
+  register: mysql_backup_xtrabackup_version
+  changed_when: false
+  failed_when: >-
+    mysql_backup_xtrabackup_version.rc != 0 or
+    not (mysql_backup_xtrabackup_version.stderr is search('version 8[.]4[.]'))
+  when: not ansible_check_mode
 
-- name: Ensure the rclone extraction directory exists
-  ansible.builtin.file:
-    path: "{{ mysql_backup_rclone_extract_path }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: Install pinned rclone
+  block:
+    - name: Download the pinned rclone binary
+      ansible.builtin.get_url:
+        url: "{{ mysql_backup_rclone_url }}"
+        dest: "{{ mysql_backup_rclone_archive_path }}"
+        checksum: "{{ mysql_backup_rclone_checksum }}"
+        owner: root
+        group: root
+        mode: "0644"
 
-- name: Extract the pinned rclone binary
-  ansible.builtin.unarchive:
-    src: "{{ mysql_backup_rclone_archive_path }}"
-    dest: "{{ mysql_backup_rclone_extract_path }}"
-    remote_src: true
-    creates: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+    - name: Ensure the rclone extraction directory exists
+      ansible.builtin.file:
+        path: "{{ mysql_backup_rclone_extract_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
 
-- name: Install the pinned rclone binary
-  ansible.builtin.copy:
-    src: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
-    dest: "{{ mysql_backup_rclone_binary }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: "0755"
+    - name: Extract the pinned rclone binary
+      ansible.builtin.unarchive:
+        src: "{{ mysql_backup_rclone_archive_path }}"
+        dest: "{{ mysql_backup_rclone_extract_path }}"
+        remote_src: true
+        creates: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+      when: not ansible_check_mode
+
+    - name: Inspect the pinned rclone source in check mode
+      ansible.builtin.stat:
+        path: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+      register: mysql_backup_rclone_source
+      when: ansible_check_mode
+
+    - name: Install the pinned rclone binary
+      ansible.builtin.copy:
+        src: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
+        dest: "{{ mysql_backup_rclone_binary }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      when: not ansible_check_mode or mysql_backup_rclone_source.stat.exists
 
 - name: Ensure physical backup directories exist
   ansible.builtin.file:
@@ -220,20 +241,4 @@
     state: started
     enabled: true
     daemon_reload: true
-  when: not ansible_check_mode
-
-- name: Validate Percona XtraBackup 8.4
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/xtrabackup
-      - --version
-  register: mysql_backup_xtrabackup_version
-  changed_when: false
-  when: not ansible_check_mode
-
-- name: Require the XtraBackup 8.4 series
-  ansible.builtin.assert:
-    that:
-      - mysql_backup_xtrabackup_version.stdout is search('8\\.4\\.')
-    fail_msg: "Installed XtraBackup is outside the required 8.4 series: {{ mysql_backup_xtrabackup_version.stdout }}"
   when: not ansible_check_mode

@@ -1,7 +1,9 @@
 import unittest
 
+import yaml
 
 from ansible.errors import AnsibleFilterError
+from ansible_support import AnsibleTestCase, ROOT
 
 from roles.services.mysql.filter_plugins.mysql_shared import (
     mysql_expand_tenants,
@@ -115,6 +117,52 @@ class MySQLTenantTests(unittest.TestCase):
             )
         with self.assertRaises(AnsibleFilterError):
             mysql_validate_databases([{"name": "app"}, {"name": "app"}])
+
+
+class MySQLBootstrapAccountTests(AnsibleTestCase):
+    def test_repeated_construction_replaces_previous_accounts(self):
+        tasks = yaml.safe_load(
+            (ROOT / "roles/services/mysql/tasks/main.yml").read_text()
+        )
+        build_accounts = next(
+            task for task in tasks
+            if "mysql_replicaset_bootstrap_users"
+            in task.get("ansible.builtin.set_fact", {})
+        )
+        playbook = self.directory / "accounts.yml"
+        playbook.write_text(yaml.safe_dump([{
+            "hosts": "fixture",
+            "gather_facts": False,
+            "vars": {
+                "mysql_replicaset_admin_user": "fixture_admin",
+                "mysql_replicaset_admin_grants": ["*.*:SELECT, INSERT"],
+            },
+            "tasks": [
+                {"ansible.builtin.set_fact": {
+                    "mysql_replicaset_admin_allowed_addresses": [
+                        "192.0.2.1", "192.0.2.2",
+                    ],
+                }},
+                build_accounts,
+                build_accounts,
+                {"ansible.builtin.assert": {"that": [
+                    "mysql_replicaset_bootstrap_users | length == 2",
+                    "mysql_replicaset_bootstrap_users | map(attribute='host') | list "
+                    "== ['192.0.2.1', '192.0.2.2']",
+                ]}},
+                {"ansible.builtin.set_fact": {
+                    "mysql_replicaset_admin_allowed_addresses": ["192.0.2.3"],
+                    "mysql_replicaset_admin_user": "replacement_admin",
+                }},
+                build_accounts,
+                {"ansible.builtin.assert": {"that": [
+                    "mysql_replicaset_bootstrap_users == [{'name': 'replacement_admin', "
+                    "'host': '192.0.2.3', 'password_var': 'mysql_replicaset_admin_password', "
+                    "'priv': '*.*:SELECT,INSERT'}]",
+                ]}},
+            ],
+        }]))
+        self.assert_success(self.run_playbook(playbook, check=True))
 
 
 if __name__ == "__main__":

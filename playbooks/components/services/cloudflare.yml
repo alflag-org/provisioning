@@ -5,6 +5,4 @@
 
   roles:
     - role: cloudflared
-      when: cloudflared_enabled | default(false)
     - role: cloudflare_ssh_target
-      when: cloudflare_ssh_enabled | default(false)

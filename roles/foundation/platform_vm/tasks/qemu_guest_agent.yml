@@ -1,10 +1,12 @@
 ---
 - name: Install QEMU guest agent
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages:
+  ansible.builtin.apt:
+    name:
       - qemu-guest-agent
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+  become: true
 
 - name: Gather service state
   ansible.builtin.service_facts:

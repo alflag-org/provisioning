@@ -47,21 +47,9 @@ not establish convergence. Check mode may skip operations whose prerequisites ar
 absent. An otherwise successful run fails if its safe summary is unavailable or
 invalid. Use local validation without secret injection for syntax diagnostics.
 
-The [GameAP guide](docs/gameap.md) covers the separate Panel and Daemon VMs,
-secret inputs, and runtime verification.
-
-The [workload host guide](docs/workload-hosts.md) defines Web and application host
-classification, standard middleware, and conventions for adding services.
+The [GameAP guide](docs/gameap.md) explains enrollment and recovery decisions.
 
 The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
 applies declared retired-resource removals; inspect the inventory declarations
 before running it. Removing a host from inventory does not destroy the machine.
-
-The [authoritative DNS role](roles/dns_authoritative/) and
-[recursive DNS role](roles/dns_recursor/) own their complete root configurations;
-DNS snippets are not loaded separately. Declare zones and resolver policy in
-inventory, including any locally maintained settings that must survive convergence.
-Host records come from active inventory membership, and reverse zones come from
-network CIDRs. VM address configuration remains owned by Proxmox Cloud-Init;
-these roles do not write guest Netplan files.

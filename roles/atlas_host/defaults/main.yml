@@ -46,4 +46,3 @@ atlas:
   programs: {}
 
 atlas_manage_runtime: true
-atlas_validate_runtime: false

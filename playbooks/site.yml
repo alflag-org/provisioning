@@ -2,9 +2,6 @@
 - name: Converge foundation components
   ansible.builtin.import_playbook: components/foundation.yml
 
-- name: Converge control-plane components
-  ansible.builtin.import_playbook: components/control-plane.yml
-
 - name: Converge Web host middleware
   ansible.builtin.import_playbook: components/nginx.yml
 

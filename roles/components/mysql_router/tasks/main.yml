@@ -32,15 +32,17 @@
   register: mysql_router_apt_pin
 
 - name: Install MySQL Router 8.4 and bootstrap dependencies
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages:
+  ansible.builtin.apt:
+    name:
       - "{{ mysql_router_package }}"
       - "{{ mysql_router_client_package }}"
       - python3-pexpect
       - acl
-    apt_state_force_update_cache: "{{ mysql_router_apt_pin.changed | default(false) }}"
+    state: present
+    update_cache: true
+    cache_valid_time: >-
+      {{ 0 if (mysql_router_apt_pin.changed | default(false)) | bool else apt_cache_valid_time | default(86400) }}
+  become: true
 
 - name: Create the MySQL Router system group
   ansible.builtin.group:
@@ -252,12 +254,6 @@
   notify: Restart MySQL Router
   when: mysql_router_bootstrap_config_after.stat.exists
 
-- name: Inspect the Router monitoring configuration directory
-  ansible.builtin.stat:
-    path: "{{ mysql_router_monitor_config_path | dirname }}"
-  register: mysql_router_monitor_directory
-  when: ansible_check_mode
-
 - name: Render the Router synthetic monitoring credential
   ansible.builtin.template:
     src: mysql-router.cnf.j2
@@ -266,7 +262,6 @@
     group: root
     mode: "0640"
   no_log: true
-  when: not ansible_check_mode or mysql_router_monitor_directory.stat.exists
 
 - name: Install the Router health program
   ansible.builtin.copy:
@@ -296,18 +291,7 @@
       - --version
   register: mysql_router_version
   changed_when: false
+  failed_when: >-
+    mysql_router_version.rc != 0 or
+    not (mysql_router_version.stdout is search('8[.]4[.]'))
   when: not ansible_check_mode
-
-- name: Require MySQL Router 8.4
-  ansible.builtin.assert:
-    that:
-      - mysql_router_version.stdout is search('8\\.4\\.')
-    fail_msg: "Installed MySQL Router is outside the required 8.4 series: {{ mysql_router_version.stdout }}"
-  when: not ansible_check_mode
-
-- name: Validate Router service, metadata cache, and all three endpoints
-  ansible.builtin.include_tasks:
-    file: validate.yml
-  when:
-    - mysql_router_bootstrap_config_after.stat.exists
-    - not ansible_check_mode

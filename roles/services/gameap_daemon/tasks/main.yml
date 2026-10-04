@@ -22,10 +22,12 @@
   when: services_gameap_daemon_data_device | length == 0
 
 - name: Install Daemon prerequisites
-  ansible.builtin.include_role:
-    name: apt_state
-  vars:
-    apt_state_packages: [ca-certificates, python3, python3-grpcio, python3-protobuf, tar, unzip]
+  ansible.builtin.apt:
+    name: [ca-certificates, python3, python3-grpcio, python3-protobuf, tar, unzip]
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+  become: true
 
 - name: Create game server group
   ansible.builtin.group:

@@ -6,6 +6,7 @@
     owner: "{{ atlas_operator_user }}"
     group: "{{ atlas_operator_group }}"
     mode: "0775"
+    follow: false
   become: "{{ atlas_become_root }}"
 
 - name: Install pyenv
@@ -16,17 +17,3 @@
     update: true
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
-
-- name: Ensure pyenv shell profile
-  ansible.builtin.blockinfile:
-    path: "{{ atlas_operator_profile }}"
-    marker: "# {mark} ANSIBLE MANAGED PYENV"
-    create: true
-    owner: "{{ atlas_operator_user }}"
-    group: "{{ atlas_operator_group }}"
-    mode: "0644"
-    block: |
-      export PYENV_ROOT="$HOME/.pyenv"
-      [[ -d "$PYENV_ROOT/bin" ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-      eval "$(pyenv init - bash)"
-  become: "{{ atlas_become_operator }}"
