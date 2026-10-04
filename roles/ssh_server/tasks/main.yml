@@ -10,31 +10,34 @@
         cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
       become: true
 
-    - name: Validate SSH TCP forwarding policy
-      ansible.builtin.assert:
-        that:
-          - ssh_server_allow_tcp_forwarding is string
-          - ssh_server_allow_tcp_forwarding in ['no', 'local', 'yes']
-        fail_msg: >-
-          ssh_server_allow_tcp_forwarding must be the string no, local, or yes.
-        quiet: true
+    - name: Manage SSH server policy
+      when: ssh_server_manage_policy | bool
+      block:
+        - name: Validate SSH TCP forwarding policy
+          ansible.builtin.assert:
+            that:
+              - ssh_server_allow_tcp_forwarding is string
+              - ssh_server_allow_tcp_forwarding in ['no', 'local', 'yes']
+            fail_msg: >-
+              ssh_server_allow_tcp_forwarding must be the string no, local, or yes.
+            quiet: true
 
-    - name: Ensure sshd drop-in directory exists
-      ansible.builtin.file:
-        path: "{{ ssh_server_config_dropin_dir }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
+        - name: Ensure sshd drop-in directory exists
+          ansible.builtin.file:
+            path: "{{ ssh_server_config_dropin_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0755"
 
-    - name: Render managed sshd policy drop-in
-      ansible.builtin.template:
-        src: alflag.conf.j2
-        dest: "{{ ssh_server_config_dropin_path }}"
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Restart SSH service
+        - name: Render managed sshd policy drop-in
+          ansible.builtin.template:
+            src: alflag.conf.j2
+            dest: "{{ ssh_server_config_dropin_path }}"
+            owner: root
+            group: root
+            mode: "0644"
+          notify: Restart SSH service
 
     - name: Validate sshd configuration
       ansible.builtin.command:

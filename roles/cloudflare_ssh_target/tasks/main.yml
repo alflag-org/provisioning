@@ -1,9 +1,17 @@
 ---
 - name: Converge Cloudflare SSH target
-  when: cloudflare_ssh_enabled | bool
+  when:
+    - "'cloudflare_ssh_targets' in group_names"
+    - cloudflare_ssh_enabled | bool
   block:
     - name: Ensure SSH server is present for Cloudflare SSH target
       ansible.builtin.include_role:
         name: ssh_server
       vars:
         ssh_server_enabled: true
+        # Cloudflare convergence owns CA trust; foundation owns SSH policy.
+        ssh_server_manage_policy: false
+
+    - name: Configure Cloudflare SSH certificate authority trust
+      ansible.builtin.include_role:
+        name: foundation/cloudflare_ssh  # noqa role-name[path]

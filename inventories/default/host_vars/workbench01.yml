@@ -9,5 +9,4 @@ network_service_aliases:
 
 ssh_server_enabled: true
 ssh_server_allow_tcp_forwarding: local
-cloudflare_ssh_enabled: true
 systemd_resolved_enabled: true

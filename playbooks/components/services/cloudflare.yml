@@ -5,4 +5,6 @@
 
   roles:
     - role: cloudflared
-    - role: cloudflare_ssh_target
+
+- name: Converge Cloudflare SSH targets
+  ansible.builtin.import_playbook: ../../cloudflare-ssh.yml
