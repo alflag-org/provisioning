@@ -1,0 +1,48 @@
+---
+- name: Require a pinned Talos deployment with non-secret settings
+  ansible.builtin.assert:
+    that:
+      - talos_revision is match('^[0-9a-f]{40}$')
+      - talos_root is match('^/')
+      - talos_config_path is match('^/')
+      - talos_config.keys() | sort == ['proxmox', 'registry']
+      - talos_config.proxmox.keys() | difference(['url', 'cluster', 'tls_server_name']) | length == 0
+      - talos_config.registry.keys() | difference(['url', 'location']) | length == 0
+    fail_msg: Talos requires an immutable revision and non-secret endpoint settings.
+
+- name: Create Talos source and configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ talos_owner }}"
+    group: "{{ talos_group }}"
+    mode: "0755"
+    follow: false
+  loop:
+    - "{{ talos_root }}"
+    - "{{ talos_config_path | dirname }}"
+
+- name: Check out the selected Talos commit without discarding host edits
+  ansible.builtin.git:
+    repo: "{{ talos_repository }}"
+    dest: "{{ talos_root }}"
+    version: "{{ talos_revision }}"
+    force: false
+  become: true
+  become_user: "{{ talos_owner }}"
+  register: talos_checkout
+
+- name: Inspect the Talos configuration directory
+  ansible.builtin.stat:
+    path: "{{ talos_config_path | dirname }}"
+  register: talos_config_directory
+
+- name: Render Talos non-secret configuration
+  ansible.builtin.copy:
+    content: "{{ talos_config | to_nice_yaml }}"
+    dest: "{{ talos_config_path }}"
+    owner: "{{ talos_owner }}"
+    group: "{{ talos_group }}"
+    mode: "0644"
+    follow: false
+  when: not ansible_check_mode or talos_config_directory.stat.exists

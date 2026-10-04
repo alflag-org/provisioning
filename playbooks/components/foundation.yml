@@ -3,6 +3,13 @@
   hosts: default
   gather_facts: true
 
+  pre_tasks:
+    - name: Prepare Talos sources before Atlas command discovery
+      ansible.builtin.include_role:
+        name: components/talos  # noqa role-name[path]
+        tasks_from: prepare.yml
+      when: talos_enabled | default(false)
+
   roles:
     - role: foundation/platform_vm  # noqa role-name[path]
       when: "'platform_vm' in group_names"
@@ -28,3 +35,19 @@
     - role: ssh_server
     - role: systemd_resolved
     - role: resource_cleanup  # noqa role-name[path]
+
+  tasks:
+    - name: Prepare Talos after Atlas runtime preparation
+      when: talos_enabled | default(false)
+      environment:
+        PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        PYENV_ROOT: "{{ atlas_pyenv_root }}"
+        ATLAS_HOME: "{{ atlas_home }}"
+        ATLAS_ETC_DIR: "{{ atlas_etc_dir }}"
+        ATLAS_VAR_DIR: "{{ atlas_var_dir }}"
+        TMPDIR: "{{ atlas_tmp_dir }}"
+      block:
+        - name: Install Talos in its dedicated virtual environment
+          ansible.builtin.include_role:
+            name: components/talos  # noqa role-name[path]
+            tasks_from: runtime.yml

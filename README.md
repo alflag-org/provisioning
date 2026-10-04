@@ -53,3 +53,9 @@ The [database guide](docs/mysql-platform.md) explains topology and recovery
 considerations. The [cleanup playbook](playbooks/operations/resource-cleanup.yml)
 applies declared retired-resource removals; inspect the inventory declarations
 before running it. Removing a host from inventory does not destroy the machine.
+
+The [Talos deployment playbook](playbooks/components/talos.yml) prepares the control
+host's pinned Talos checkout, configuration, dedicated Atlas venv, and command shim.
+Foundation convergence prepares its sources before Atlas discovers commands.
+Deployment never runs registry synchronization. Configure external secrets and
+select a verified existing Registry Location before running `registry-sync`.
