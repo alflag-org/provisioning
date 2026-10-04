@@ -4,6 +4,17 @@ ansible_python_interpreter: /usr/bin/python3
 
 atlas_role: control
 atlas_remove_legacy_provisioning_clone: true
+talos_enabled: true
+talos_revision: 3ba1daa1ba418e1fa6bc0630770e7be76946f9e4
+talos_root: /srv/talos
+talos_python_version: "3.14.6"
+talos_config:
+  proxmox:
+    url: https://proxmox.access.internal:8006
+    cluster: kng01-pve
+    tls_server_name: proxmox.alflag.org
+  registry:
+    url: https://registry.alflag.org
 atlas:
   programs:
     provisioning:
@@ -12,5 +23,11 @@ atlas:
         type: python
         python: "3.14.6"
         venv: provisioning
+    talos:
+      root: "{{ talos_root }}"
+      runtime:
+        type: python
+        python: "{{ talos_python_version }}"
+        venv: talos
 
 ssh_server_enabled: true

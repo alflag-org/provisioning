@@ -1,0 +1,11 @@
+---
+talos_enabled: false
+talos_root: /srv/talos
+talos_repository: https://github.com/alflag-org/talos.git
+talos_revision: ""
+talos_config_path: /etc/talos/config.yml
+talos_config: {}
+talos_python_version: "3.14.6"
+talos_owner: ops
+talos_group: "{{ talos_owner }}"
+talos_venv: /opt/atlas/venvs/talos

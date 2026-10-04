@@ -1,0 +1,41 @@
+---
+- name: Deploy Talos on the control host without running synchronization
+  hosts: control01
+  gather_facts: true
+
+  tasks:
+    - name: Prepare the selected Talos source and configuration
+      ansible.builtin.include_role:
+        name: components/talos  # noqa role-name[path]
+        tasks_from: prepare.yml
+
+    - name: Register programs in Atlas
+      ansible.builtin.include_role:
+        name: atlas_host
+        tasks_from: config.yml
+        public: true
+
+    - name: Prepare Talos runtime and command shims
+      environment:
+        PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:{{ atlas_home }}/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        PYENV_ROOT: "{{ atlas_pyenv_root }}"
+        ATLAS_HOME: "{{ atlas_home }}"
+        ATLAS_ETC_DIR: "{{ atlas_etc_dir }}"
+        ATLAS_VAR_DIR: "{{ atlas_var_dir }}"
+        TMPDIR: "{{ atlas_tmp_dir }}"
+        PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
+      block:
+        - name: Manage the selected Atlas Python runtime
+          ansible.builtin.include_role:
+            name: atlas_host
+            tasks_from: runtime.yml
+
+        - name: Install Talos in its dedicated virtual environment
+          ansible.builtin.include_role:
+            name: components/talos  # noqa role-name[path]
+            tasks_from: runtime.yml
+
+        - name: Manage the registered Atlas command shims
+          ansible.builtin.include_role:
+            name: atlas_host
+            tasks_from: shims.yml
