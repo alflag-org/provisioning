@@ -46,3 +46,4 @@ atlas:
   programs: {}
 
 atlas_manage_runtime: true
+atlas_manage_shims: true

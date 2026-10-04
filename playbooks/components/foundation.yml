@@ -17,6 +17,7 @@
       when: "'platform_lxc' in group_names"
     - role: atlas_host
       vars:
+        atlas_manage_shims: "{{ not (talos_enabled | default(false)) }}"
         atlas_manage_operator_account: >-
           {{ hostvars[inventory_hostname].atlas_manage_operator_account | default(true)
              and not (
@@ -46,8 +47,14 @@
         ATLAS_ETC_DIR: "{{ atlas_etc_dir }}"
         ATLAS_VAR_DIR: "{{ atlas_var_dir }}"
         TMPDIR: "{{ atlas_tmp_dir }}"
+        PYTHON_BUILD_CACHE_PATH: "{{ atlas_python_build_cache_path }}"
       block:
         - name: Install Talos in its dedicated virtual environment
           ansible.builtin.include_role:
             name: components/talos  # noqa role-name[path]
             tasks_from: runtime.yml
+
+        - name: Manage command shims after Talos dependency installation
+          ansible.builtin.include_role:
+            name: atlas_host
+            tasks_from: shims.yml

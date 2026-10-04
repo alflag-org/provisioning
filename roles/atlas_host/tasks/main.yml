@@ -79,3 +79,4 @@
 
     - name: Manage Atlas command shims
       ansible.builtin.import_tasks: shims.yml
+      when: atlas_manage_shims | bool
