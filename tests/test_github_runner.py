@@ -38,7 +38,7 @@ else:
         return args[args.index(name) + 1]
     (root / '.runner').write_text(json.dumps({
         'gitHubUrl': option('--url'), 'agentName': option('--name'),
-        'workFolder': option('--work'), 'agentId': 1,
+        'workFolder': option('--work'), 'agentId': 0 if token == 'invalid-metadata' else 1,
     }))
     for name in ['.credentials', '.credentials_rsaparams']:
         (root / name).write_text('synthetic-vendor-credential')
@@ -77,10 +77,10 @@ class RunnerTests(AnsibleTestCase):
             'services_github_runner_token': TOKEN,
         }
 
-    def run_tasks(self, stages, context, *, check=False, tasks=None):
+    def run_tasks(self, stages, context, *, check=False, tasks=None, environment=None):
         playbook = self.directory / 'operation.yml'
         playbook.write_text(yaml.safe_dump([{
-            'hosts': 'default', 'gather_facts': False,
+            'hosts': 'default', 'gather_facts': False, 'environment': environment or {},
             'tasks': [{'ansible.builtin.include_role': {'name': ROLE, 'tasks_from': stage}}
                       for stage in stages] + (tasks or []),
         }]))
@@ -161,6 +161,112 @@ class RunnerTests(AnsibleTestCase):
             result = self.run_tasks(['state', 'register'], context)
             self.assert_success(result)
             self.assertRegex(result.stdout, r'changed=0\s')
+
+    def test_first_registration_rejects_invalid_metadata_and_preserves_recovery_state(self):
+        other = self.snapshot(self.org)
+        result = self.run_tasks(['state', 'register'], {
+            **self.repo, 'services_github_runner_token': 'invalid-metadata',
+        })
+        self.assertNotEqual(result.returncode, 0)
+        root = Path(self.repo['services_github_runner_root'])
+        self.assertTrue((root / '.registration-attempt').exists())
+        self.assertTrue((root / '.credentials').exists())
+        before = self.snapshot(self.repo)
+        retry = self.run_tasks(['state', 'register'], self.repo)
+        self.assertNotEqual(retry.returncode, 0)
+        self.assertRegex(retry.stdout, r'changed=0\s')
+        self.assertEqual(self.snapshot(self.repo), before)
+        self.assertEqual(self.snapshot(self.org), other)
+
+    def test_fresh_host_check_mode_needs_no_account_binary_token_or_service(self):
+        instance = self.repo['services_github_runner_instance']
+        identifier = instance['id']
+        account = 'gha-' + identifier
+        paths = [
+            Path('/opt/github-actions-runner') / identifier,
+            Path('/var/lib/github-actions-runner') / identifier,
+            Path('/etc/systemd/system') / ('github-runner-' + identifier + '.service'),
+            Path('/etc/tmpfiles.d') / ('github-runner-' + identifier + '.conf'),
+            *[Path('/usr/local/libexec/github-runner') / (identifier + '-' + phase + '.sh')
+              for phase in ('start', 'end')],
+        ]
+        self.assertTrue(all(not p.exists() for p in paths))
+        self.assertFalse(any(p.pw_name == account for p in pwd.getpwall()))
+        self.assertFalse(any(g.gr_name == account for g in grp.getgrall()))
+        for operation in ('install', 'register'):
+            result = self.run_tasks(['main'], {
+                'services_github_runner_instances': [instance],
+                'services_github_runner_operation': operation,
+                'services_github_runner_selected_instance': identifier,
+                'services_github_runner_isolation_confirmed': True,
+                # Package availability on Ubuntu requires a real target; this
+                # check exercises the account/file/registration dependencies.
+                'services_github_runner_packages': [],
+                'ansible_facts': {'distribution': 'Ubuntu', 'distribution_version': '24.04',
+                                  'architecture': 'x86_64', 'service_mgr': 'systemd'},
+                'group_names': ['platform_vm', 'svc_github_runner'],
+            }, check=True)
+            self.assert_success(result)
+            self.assertTrue(all(not p.exists() for p in paths))
+            self.assertFalse(any(p.pw_name == account for p in pwd.getpwall()))
+            self.assertFalse(any(g.gr_name == account for g in grp.getgrall()))
+
+    def test_registration_starts_only_its_service_and_convergence_never_restarts_it(self):
+        # A single systemctl boundary exercises the real Ansible systemd module
+        # without touching the controller's services.
+        binary = self.directory / 'systemctl'
+        state = self.directory / 'service-state.json'
+        calls = self.directory / 'service-calls.jsonl'
+        unit, other = self.repo['services_github_runner_unit'], self.org['services_github_runner_unit']
+        state.write_text(json.dumps({unit: {'active': False, 'enabled': False},
+                                    other: {'active': True, 'enabled': True}}))
+        binary.write_text(r"""#!/usr/bin/python3
+import json, pathlib, sys
+root = pathlib.Path(__file__).parent
+state_file = root / 'service-state.json'
+state = json.loads(state_file.read_text())
+args = sys.argv[1:]
+with (root / 'service-calls.jsonl').open('a') as output:
+    output.write(json.dumps(args) + '\n')
+if args == ['daemon-reload']:
+    raise SystemExit(0)
+command, unit = args[:2]
+current = state[unit]
+if command == 'show':
+    print('LoadState=loaded')
+    print('ActiveState=' + ('active' if current['active'] else 'inactive'))
+elif command == 'is-enabled':
+    print('enabled' if current['enabled'] else 'disabled')
+    raise SystemExit(0 if current['enabled'] else 1)
+elif command in ('enable', 'start'):
+    current['enabled' if command == 'enable' else 'active'] = True
+    state_file.write_text(json.dumps(state))
+else:
+    raise SystemExit('Unexpected service mutation: ' + command)
+""")
+        binary.chmod(0o755)
+        environment = {'PATH': str(self.directory) + ':' + os.environ['PATH']}
+        self.assert_success(self.run_tasks(['state', 'start'], self.repo, environment=environment))
+        self.assertFalse(calls.exists())
+        self.assert_success(self.run_tasks(['state', 'register', 'start'], self.repo, environment=environment))
+        self.assertEqual(json.loads(state.read_text())[unit], {'active': True, 'enabled': True})
+        self.assertEqual(json.loads(state.read_text())[other], {'active': True, 'enabled': True})
+        first_calls = [json.loads(line) for line in calls.read_text().splitlines()]
+        self.assertIn(['start', unit], first_calls)
+        self.assertIn(['enable', unit], first_calls)
+        calls.unlink()
+        # A changed unit must not cause a running Runner to restart.
+        result = self.run_tasks(['state'], self.repo, environment=environment, tasks=[{
+            'ansible.builtin.template': {'src': str(TEMPLATES / 'github-runner.service.j2'),
+                                        'dest': str(self.directory / 'updated-unit'), 'mode': '0600'},
+        }, {'ansible.builtin.include_role': {'name': ROLE, 'tasks_from': 'start'}}])
+        self.assert_success(result)
+        repeated_calls = [json.loads(line) for line in calls.read_text().splitlines()]
+        self.assertFalse(any(args[0] in ('start', 'stop', 'restart', 'enable', 'disable') for args in repeated_calls))
+        self.assertFalse(any(other in args for args in first_calls + repeated_calls))
+        result = self.run_tasks(['state', 'start'], self.repo, environment=environment)
+        self.assert_success(result)
+        self.assertRegex(result.stdout, r'changed=0\s')
 
     def test_failed_or_incomplete_registration_blocks_retry_without_deleting_other_instance(self):
         for context, token in ((self.repo, 'reject-' + TOKEN), (self.org, 'incomplete')):

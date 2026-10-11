@@ -28,8 +28,10 @@
       changed_when: true
       no_log: true
 
-    - name: Verify complete registration before enabling the service
-      ansible.builtin.import_tasks: state.yml
+# Keep verification outside the block: state.yml changes the registered fact.
+- name: Verify complete registration before enabling the service
+  ansible.builtin.import_tasks: state.yml
+  when: services_github_runner_operation == 'register' and not ansible_check_mode
 
 - name: Remove attempt marker only for a complete matching registration
   ansible.builtin.file:

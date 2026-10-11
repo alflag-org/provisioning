@@ -65,4 +65,3 @@
     owner: root
     group: root
     mode: "0644"
-  register: services_github_runner_unit_file

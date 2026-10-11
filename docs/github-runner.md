@@ -58,10 +58,14 @@ instance. Matching registration is retained. Registration failure preserves an
 attempt marker: inspect GitHub and local state and resolve any orphan before
 manually clearing it and retrying. Identity changes require explicit removal.
 
-For [removal](../playbooks/operations/github-runner-remove.yml), stop routing new
-jobs to the selected instance and wait for its running job to finish. Follow the
-same check/apply procedure with GitHub's short-lived removal token. Only that
-service is stopped. Failed deregistration retains local files and credentials;
+Before [removal](../playbooks/operations/github-runner-remove.yml), prevent new
+jobs from targeting the selected instance through GitHub/workflow routing and
+wait for the current job to finish. Confirm that GitHub reports the instance
+Idle and that no job is assigned; if this cannot be confirmed, do not proceed.
+Keep routing withdrawn throughout check/apply with GitHub's short-lived removal
+token. The operation stops only that service; it does not check job status or wait
+for jobs to finish, and stopping a busy service can cancel its job. Failed
+deregistration retains local files and credentials;
 correct authentication and retry. Successful removal deletes only that instance.
 Repeating removal requires no token. Shared prerequisites remain installed.
 
@@ -69,9 +73,15 @@ Repeating removal requires no token. Shared prerequisites remain installed.
 
 Runner instances update themselves through GitHub's official mechanism.
 The pinned archive bootstraps new installations; Ansible does not extract it
-over installed or self-updated instances. Drain affected instances before
-applying changes that restart their units. Simple bounded hooks clean work and
-HOME before/after jobs, with current Runner files retained while needed. Process
+over installed or self-updated instances. Normal apply enables and starts validated
+registered instances, leaving an already running service running even when its
+unit changes. It reloads systemd definitions without restarting the process;
+unit changes take effect at its next start. To apply them immediately, withdraw
+routing and confirm Idle as described for removal, then explicitly restart only
+that instance with `sudo systemctl restart github-runner-<instance-id>.service`
+through the existing controller SSH path. Verify the service and GitHub Online
+status before restoring routing. Check mode does not register or start services.
+Simple bounded hooks clean work and HOME before/after jobs, with current Runner files retained while needed. Process
 state and private temporary files may outlive a job; cleanup is not a security
 boundary. Use existing system logs, Runner diagnostics and GitHub Runner status
 for troubleshooting; service activity alone is not Online acceptance.
