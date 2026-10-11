@@ -1,5 +1,5 @@
 ---
-- name: Install repository-dedicated GitHub Actions Runners
+- name: Install shared organization GitHub Actions Runners
   hosts: svc_github_runner
   gather_facts: true
   roles:

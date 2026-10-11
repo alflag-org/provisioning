@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 exec /usr/bin/timeout --kill-after=5s 180s /usr/bin/python3 \
-  /usr/local/libexec/github-runner-cleanup.py {{ item }} {{ services_github_runner_repository | quote }}
+  /usr/local/libexec/github-runner-cleanup.py {{ item }} {{ services_github_runner_organization | quote }}

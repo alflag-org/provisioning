@@ -1,6 +1,7 @@
 ---
 services_github_runner_operation: install
-services_github_runner_repository: ""
+services_github_runner_organization: ""
+services_github_runner_group: Default
 services_github_runner_name: "{{ inventory_hostname }}"
 # Set only after verifying guest-external ACLs, including IPv6 and lateral traffic.
 services_github_runner_isolation_confirmed: false

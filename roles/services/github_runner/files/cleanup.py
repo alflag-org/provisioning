@@ -9,9 +9,12 @@ import stat
 import sys
 
 
-def validate_event(event, repository):
+def validate_event(event, organization):
     source = event.get('repository', {})
-    if source.get('private') is not True or source.get('full_name') != repository:
+    repository = source.get('full_name', '')
+    owner, separator, name = repository.partition('/')
+    if (source.get('private') is not True or owner.casefold() != organization.casefold()
+            or not separator or not name or '/' in name):
         raise ValueError('repository is not permitted')
     if 'pull_request' in event:
         head = event['pull_request'].get('head', {}).get('repo') or {}
@@ -51,10 +54,10 @@ def cleanup(work, home, phase):
 
 def main():
     try:
-        phase, repository = sys.argv[1:]
+        phase, organization = sys.argv[1:]
         if phase == 'start':
             event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-            validate_event(event, repository)
+            validate_event(event, organization)
         cleanup('/var/lib/github-actions-runner/work', '/var/lib/github-actions-runner/home', phase)
     except Exception:
         # Never expose job-controlled paths, file contents, or event payloads.

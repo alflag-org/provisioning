@@ -13,7 +13,9 @@
       - /opt/github-actions-runner/config.sh
       - --unattended
       - --url
-      - "https://github.com/{{ services_github_runner_repository }}"
+      - "https://github.com/{{ services_github_runner_organization }}"
+      - --runnergroup
+      - "{{ services_github_runner_group }}"
       - --name
       - "{{ services_github_runner_name }}"
       - --labels

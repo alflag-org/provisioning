@@ -179,7 +179,7 @@
     argv:
       - gh
       - api
-      - "repos/{{ services_github_runner_repository }}/actions/runners/{{ services_github_runner_settings.agentId }}"
+      - "orgs/{{ services_github_runner_organization }}/actions/runners/{{ services_github_runner_settings.agentId }}"
       - --jq
       - .busy
   delegate_to: localhost

@@ -32,7 +32,7 @@
     argv:
       - gh
       - api
-      - "repos/{{ services_github_runner_repository }}/actions/runners/{{ services_github_runner_settings.agentId }}"
+      - "orgs/{{ services_github_runner_organization }}/actions/runners/{{ services_github_runner_settings.agentId }}"
       - --jq
       - '{name, status, labels: [.labels[].name | ascii_downcase]}'
   delegate_to: localhost

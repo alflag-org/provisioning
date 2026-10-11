@@ -64,22 +64,32 @@ class RunnerCleanupTests(unittest.TestCase):
             CLEANUP.cleanup(self.work, self.home, 'end')
         self.assertEqual(retained.read_text(), 'retained')
 
-    def test_rejects_public_other_repository_and_fork_events(self):
+    def test_accepts_private_repositories_in_the_selected_organization(self):
+        for repository in ('owner/first-ci', 'owner/second-ci', 'OWNER/third-ci'):
+            with self.subTest(repository=repository):
+                CLEANUP.validate_event({
+                    'repository': {'private': True, 'full_name': repository},
+                }, 'owner')
+
+    def test_rejects_public_other_organization_and_fork_events(self):
         repository = 'owner/private-ci'
         event = {'repository': {'private': True, 'full_name': repository}}
-        CLEANUP.validate_event(event, repository)
+        CLEANUP.validate_event(event, 'owner')
         CLEANUP.validate_event({
             **event, 'pull_request': {'head': {'repo': {'full_name': repository}}},
-        }, repository)
+        }, 'owner')
         rejected = [
             {'repository': {'private': False, 'full_name': repository}},
-            {'repository': {'private': True, 'full_name': 'owner/other'}},
+            {'repository': {'private': True, 'full_name': 'other-owner/private-ci'}},
+            {'repository': {'private': True, 'full_name': 'owner'}},
+            {'repository': {'private': True, 'full_name': 'owner/invalid/name'}},
             {**event, 'pull_request': {'head': {'repo': {'full_name': 'fork/private-ci'}}}},
+            {**event, 'pull_request': {'head': {'repo': {'full_name': 'owner/another-repo'}}}},
             {**event, 'pull_request': {'head': {'repo': None}}},
         ]
         for value in rejected:
             with self.subTest(event=value), self.assertRaises(ValueError):
-                CLEANUP.validate_event(value, repository)
+                CLEANUP.validate_event(value, 'owner')
 
     def test_invalid_phase_preserves_files(self):
         retained = self.home / 'keep'
@@ -110,7 +120,7 @@ class RunnerIsolationTests(AnsibleTestCase):
                     },
                     'group_names': groups,
                     'services_github_runner_isolation_confirmed': isolation,
-                    'services_github_runner_repository': 'owner/private-ci',
+                    'services_github_runner_organization': 'owner',
                     'services_github_runner_token': 'synthetic-secret-must-not-appear',
                 }, check=check)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)

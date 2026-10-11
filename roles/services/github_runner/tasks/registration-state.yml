@@ -50,7 +50,7 @@
 - name: Validate existing registration identity without replacing it
   ansible.builtin.assert:
     that:
-      - services_github_runner_settings.gitHubUrl | default('') == 'https://github.com/' ~ services_github_runner_repository
+      - services_github_runner_settings.gitHubUrl | default('') == 'https://github.com/' ~ services_github_runner_organization
       - services_github_runner_settings.agentName | default('') == services_github_runner_name
       - services_github_runner_settings.agentId | default(0) | int > 0
       - services_github_runner_settings.workFolder | default('') == '/var/lib/github-actions-runner/work'
@@ -59,13 +59,13 @@
     fail_msg: Existing registration differs from inventory. Deregister explicitly before changing identity or mode.
   when: services_github_runner_settings | length > 0
 
-- name: Inspect repository Runners through the controller
+- name: Inspect organization Runners through the controller
   ansible.builtin.command:
     argv:
       - gh
       - api
       - --paginate
-      - "repos/{{ services_github_runner_repository }}/actions/runners?per_page=100"
+      - "orgs/{{ services_github_runner_organization }}/actions/runners?per_page=100"
       - --jq
       - '.runners[] | {id, name, status, busy, labels: [.labels[].name | ascii_downcase]}'
   delegate_to: localhost
@@ -74,7 +74,7 @@
   changed_when: false
   register: services_github_runner_remote_list
 
-- name: Decode repository Runner records
+- name: Decode organization Runner records
   ansible.builtin.set_fact:
     services_github_runner_remote: "{{ services_github_runner_remote_list.stdout_lines | map('from_json') | list }}"
 
@@ -88,6 +88,25 @@
          services_github_runner_remote | selectattr('id', 'equalto', services_github_runner_settings.agentId | default(0)) |
          selectattr('name', 'equalto', services_github_runner_name) | list | length == 1)
     fail_msg: GitHub and local registration disagree. Do not overwrite or register another Runner; inspect both sides.
+
+- name: Verify existing Runner membership in the selected group
+  ansible.builtin.command:
+    argv:
+      - gh
+      - api
+      - --paginate
+      - "orgs/{{ services_github_runner_organization }}/actions/runner-groups/{{ services_github_runner_group_settings.id }}/runners?per_page=100"
+      - --jq
+      - '.runners[].id'
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  changed_when: false
+  register: services_github_runner_group_members
+  failed_when: >-
+    services_github_runner_group_members.rc != 0 or
+    services_github_runner_settings.agentId | string not in services_github_runner_group_members.stdout_lines
+  when: services_github_runner_settings | length > 0
 
 - name: Require an idle Runner before removal
   ansible.builtin.assert:
