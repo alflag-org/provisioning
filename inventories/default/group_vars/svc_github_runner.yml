@@ -1,0 +1,4 @@
+---
+services_github_runner_repository: viasnake/character-agent-platform
+# No host is assigned until guest-external isolation has been implemented and tested.
+services_github_runner_isolation_confirmed: false

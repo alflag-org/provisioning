@@ -1,0 +1,6 @@
+---
+- name: Install repository-dedicated GitHub Actions Runners
+  hosts: svc_github_runner
+  gather_facts: true
+  roles:
+    - role: services/github_runner  # noqa role-name[path]

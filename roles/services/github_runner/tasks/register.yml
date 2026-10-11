@@ -1,0 +1,37 @@
+---
+- name: Explain registration check-mode boundary
+  ansible.builtin.debug:
+    msg: Registration would consume a short-lived GitHub registration token. GitHub registration and Online status are not tested in check mode.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - services_github_runner_settings | length == 0
+
+- name: Register only an unregistered Runner without replacement or disabling updates
+  ansible.builtin.command:
+    argv:
+      - /opt/github-actions-runner/config.sh
+      - --unattended
+      - --url
+      - "https://github.com/{{ services_github_runner_repository }}"
+      - --name
+      - "{{ services_github_runner_name }}"
+      - --labels
+      - ci-linux
+      - --work
+      - /var/lib/github-actions-runner/work
+    chdir: /opt/github-actions-runner
+  environment:
+    ACTIONS_RUNNER_INPUT_TOKEN: "{{ services_github_runner_token }}"
+    HOME: /var/lib/github-actions-runner/home
+  become: true
+  become_user: github-runner
+  changed_when: true
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - services_github_runner_settings | length == 0
+
+- name: Reinspect registration after the registration command
+  ansible.builtin.import_tasks: registration-state.yml
+  when: not ansible_check_mode

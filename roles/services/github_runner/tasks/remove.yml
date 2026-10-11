@@ -1,0 +1,56 @@
+---
+- name: Collect service state before removal
+  ansible.builtin.service_facts:
+
+- name: Stop and disable the Runner before deregistration
+  ansible.builtin.systemd_service:
+    name: github-actions-runner.service
+    enabled: false
+    state: stopped
+  when: "'github-actions-runner.service' in ansible_facts.services"
+
+- name: Deregister before deleting local credentials
+  ansible.builtin.command:
+    argv: [/opt/github-actions-runner/config.sh, remove]
+    chdir: /opt/github-actions-runner
+  environment:
+    ACTIONS_RUNNER_INPUT_TOKEN: "{{ services_github_runner_token }}"
+    HOME: /var/lib/github-actions-runner/home
+  become: true
+  become_user: github-runner
+  changed_when: true
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - services_github_runner_settings | length > 0
+
+- name: Remove dedicated Runner files after successful deregistration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/github-actions-runner.service
+    - /etc/tmpfiles.d/github-runner.conf
+    - /etc/needrestart/conf.d/github-runner.conf
+    - /etc/systemd/journald@github-runner.conf.d
+    - /usr/local/libexec/github-runner-start.sh
+    - /usr/local/libexec/github-runner-end.sh
+    - /usr/local/libexec/github-runner-cleanup.py
+    - /opt/github-actions-runner
+    - /var/lib/github-actions-runner
+
+- name: Reload systemd after removing Runner unit
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Remove dedicated Runner account
+  ansible.builtin.user:
+    name: github-runner
+    state: absent
+    remove: false
+
+- name: Remove dedicated Runner group
+  ansible.builtin.group:
+    name: github-runner
+    state: absent

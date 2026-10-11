@@ -1,0 +1,31 @@
+---
+- name: Validate Runner prerequisites before mutation
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Inspect local Runner registration
+  ansible.builtin.import_tasks: registration-state.yml
+
+- name: Install and converge Runner files
+  ansible.builtin.import_tasks: install.yml
+  when: services_github_runner_operation != 'remove'
+
+- name: Register Runner explicitly
+  ansible.builtin.import_tasks: register.yml
+  when: services_github_runner_operation == 'register'
+
+- name: Converge registered Runner service
+  ansible.builtin.import_tasks: service.yml
+  when:
+    - services_github_runner_operation != 'remove'
+    - services_github_runner_settings | length > 0
+
+- name: Explain unregistered Runner boundary
+  ansible.builtin.debug:
+    msg: Runner registration and service startup require the explicit registration playbook. No GitHub token was consumed.
+  when:
+    - services_github_runner_operation != 'remove'
+    - services_github_runner_settings | length == 0
+
+- name: Remove Runner explicitly
+  ansible.builtin.import_tasks: remove.yml
+  when: services_github_runner_operation == 'remove'

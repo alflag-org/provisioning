@@ -1,0 +1,29 @@
+[Unit]
+Description=GitHub Actions Runner for {{ services_github_runner_repository }}
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=github-runner
+Group=github-runner
+WorkingDirectory=/opt/github-actions-runner
+Environment=HOME=/var/lib/github-actions-runner/home
+Environment=ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/github-runner-start.sh
+Environment=ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/usr/local/libexec/github-runner-end.sh
+ExecStart=/opt/github-actions-runner/runsvc.sh
+Restart=always
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=300s
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/github-actions-runner /var/lib/github-actions-runner
+InaccessiblePaths=-/run/docker.sock -/run/podman/podman.sock -/etc/atlas
+LogNamespace=github-runner
+
+[Install]
+WantedBy=multi-user.target

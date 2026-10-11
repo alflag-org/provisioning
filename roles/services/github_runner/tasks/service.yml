@@ -1,0 +1,53 @@
+---
+- name: Protect Runner credential files
+  ansible.builtin.file:
+    path: "/opt/github-actions-runner/{{ item }}"
+    owner: github-runner
+    group: github-runner
+    mode: "0600"
+  loop: [.runner, .credentials, .credentials_rsaparams]
+  no_log: true
+
+# Official self-updates rewrite runsvc.sh. Do not recopy it on every convergence.
+- name: Install official service entry point if absent
+  ansible.builtin.copy:
+    src: /opt/github-actions-runner/bin/runsvc.sh
+    dest: /opt/github-actions-runner/runsvc.sh
+    remote_src: true
+    force: false
+    owner: github-runner
+    group: github-runner
+    mode: "0755"
+
+- name: Enable and start the registered Runner
+  ansible.builtin.systemd_service:
+    name: github-actions-runner.service
+    daemon_reload: true
+    enabled: true
+    state: "{{ 'restarted' if services_github_runner_unit.changed else 'started' }}"
+  when: not ansible_check_mode
+
+- name: Require Runner to become Online with the expected labels
+  ansible.builtin.command:
+    argv:
+      - gh
+      - api
+      - "repos/{{ services_github_runner_repository }}/actions/runners/{{ services_github_runner_settings.agentId }}"
+      - --jq
+      - '{name, status, labels: [.labels[].name | ascii_downcase]}'
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: services_github_runner_online
+  until:
+    - services_github_runner_online.rc == 0
+    - (services_github_runner_online.stdout | default('{}', true) | from_json).status | default('') == 'online'
+    - (services_github_runner_online.stdout | default('{}', true) | from_json).name | default('') == services_github_runner_name
+    - >-
+      ['self-hosted', 'linux', 'x64', 'ci-linux'] |
+      difference((services_github_runner_online.stdout | default('{}', true) | from_json).labels | default([])) | length == 0
+  retries: 12
+  delay: 5
+  when:
+    - not ansible_check_mode
+    - services_github_runner_operation == 'register'

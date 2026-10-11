@@ -1,0 +1,33 @@
+---
+- name: Require a dedicated Ubuntu x64 VM and valid operation
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version is version('24.04', '>=')
+      - ansible_facts.architecture == 'x86_64'
+      - ansible_facts.service_mgr == 'systemd'
+      - "'platform_vm' in group_names"
+      - "'control_plane_nodes' not in group_names"
+      - "'app_hosts' not in group_names"
+      - "'web_hosts' not in group_names"
+      - group_names | select('match', '^svc_') | list == ['svc_github_runner']
+      - services_github_runner_operation in ['install', 'register', 'remove']
+      - services_github_runner_repository is match('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+      - services_github_runner_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')
+      - services_github_runner_checksum is match('^sha256:[a-f0-9]{64}$')
+      - services_github_runner_operation == 'remove' or services_github_runner_isolation_confirmed is sameas true
+    fail_msg: Runner requires a dedicated Ubuntu x64 VM, a repository, and confirmed guest-external network isolation.
+
+- name: Read repository visibility through controller authentication
+  ansible.builtin.command:
+    argv: [gh, api, "repos/{{ services_github_runner_repository }}", --jq, .private]
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  changed_when: false
+  register: services_github_runner_private
+
+- name: Refuse public repositories
+  ansible.builtin.assert:
+    that: services_github_runner_private.stdout | trim == 'true'
+    fail_msg: Only private repositories may use this Runner.
