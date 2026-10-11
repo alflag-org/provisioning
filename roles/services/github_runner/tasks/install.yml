@@ -1,25 +1,18 @@
 ---
-- name: Install Runner and build prerequisites
-  ansible.builtin.apt:
-    name: "{{ services_github_runner_packages }}"
-    state: present
-    update_cache: true
-    cache_valid_time: 86400
-
-- name: Create dedicated Runner group
+- name: Create this instance group
   ansible.builtin.group:
-    name: github-runner
+    name: "{{ services_github_runner_user }}"
     system: true
 
-- name: Create unprivileged Runner user without supplementary groups
+- name: Create this instance nonprivileged account
   ansible.builtin.user:
-    name: github-runner
-    group: github-runner
+    name: "{{ services_github_runner_user }}"
+    group: "{{ services_github_runner_user }}"
     groups: []
     append: false
     system: true
     shell: /usr/sbin/nologin
-    home: /var/lib/github-actions-runner/home
+    home: "{{ services_github_runner_home }}"
     create_home: false
   register: services_github_runner_account
 
@@ -28,180 +21,48 @@
     that: services_github_runner_account.uid | int > 0
   when: not ansible_check_mode
 
-- name: Create root-owned Runner state parent
+- name: Protect this instance state parent against job-created symlinks
   ansible.builtin.file:
-    path: /var/lib/github-actions-runner
+    path: "{{ services_github_runner_state }}"
     state: directory
     owner: root
-    group: github-runner
+    group: "{{ services_github_runner_user }}"
     mode: "0750"
 
-- name: Create private Runner directories
+- name: Create private instance directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: github-runner
-    group: github-runner
+    owner: "{{ services_github_runner_user }}"
+    group: "{{ services_github_runner_user }}"
     mode: "0700"
-  loop:
-    - /opt/github-actions-runner
-    - /var/lib/github-actions-runner/home
-    - /var/lib/github-actions-runner/work
+  loop: ["{{ services_github_runner_root }}", "{{ services_github_runner_home }}", "{{ services_github_runner_work }}"]
 
-- name: Inspect Runner executable
-  ansible.builtin.stat:
-    path: /opt/github-actions-runner/bin/Runner.Listener
-  register: services_github_runner_binary
+- name: Install the initial release without overwriting self-updated Runners
+  ansible.builtin.import_tasks: release.yml
 
-- name: Refuse incomplete registered installations
-  ansible.builtin.assert:
-    that: services_github_runner_binary.stat.exists
-    fail_msg: Registered Runner executable is missing. Repair explicitly without overwriting credentials.
-  when: services_github_runner_settings | length > 0
-
-- name: Report initial Runner installation in check mode
-  ansible.builtin.debug:
-    msg: The verified Runner archive would be installed. Existing installations update themselves without re-extraction.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - not services_github_runner_binary.stat.exists
-
-- name: Install initial verified Runner release
-  when:
-    - not ansible_check_mode
-    - not services_github_runner_binary.stat.exists
-  block:
-    - name: Create temporary release directory
-      ansible.builtin.tempfile:
-        state: directory
-        prefix: github-runner-release-
-      register: services_github_runner_release_directory
-
-    - name: Download official Runner with SHA-256 verification
-      ansible.builtin.get_url:
-        url: "{{ services_github_runner_release_url }}"
-        checksum: "{{ services_github_runner_checksum }}"
-        dest: "{{ services_github_runner_release_directory.path }}/runner.tar.gz"
-        mode: "0600"
-
-    - name: Extract initial Runner owned by its service account
-      ansible.builtin.unarchive:
-        src: "{{ services_github_runner_release_directory.path }}/runner.tar.gz"
-        dest: /opt/github-actions-runner
-        remote_src: true
-        owner: github-runner
-        group: github-runner
-  always:
-    - name: Remove downloaded release archive
-      ansible.builtin.file:
-        path: "{{ services_github_runner_release_directory.path }}"
-        state: absent
-      when: services_github_runner_release_directory.path is defined
-
-- name: Create root-owned hook directory
-  ansible.builtin.file:
-    path: /usr/local/libexec
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Create needrestart configuration directory
-  ansible.builtin.file:
-    path: /etc/needrestart/conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Prevent package maintenance from restarting an active Runner job
-  ansible.builtin.copy:
-    content: "$nrconf{override_rc}{qr(^github-actions-runner\\.service$)} = 0;\n"
-    dest: /etc/needrestart/conf.d/github-runner.conf
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Install Runner cleanup helper
-  ansible.builtin.copy:
-    src: cleanup.py
-    dest: /usr/local/libexec/github-runner-cleanup.py
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Install bounded Runner job hooks
+- name: Install per-instance cleanup hooks
   ansible.builtin.template:
-    src: hook.sh.j2
-    dest: "/usr/local/libexec/github-runner-{{ item }}.sh"
+    src: cleanup.sh.j2
+    dest: "/usr/local/libexec/github-runner/{{ services_github_runner_instance.id }}-{{ item }}.sh"
     owner: root
     group: root
     mode: "0755"
   loop: [start, end]
 
-- name: Bound diagnostic log retention
+- name: Bound this instance diagnostic retention
   ansible.builtin.copy:
-    content: "e /opt/github-actions-runner/_diag - - - 7d\n"
-    dest: /etc/tmpfiles.d/github-runner.conf
+    content: "e {{ services_github_runner_root }}/_diag - - - 7d\n"
+    dest: "/etc/tmpfiles.d/github-runner-{{ services_github_runner_instance.id }}.conf"
     owner: root
     group: root
     mode: "0644"
 
-- name: Create isolated journal configuration directory
-  ansible.builtin.file:
-    path: /etc/systemd/journald@github-runner.conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Bound Runner journal storage without changing other services
-  ansible.builtin.copy:
-    content: "[Journal]\nSystemMaxUse=128M\nMaxRetentionSec=7day\n"
-    dest: /etc/systemd/journald@github-runner.conf.d/retention.conf
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Inspect proposed Runner unit change without writing it
+- name: Install this instance unit
   ansible.builtin.template:
-    src: github-actions-runner.service.j2
-    dest: /etc/systemd/system/github-actions-runner.service
+    src: github-runner.service.j2
+    dest: "/etc/systemd/system/{{ services_github_runner_unit }}"
     owner: root
     group: root
     mode: "0644"
-  check_mode: true
-  register: services_github_runner_unit_plan
-
-- name: Read current job state before changing the unit
-  ansible.builtin.command:
-    argv:
-      - gh
-      - api
-      - "orgs/{{ services_github_runner_organization }}/actions/runners/{{ services_github_runner_settings.agentId }}"
-      - --jq
-      - .busy
-  delegate_to: localhost
-  become: false
-  check_mode: false
-  changed_when: false
-  register: services_github_runner_busy
-  when:
-    - services_github_runner_settings | length > 0
-    - services_github_runner_unit_plan.changed  # noqa no-handler
-
-- name: Refuse changing a unit used by an active job
-  ansible.builtin.assert:
-    that: services_github_runner_busy.stdout | default('false') | trim == 'false'
-    fail_msg: Runner is busy. Wait before applying a unit change.
-  when: services_github_runner_settings | length > 0
-
-- name: Install Runner systemd unit
-  ansible.builtin.template:
-    src: github-actions-runner.service.j2
-    dest: /etc/systemd/system/github-actions-runner.service
-    owner: root
-    group: root
-    mode: "0644"
-  register: services_github_runner_unit
+  register: services_github_runner_unit_file

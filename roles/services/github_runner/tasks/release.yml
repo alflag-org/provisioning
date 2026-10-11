@@ -1,0 +1,58 @@
+---
+- name: Inspect this instance executable
+  ansible.builtin.stat:
+    path: "{{ services_github_runner_root }}/bin/Runner.Listener"
+  register: services_github_runner_binary
+
+- name: Refuse reinstalling a damaged registered instance
+  ansible.builtin.assert:
+    that: services_github_runner_binary.stat.exists
+    fail_msg: Inspect this registered instance before repairing missing binaries.
+  when: services_github_runner_registered
+
+- name: Report initial installation in check mode
+  ansible.builtin.debug:
+    msg: The verified bootstrap release would be installed for this instance.
+  changed_when: true
+  when: ansible_check_mode and not services_github_runner_binary.stat.exists
+
+- name: Install the verified bootstrap release
+  when: not ansible_check_mode and not services_github_runner_binary.stat.exists
+  block:
+    - name: Create temporary download directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: github-runner-release-
+      register: services_github_runner_download
+
+    - name: Download official archive with SHA-256 verification
+      ansible.builtin.get_url:
+        url: "{{ services_github_runner_release_url }}"
+        checksum: "{{ services_github_runner_checksum }}"
+        dest: "{{ services_github_runner_download.path }}/runner.tar.gz"
+        mode: "0600"
+
+    - name: Extract this instance release
+      ansible.builtin.unarchive:
+        src: "{{ services_github_runner_download.path }}/runner.tar.gz"
+        dest: "{{ services_github_runner_root }}"
+        remote_src: true
+        owner: "{{ services_github_runner_user }}"
+        group: "{{ services_github_runner_user }}"
+  always:
+    - name: Remove temporary archive
+      ansible.builtin.file:
+        path: "{{ services_github_runner_download.path }}"
+        state: absent
+      when: services_github_runner_download.path is defined
+
+- name: Install official service entry point if absent
+  ansible.builtin.copy:
+    src: "{{ services_github_runner_root }}/bin/runsvc.sh"
+    dest: "{{ services_github_runner_root }}/runsvc.sh"
+    remote_src: true
+    force: false
+    owner: "{{ services_github_runner_user }}"
+    group: "{{ services_github_runner_user }}"
+    mode: "0755"
+  when: not ansible_check_mode or services_github_runner_binary.stat.exists

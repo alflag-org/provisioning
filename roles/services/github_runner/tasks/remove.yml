@@ -1,56 +1,54 @@
 ---
-- name: Collect service state before removal
-  ansible.builtin.service_facts:
+- name: Inspect this instance unit before removal
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ services_github_runner_unit }}"
+  register: services_github_runner_installed_unit
 
-- name: Stop and disable the Runner before deregistration
+- name: Stop only the selected Runner instance
   ansible.builtin.systemd_service:
-    name: github-actions-runner.service
+    name: "{{ services_github_runner_unit }}"
     enabled: false
     state: stopped
-  when: "'github-actions-runner.service' in ansible_facts.services"
+  when: services_github_runner_installed_unit.stat.exists
 
-- name: Deregister before deleting local credentials
+- name: Deregister before deleting instance files
   ansible.builtin.command:
-    argv: [/opt/github-actions-runner/config.sh, remove]
-    chdir: /opt/github-actions-runner
+    argv: ["{{ services_github_runner_root }}/config.sh", remove]
+    chdir: "{{ services_github_runner_root }}"
   environment:
     ACTIONS_RUNNER_INPUT_TOKEN: "{{ services_github_runner_token }}"
-    HOME: /var/lib/github-actions-runner/home
+    HOME: "{{ services_github_runner_home }}"
   become: true
-  become_user: github-runner
+  become_user: "{{ services_github_runner_user }}"
   changed_when: true
   no_log: true
-  when:
-    - not ansible_check_mode
-    - services_github_runner_settings | length > 0
+  when: not ansible_check_mode and services_github_runner_registered
 
-- name: Remove dedicated Runner files after successful deregistration
+- name: Remove only this instance files after successful deregistration
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
-    - /etc/systemd/system/github-actions-runner.service
-    - /etc/tmpfiles.d/github-runner.conf
-    - /etc/needrestart/conf.d/github-runner.conf
-    - /etc/systemd/journald@github-runner.conf.d
-    - /usr/local/libexec/github-runner-start.sh
-    - /usr/local/libexec/github-runner-end.sh
-    - /usr/local/libexec/github-runner-cleanup.py
-    - /opt/github-actions-runner
-    - /var/lib/github-actions-runner
+    - "/etc/systemd/system/{{ services_github_runner_unit }}"
+    - "/etc/tmpfiles.d/github-runner-{{ services_github_runner_instance.id }}.conf"
+    - "/usr/local/libexec/github-runner/{{ services_github_runner_instance.id }}-start.sh"
+    - "/usr/local/libexec/github-runner/{{ services_github_runner_instance.id }}-end.sh"
+    - "{{ services_github_runner_root }}"
+    - "{{ services_github_runner_state }}"
+  register: services_github_runner_removal
 
-- name: Reload systemd after removing Runner unit
+- name: Reload systemd after deleting an instance unit
   ansible.builtin.systemd_service:
     daemon_reload: true
-  when: not ansible_check_mode
+  when: not ansible_check_mode and services_github_runner_removal.results[0].changed  # noqa no-handler
 
-- name: Remove dedicated Runner account
+- name: Remove this instance user without removing shared resources
   ansible.builtin.user:
-    name: github-runner
+    name: "{{ services_github_runner_user }}"
     state: absent
     remove: false
 
-- name: Remove dedicated Runner group
+- name: Remove this instance group
   ansible.builtin.group:
-    name: github-runner
+    name: "{{ services_github_runner_user }}"
     state: absent

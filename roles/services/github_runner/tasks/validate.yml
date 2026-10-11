@@ -1,5 +1,34 @@
 ---
-- name: Require a dedicated Ubuntu x64 VM and valid operation
+- name: Require a list of Runner instances and a valid operation
+  ansible.builtin.assert:
+    that:
+      - services_github_runner_instances is sequence and services_github_runner_instances is not string and services_github_runner_instances is not mapping
+      - services_github_runner_operation in ['install', 'register', 'remove']
+      - services_github_runner_checksum is match('^sha256:[a-f0-9]{64}$')
+
+- name: Validate instance identity and GitHub registration URL
+  ansible.builtin.assert:
+    that:
+      - item.id is match('^[a-z][a-z0-9-]{0,19}$')
+      - item.url is match('^https://github\.com/[A-Za-z0-9-]+(/[A-Za-z0-9_.-]+)?$')
+      - item.name | default(inventory_hostname ~ '-' ~ item.id) | length > 0
+      - item.url.split('/') | length == 4 or 'runner_group' not in item
+    fail_msg: Each Runner needs a safe unique ID and a GitHub organization or repository URL; groups apply only to organizations.
+  loop: "{{ services_github_runner_instances }}"
+  loop_control:
+    label: "{{ item.id | default('invalid') }}"
+
+- name: Refuse duplicate instance IDs and unselected operations
+  ansible.builtin.assert:
+    that:
+      - services_github_runner_instances | map(attribute='id') | unique | length == services_github_runner_instances | length
+      - >-
+        services_github_runner_operation == 'install' or
+        (ansible_play_hosts_all | length == 1 and
+         services_github_runner_instances | selectattr('id', 'equalto', services_github_runner_selected_instance) | list | length == 1)
+    fail_msg: Registration and removal require one inventory host and one configured selected instance.
+
+- name: Require an isolated dedicated Ubuntu x64 CI VM
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == 'Ubuntu'
@@ -7,52 +36,9 @@
       - ansible_facts.architecture == 'x86_64'
       - ansible_facts.service_mgr == 'systemd'
       - "'platform_vm' in group_names"
-      - "'control_plane_nodes' not in group_names"
-      - "'app_hosts' not in group_names"
-      - "'web_hosts' not in group_names"
       - group_names | select('match', '^svc_') | list == ['svc_github_runner']
-      - services_github_runner_operation in ['install', 'register', 'remove']
-      - services_github_runner_organization is match('^[A-Za-z0-9][A-Za-z0-9-]{0,38}$')
-      - services_github_runner_group is match('^[A-Za-z0-9][A-Za-z0-9 _.-]{0,99}$')
-      - services_github_runner_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')
-      - services_github_runner_checksum is match('^sha256:[a-f0-9]{64}$')
+      - "'control_plane_nodes' not in group_names"
+      - "'app_hosts' not in group_names and 'web_hosts' not in group_names"
       - services_github_runner_operation == 'remove' or services_github_runner_isolation_confirmed is sameas true
-    fail_msg: Runner requires a dedicated Ubuntu x64 VM, an organization, a Runner group, and confirmed guest-external network isolation.
-
-- name: Read organization Runner groups through controller authentication
-  ansible.builtin.command:
-    argv:
-      - gh
-      - api
-      - --paginate
-      - "orgs/{{ services_github_runner_organization }}/actions/runner-groups?per_page=100"
-      - --jq
-      - '.runner_groups[] | {id, name, allows_public_repositories, inherited}'
-  delegate_to: localhost
-  become: false
-  check_mode: false
-  changed_when: false
-  register: services_github_runner_group_list
-
-- name: Select the inventory Runner group
-  ansible.builtin.set_fact:
-    services_github_runner_groups: >-
-      {{ services_github_runner_group_list.stdout_lines | map('from_json') |
-         selectattr('name', 'equalto', services_github_runner_group) | list }}
-
-- name: Require an existing unambiguous Runner group
-  ansible.builtin.assert:
-    that: services_github_runner_groups | length == 1
-    fail_msg: The inventory Runner group must exist in the selected organization.
-
-- name: Record the selected Runner group
-  ansible.builtin.set_fact:
-    services_github_runner_group_settings: "{{ services_github_runner_groups | first }}"
-
-- name: Require an organization-owned group that denies public repository access
-  ansible.builtin.assert:
-    that:
-      - services_github_runner_group_settings.id | int > 0
-      - services_github_runner_group_settings.inherited is sameas false
-      - services_github_runner_operation == 'remove' or services_github_runner_group_settings.allows_public_repositories is sameas false
-    fail_msg: Runner group must be owned by this organization and must not allow public repositories.
+    fail_msg: Confirm guest-external isolation and use a dedicated Ubuntu x64 CI VM.
+  when: services_github_runner_instances | length > 0

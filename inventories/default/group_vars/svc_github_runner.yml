@@ -1,3 +1,7 @@
 ---
 # No host is assigned until guest-external isolation has been implemented and tested.
 services_github_runner_isolation_confirmed: false
+services_github_runner_instances:
+  - id: character-agent
+    url: https://github.com/viasnake/character-agent-platform
+    name: "{{ inventory_hostname }}-character-agent-platform"

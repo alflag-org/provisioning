@@ -1,31 +1,53 @@
 ---
-- name: Validate Runner prerequisites before mutation
+- name: Validate Runner inventory before mutation
   ansible.builtin.import_tasks: validate.yml
 
-- name: Inspect local Runner registration
-  ansible.builtin.import_tasks: registration-state.yml
-
-- name: Install and converge Runner files
-  ansible.builtin.import_tasks: install.yml
-  when: services_github_runner_operation != 'remove'
-
-- name: Register Runner explicitly
-  ansible.builtin.import_tasks: register.yml
-  when: services_github_runner_operation == 'register'
-
-- name: Converge registered Runner service
-  ansible.builtin.import_tasks: service.yml
+- name: Prepare shared Runner prerequisites
   when:
+    - services_github_runner_instances | length > 0
     - services_github_runner_operation != 'remove'
-    - services_github_runner_settings | length > 0
+  block:
+    - name: Create shared root-owned directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /opt/github-actions-runner
+        - /var/lib/github-actions-runner
+        - /usr/local/libexec/github-runner
+        - /etc/needrestart/conf.d
 
-- name: Explain unregistered Runner boundary
-  ansible.builtin.debug:
-    msg: Runner registration and service startup require the explicit registration playbook. No GitHub token was consumed.
-  when:
-    - services_github_runner_operation != 'remove'
-    - services_github_runner_settings | length == 0
+    - name: Exclude Runner instances from automatic package-service restarts
+      ansible.builtin.copy:
+        content: "$nrconf{override_rc}{qr(^github-runner-.+\\.service$)} = 0;\n"
+        dest: /etc/needrestart/conf.d/github-runner.conf
+        owner: root
+        group: root
+        mode: "0644"
 
-- name: Remove Runner explicitly
-  ansible.builtin.import_tasks: remove.yml
-  when: services_github_runner_operation == 'remove'
+    - name: Install Runner prerequisites without upgrading installed packages
+      ansible.builtin.apt:
+        name: "{{ services_github_runner_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 86400
+
+- name: Manage Runner instances independently
+  ansible.builtin.include_tasks: instance.yml
+  loop: >-
+    {{ services_github_runner_instances if services_github_runner_operation == 'install' else
+       services_github_runner_instances | selectattr('id', 'equalto', services_github_runner_selected_instance) | list }}
+  loop_control:
+    loop_var: services_github_runner_instance
+    label: "{{ services_github_runner_instance.id }}"
+  vars:
+    services_github_runner_user: "gha-{{ services_github_runner_instance.id }}"
+    services_github_runner_root: "/opt/github-actions-runner/{{ services_github_runner_instance.id }}"
+    services_github_runner_state: "/var/lib/github-actions-runner/{{ services_github_runner_instance.id }}"
+    services_github_runner_home: "{{ services_github_runner_state }}/home"
+    services_github_runner_work: "{{ services_github_runner_state }}/work"
+    services_github_runner_name: "{{ services_github_runner_instance.name | default(inventory_hostname ~ '-' ~ services_github_runner_instance.id) }}"
+    services_github_runner_unit: "github-runner-{{ services_github_runner_instance.id }}.service"

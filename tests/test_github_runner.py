@@ -1,129 +1,286 @@
-"""Protect Runner cleanup boundaries and reject untrusted job events."""
+"""Exercise real Ansible operations with a synthetic vendor command boundary."""
 
-import importlib.util
+import grp
+import hashlib
 import json
-import tempfile
+import os
 from pathlib import Path
-import unittest
+import pwd
+import subprocess
+import tarfile
+import uuid
+
+import yaml
 
 from ansible_support import AnsibleTestCase, ROOT
 
-SPEC = importlib.util.spec_from_file_location(
-    'runner_cleanup', ROOT / 'roles/services/github_runner/files/cleanup.py',
-)
-CLEANUP = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(CLEANUP)
+ROLE = 'services/github_runner'
+TEMPLATES = ROOT / 'roles/services/github_runner/templates'
+TOKEN = 'synthetic-token-must-not-appear'
+CONFIG = """#!/usr/bin/python3
+import json, os, pathlib, sys
+root = pathlib.Path.cwd()
+args = sys.argv[1:]
+(root / 'argv.json').write_text(json.dumps(args))
+token = os.environ.get('ACTIONS_RUNNER_INPUT_TOKEN', '')
+if not token or '--token' in args:
+    raise SystemExit(3)
+if token.startswith('reject-'):
+    print(token)
+    raise SystemExit(1)
+if token == 'incomplete':
+    raise SystemExit(0)
+if args == ['remove']:
+    for name in ['.runner', '.credentials', '.credentials_rsaparams']:
+        (root / name).unlink()
+else:
+    def option(name):
+        return args[args.index(name) + 1]
+    (root / '.runner').write_text(json.dumps({
+        'gitHubUrl': option('--url'), 'agentName': option('--name'),
+        'workFolder': option('--work'), 'agentId': 1,
+    }))
+    for name in ['.credentials', '.credentials_rsaparams']:
+        (root / name).write_text('synthetic-vendor-credential')
+        (root / name).chmod(0o644)
+    (root / '.runner').chmod(0o644)
+"""
 
 
-class RunnerCleanupTests(unittest.TestCase):
+class RunnerTests(AnsibleTestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
-        self.work = self.root / 'work'
-        self.home = self.root / 'home'
-        self.work.mkdir()
-        self.home.mkdir()
+        super().setUp()
+        self.repo = self.instance('repo', 'https://github.com/owner/private-ci')
+        self.org = self.instance('org', 'https://github.com/example-org', runner_group='Trusted')
 
-    def test_start_preserves_current_event_and_end_removes_job_credentials(self):
-        current = self.work / '_temp'
-        current.mkdir()
-        event = current / 'event.json'
-        event.write_text('{}')
-        checkout = self.work / 'repository'
-        checkout.mkdir()
-        (checkout / '.git-credentials').write_text('synthetic secret')
-        (self.home / '.netrc').write_text('synthetic secret')
-        CLEANUP.cleanup(self.work, self.home, 'start')
-        self.assertTrue(event.exists())
-        self.assertFalse(checkout.exists())
-        self.assertEqual(list(self.home.iterdir()), [])
-        CLEANUP.cleanup(self.work, self.home, 'end')
-        self.assertEqual(list(self.work.iterdir()), [])
-        CLEANUP.cleanup(self.work, self.home, 'end')
+    def instance(self, prefix, url, **options):
+        identifier = prefix + '-' + uuid.uuid4().hex[:8]
+        root = self.directory / identifier
+        install, state = root / 'app', root / 'state'
+        home, work = state / 'home', state / 'work'
+        for path in (install / 'bin', home, work):
+            path.mkdir(parents=True, exist_ok=True)
+        (install / 'config.sh').write_text(CONFIG)
+        (install / 'config.sh').chmod(0o755)
+        for path in (install / 'bin/Runner.Listener', install / 'bin/runsvc.sh', install / 'runsvc.sh'):
+            path.write_text('synthetic-self-updated-release')
+            path.chmod(0o755)
+        return {
+            'services_github_runner_instance': {'id': identifier, 'url': url, **options},
+            'services_github_runner_root': str(install),
+            'services_github_runner_state': str(state),
+            'services_github_runner_home': str(home),
+            'services_github_runner_work': str(work),
+            'services_github_runner_name': identifier,
+            'services_github_runner_user': pwd.getpwuid(os.getuid()).pw_name,
+            'services_github_runner_unit': 'github-runner-' + identifier + '.service',
+            'services_github_runner_token': TOKEN,
+        }
 
-    def test_nested_symlinks_do_not_delete_external_data(self):
-        external = self.root / 'external'
-        external.mkdir()
-        retained = external / 'keep'
-        retained.write_text('retained')
-        (self.work / 'link').symlink_to(external, target_is_directory=True)
-        checkout = self.work / 'repository'
-        checkout.mkdir()
-        (checkout / 'link').symlink_to(external, target_is_directory=True)
-        CLEANUP.cleanup(self.work, self.home, 'end')
-        self.assertEqual(retained.read_text(), 'retained')
-        self.assertEqual(list(self.work.iterdir()), [])
-
-    def test_symlinked_work_root_is_rejected(self):
-        self.work.rmdir()
-        self.work.symlink_to(self.home, target_is_directory=True)
-        retained = self.home / 'keep'
-        retained.write_text('retained')
-        with self.assertRaises(OSError):
-            CLEANUP.cleanup(self.work, self.home, 'end')
-        self.assertEqual(retained.read_text(), 'retained')
-
-    def test_accepts_private_repositories_in_the_selected_organization(self):
-        for repository in ('owner/first-ci', 'owner/second-ci', 'OWNER/third-ci'):
-            with self.subTest(repository=repository):
-                CLEANUP.validate_event({
-                    'repository': {'private': True, 'full_name': repository},
-                }, 'owner')
-
-    def test_rejects_public_other_organization_and_fork_events(self):
-        repository = 'owner/private-ci'
-        event = {'repository': {'private': True, 'full_name': repository}}
-        CLEANUP.validate_event(event, 'owner')
-        CLEANUP.validate_event({
-            **event, 'pull_request': {'head': {'repo': {'full_name': repository}}},
-        }, 'owner')
-        rejected = [
-            {'repository': {'private': False, 'full_name': repository}},
-            {'repository': {'private': True, 'full_name': 'other-owner/private-ci'}},
-            {'repository': {'private': True, 'full_name': 'owner'}},
-            {'repository': {'private': True, 'full_name': 'owner/invalid/name'}},
-            {**event, 'pull_request': {'head': {'repo': {'full_name': 'fork/private-ci'}}}},
-            {**event, 'pull_request': {'head': {'repo': {'full_name': 'owner/another-repo'}}}},
-            {**event, 'pull_request': {'head': {'repo': None}}},
-        ]
-        for value in rejected:
-            with self.subTest(event=value), self.assertRaises(ValueError):
-                CLEANUP.validate_event(value, 'owner')
-
-    def test_invalid_phase_preserves_files(self):
-        retained = self.home / 'keep'
-        retained.write_text('retained')
-        with self.assertRaises(ValueError):
-            CLEANUP.cleanup(self.work, self.home, 'invalid')
-        self.assertTrue(retained.exists())
-
-
-class RunnerIsolationTests(AnsibleTestCase):
-    def test_unconfirmed_isolation_fails_before_mutation_and_token_exposure(self):
-        playbook = self.directory / 'runner.yml'
-        playbook.write_text(json.dumps([{
+    def run_tasks(self, stages, context, *, check=False, tasks=None):
+        playbook = self.directory / 'operation.yml'
+        playbook.write_text(yaml.safe_dump([{
             'hosts': 'default', 'gather_facts': False,
-            'roles': ['services/github_runner'],
+            'tasks': [{'ansible.builtin.include_role': {'name': ROLE, 'tasks_from': stage}}
+                      for stage in stages] + (tasks or []),
         }]))
-        for check, isolation, groups in (
-            (False, False, ['platform_vm', 'svc_github_runner']),
-            (True, False, ['platform_vm', 'svc_github_runner']),
-            (False, True, ['platform_vm', 'svc_github_runner', 'svc_mysql']),
-            (True, True, ['platform_vm', 'svc_github_runner', 'svc_mysql']),
+        if 'register' in stages:
+            context = {'services_github_runner_operation': 'register', **context}
+        result = self.run_playbook(playbook, variables=context, check=check)
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
+        return result
+
+    def snapshot(self, context):
+        root = Path(context['services_github_runner_root']).parent
+        return {str(p.relative_to(root)): p.read_bytes()
+                for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
+
+    def test_repository_organization_and_mixed_configuration(self):
+        facts = {
+            'distribution': 'Ubuntu', 'distribution_version': '24.04',
+            'architecture': 'x86_64', 'service_mgr': 'systemd',
+        }
+        for contexts in ([self.repo], [self.org], [self.repo, self.org]):
+            result = self.run_tasks(['validate'], {
+                'services_github_runner_instances': [c['services_github_runner_instance'] for c in contexts],
+                'services_github_runner_isolation_confirmed': True,
+                'ansible_facts': facts, 'group_names': ['platform_vm', 'svc_github_runner'],
+            })
+            self.assert_success(result)
+            self.assertRegex(result.stdout, r'changed=0\s')
+        units = []
+        for context in (self.repo, self.org):
+            unit = Path(context['services_github_runner_root']).parent / 'unit'
+            context = {**context, 'services_github_runner_user': 'gha-' + context['services_github_runner_instance']['id']}
+            result = self.run_tasks([], context, tasks=[{
+                'ansible.builtin.template': {
+                    'src': str(TEMPLATES / 'github-runner.service.j2'),
+                    'dest': str(unit), 'mode': '0600',
+                },
+            }])
+            self.assert_success(result)
+            units.append(unit.read_text())
+            for field in ('user', 'root', 'home', 'state'):
+                self.assertIn(context['services_github_runner_' + field], units[-1])
+        self.assertNotIn(self.repo['services_github_runner_root'], units[1])
+        self.assertNotIn(self.org['services_github_runner_root'], units[0])
+
+    def test_invalid_selection_and_duplicate_ids_fail_before_mutation(self):
+        instance = self.repo['services_github_runner_instance']
+        for settings in (
+            {'services_github_runner_instances': [instance, instance]},
+            {'services_github_runner_instances': [instance], 'services_github_runner_operation': 'remove'},
         ):
-            with self.subTest(check=check, isolation=isolation, groups=groups):
-                result = self.run_playbook(playbook, variables={
-                    'ansible_facts': {
-                        'distribution': 'Ubuntu', 'distribution_version': '24.04',
-                        'architecture': 'x86_64', 'service_mgr': 'systemd',
-                    },
-                    'group_names': groups,
-                    'services_github_runner_isolation_confirmed': isolation,
-                    'services_github_runner_organization': 'owner',
-                    'services_github_runner_token': 'synthetic-secret-must-not-appear',
-                }, check=check)
-                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn('confirmed guest-external network isolation', result.stdout)
-                self.assertRegex(result.stdout, r'changed=0\s')
-                self.assertNotIn('synthetic-secret-must-not-appear', result.stdout + result.stderr)
+            before = self.snapshot(self.repo)
+            result = self.run_tasks(['validate'], settings)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertRegex(result.stdout, r'changed=0\s')
+            self.assertEqual(self.snapshot(self.repo), before)
+
+    def test_ordinary_installation_does_not_register_an_instance(self):
+        result = self.run_tasks(['state', 'register'], {
+            **self.repo, 'services_github_runner_operation': 'install',
+        })
+        self.assert_success(result)
+        self.assertRegex(result.stdout, r'changed=0\s')
+        self.assertFalse((Path(self.repo['services_github_runner_root']) / 'argv.json').exists())
+
+    def test_registration_of_both_scopes_is_independent_and_repeatable(self):
+        for context, other in ((self.repo, self.org), (self.org, self.repo)):
+            before = self.snapshot(other)
+            result = self.run_tasks(['state', 'register'], context)
+            self.assert_success(result)
+            self.assertEqual(self.snapshot(other), before)
+            root = Path(context['services_github_runner_root'])
+            args = json.loads((root / 'argv.json').read_text())
+            self.assertEqual(args[args.index('--url') + 1], context['services_github_runner_instance']['url'])
+            self.assertEqual('--runnergroup' in args, 'runner_group' in context['services_github_runner_instance'])
+            self.assertNotIn(TOKEN, ''.join(p.read_text() for p in root.rglob('*') if p.is_file()))
+            for name in ('.runner', '.credentials', '.credentials_rsaparams'):
+                self.assertEqual((root / name).stat().st_mode & 0o777, 0o600)
+            result = self.run_tasks(['state', 'register'], context)
+            self.assert_success(result)
+            self.assertRegex(result.stdout, r'changed=0\s')
+
+    def test_failed_or_incomplete_registration_blocks_retry_without_deleting_other_instance(self):
+        for context, token in ((self.repo, 'reject-' + TOKEN), (self.org, 'incomplete')):
+            before = self.snapshot(self.org if context is self.repo else self.repo)
+            result = self.run_tasks(['state', 'register'], {**context, 'services_github_runner_token': token})
+            self.assertNotEqual(result.returncode, 0)
+            root = Path(context['services_github_runner_root'])
+            self.assertTrue((root / '.registration-attempt').exists())
+            attempt = (root / 'argv.json').stat().st_mtime_ns
+            retry = self.run_tasks(['state', 'register'], context)
+            self.assertNotEqual(retry.returncode, 0)
+            self.assertRegex(retry.stdout, r'changed=0\s')
+            self.assertEqual((root / 'argv.json').stat().st_mtime_ns, attempt)
+            self.assertEqual(self.snapshot(self.org if context is self.repo else self.repo), before)
+
+    def test_failed_removal_preserves_credentials_and_success_removes_only_selected_instance(self):
+        for context in (self.repo, self.org):
+            self.assert_success(self.run_tasks(['state', 'register'], context))
+        before = self.snapshot(self.org)
+        identifier = self.repo['services_github_runner_instance']['id']
+        # No real OS account is created or deleted by this fixture.
+        account = 'gha-' + identifier
+        self.assertFalse(any(p.pw_name == account for p in pwd.getpwall()))
+        self.assertFalse(any(g.gr_name == account for g in grp.getgrall()))
+        context = {**self.repo, 'services_github_runner_user': account}
+        result = self.run_tasks(['state', 'remove'], {**context, 'services_github_runner_token': 'reject-' + TOKEN})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((Path(context['services_github_runner_root']) / '.credentials').exists())
+        self.assertEqual(self.snapshot(self.org), before)
+        self.assert_success(self.run_tasks(['state', 'remove'], context))
+        self.assertFalse(Path(context['services_github_runner_root']).exists())
+        self.assertFalse(Path(context['services_github_runner_state']).exists())
+        self.assertEqual(self.snapshot(self.org), before)
+        result = self.run_tasks(['state', 'remove'], {k: v for k, v in context.items() if k != 'services_github_runner_token'})
+        self.assert_success(result)
+        self.assertRegex(result.stdout, r'changed=0\s')
+
+    def test_bootstrap_version_change_preserves_self_updated_binaries_and_registration(self):
+        self.assert_success(self.run_tasks(['state', 'register'], self.repo))
+        before, other = self.snapshot(self.repo), self.snapshot(self.org)
+        result = self.run_tasks(['state', 'release'], {**self.repo, 'services_github_runner_version': '99.0.0'})
+        self.assert_success(result)
+        self.assertRegex(result.stdout, r'changed=0\s')
+        self.assertEqual(self.snapshot(self.repo), before)
+        self.assertEqual(self.snapshot(self.org), other)
+
+    def test_changed_identity_and_invalid_registration_are_preserved_for_recovery(self):
+        self.assert_success(self.run_tasks(['state', 'register'], self.repo))
+        root = Path(self.repo['services_github_runner_root'])
+        before = self.snapshot(self.repo)
+        changed = {**self.repo, 'services_github_runner_instance': {
+            **self.repo['services_github_runner_instance'], 'url': 'https://github.com/another-org',
+        }}
+        result = self.run_tasks(['state', 'register'], changed)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout, r'changed=0\s')
+        self.assertEqual(self.snapshot(self.repo), before)
+        metadata = json.loads((root / '.runner').read_text())
+        metadata['agentId'] = 0
+        (root / '.runner').write_text(json.dumps(metadata))
+        before = self.snapshot(self.repo)
+        result = self.run_tasks(['state', 'register'], self.repo)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout, r'changed=0\s')
+        self.assertEqual(self.snapshot(self.repo), before)
+
+    def test_initial_archive_is_verified_before_extraction(self):
+        root = Path(self.repo['services_github_runner_root'])
+        for p in (root / 'bin/Runner.Listener', root / 'runsvc.sh'):
+            p.unlink()
+        source = self.directory / 'package'
+        (source / 'bin').mkdir(parents=True)
+        (source / 'bin/Runner.Listener').write_text('verified-initial-release')
+        (source / 'bin/runsvc.sh').write_text('entry-point')
+        archive = self.directory / 'runner.tar.gz'
+        with tarfile.open(archive, 'w:gz') as output:
+            output.add(source / 'bin', arcname='bin')
+        context = {**self.repo, 'services_github_runner_registered': False,
+                   'services_github_runner_release_url': archive.as_uri(),
+                   'services_github_runner_checksum': 'sha256:' + '0' * 64}
+        other = self.snapshot(self.org)
+        result = self.run_tasks(['release'], context)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((root / 'bin/Runner.Listener').exists())
+        context['services_github_runner_checksum'] = 'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()
+        self.assert_success(self.run_tasks(['release'], context))
+        self.assertEqual((root / 'bin/Runner.Listener').read_text(), 'verified-initial-release')
+        self.assertEqual(self.snapshot(self.org), other)
+
+    def test_cleanup_preserves_other_instance_and_symlink_targets(self):
+        work, home = Path(self.repo['services_github_runner_work']), Path(self.repo['services_github_runner_home'])
+        external = Path(self.org['services_github_runner_home']) / 'keep'
+        external.write_text('retained')
+        (work / 'external').symlink_to(external.parent, target_is_directory=True)
+        checkout = work / 'repository'
+        checkout.mkdir()
+        (checkout / 'secret').write_text('temporary')
+        current = work / '_temp'
+        current.mkdir()
+        (current / 'event.json').write_text('{}')
+        (home / '.netrc').write_text('temporary')
+        scripts = []
+        for phase in ('start', 'end'):
+            script = self.directory / (phase + '.sh')
+            result = self.run_tasks([], {**self.repo, 'item': phase}, tasks=[{
+                'ansible.builtin.template': {'src': str(TEMPLATES / 'cleanup.sh.j2'),
+                                            'dest': str(script), 'mode': '0700'},
+            }])
+            self.assert_success(result)
+            subprocess.run(['shellcheck', str(script)], check=True, capture_output=True)
+            subprocess.run(['sh', str(script)], check=True, capture_output=True)
+            if phase == 'start':
+                self.assertTrue((current / 'event.json').exists())
+            scripts.append(script)
+        self.assertFalse(checkout.exists())
+        self.assertEqual(list(work.iterdir()), [])
+        self.assertEqual(list(home.iterdir()), [])
+        self.assertEqual(external.read_text(), 'retained')
+        work.rmdir()
+        work.symlink_to(external.parent, target_is_directory=True)
+        result = subprocess.run(['sh', str(scripts[0])], capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(external.read_text(), 'retained')
