@@ -39,7 +39,7 @@ else:
     (root / '.runner').write_text(json.dumps({
         'gitHubUrl': option('--url'), 'agentName': option('--name'),
         'workFolder': option('--work'), 'agentId': 0 if token == 'invalid-metadata' else 1,
-    }))
+    }), encoding='utf-8-sig')
     for name in ['.credentials', '.credentials_rsaparams']:
         (root / name).write_text('synthetic-vendor-credential')
         (root / name).chmod(0o644)
@@ -204,7 +204,7 @@ class RunnerTests(AnsibleTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertRegex(result.stdout, r'changed=0\s')
         self.assertEqual(self.snapshot(self.repo), before)
-        metadata = json.loads((root / '.runner').read_text())
+        metadata = json.loads((root / '.runner').read_text(encoding='utf-8-sig'))
         metadata['agentId'] = 0
         (root / '.runner').write_text(json.dumps(metadata))
         before = self.snapshot(self.repo)

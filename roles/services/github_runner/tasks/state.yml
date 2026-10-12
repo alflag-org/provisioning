@@ -45,6 +45,7 @@
       - not settings.ephemeral | default(false)
     fail_msg: Existing registration differs from inventory. Deregister explicitly before changing identity.
   vars:
-    settings: "{{ services_github_runner_metadata.content | b64decode | from_json }}"
+    # The official Runner writes UTF-8 metadata with a BOM.
+    settings: "{{ services_github_runner_metadata.content | b64decode | regex_replace('^\\ufeff', '') | from_json }}"
   no_log: true
   when: services_github_runner_registered
