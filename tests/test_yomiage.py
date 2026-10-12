@@ -48,7 +48,7 @@ class YomiagePreflightTests(AnsibleTestCase):
         with redirect_stdout(output):
             result = provision.run(playbook, required, ['-i', str(inventory)], provider=provider)
         self.assertEqual(result, 0, output.getvalue())
-        self.assertIn('changed=0 failed=0', output.getvalue())
+        self.assertIn('Ansible exited with status 0', output.getvalue())
         self.assertNotIn(sentinel, output.getvalue())
         self.assertNotIn(billing_url, output.getvalue())
 

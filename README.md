@@ -36,16 +36,14 @@ atlas run provision '<playbook>' --limit '<target>' --required-secrets required-
 ```
 
 Missing secrets stop execution. Ansible stdout and stderr remain suppressed.
-Provision reports per-host and total execution counts, changed hosts, and changed
-task source paths, line numbers, and module names. It never reports task names,
-arguments, result messages, or diffs. The versioned summary exists only in the
-volatile run directory and is removed with the secret inputs.
+Provision reports only Ansible's exit status. It does not collect execution
+counts or task details.
 
-Review the changed sources before applying. After applying, repeat the same check
-and inspect `changed=0`, `failed=0`, and `unreachable=0`; the exit status alone does
-not establish convergence. Check mode may skip operations whose prerequisites are
-absent. An otherwise successful run fails if its safe summary is unavailable or
-invalid. Use local validation without secret injection for syntax diagnostics.
+Review the selected inventory and roles before applying. After applying, repeat
+the same check and verify the target's configuration and service behavior directly.
+An exit status of zero does not establish that no changes were needed. Check mode
+may skip operations whose prerequisites are absent. Use local validation without
+secret injection for syntax diagnostics.
 
 The [GameAP guide](docs/gameap.md) explains enrollment and recovery decisions.
 

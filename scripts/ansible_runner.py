@@ -13,7 +13,6 @@ def callback_paths(subdirs=True):
     # CALLBACK_PLUGINS and CALLBACKS_ENABLED are explicit. Do not import them.
     # This loader hook is verified with the pinned ansible-core integration tests.
     return [
-        PluginPathContext(str(Path(__file__).resolve().parents[1] / "callback_plugins"), False),
         PluginPathContext(str(Path(ansible.plugins.callback.__file__).parent), True),
     ]
 

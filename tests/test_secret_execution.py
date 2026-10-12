@@ -1,12 +1,14 @@
 """Exercise the actual child boundary with synthetic secrets and no network."""
 
 import importlib.util
+import io
 import os
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+from contextlib import redirect_stdout, redirect_stderr
 
 from atlas_core.secrets import SecretResolutionError, SecretResolver
 
@@ -32,8 +34,7 @@ class SecretExecutionTests(unittest.TestCase):
             provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
             with patch.dict(os.environ, {"ATLAS_VENV": str(venv)}):
                 self.assertEqual(COMMAND.run(Path("unused"), {"password": "mysql.backup.password"}, [],
-                                             provider=provider), 2)
-            # The child ran, but a synthetic executable supplies no safe summary.
+                                             provider=provider), 0)
             self.assertTrue(marker.exists())
 
     def test_real_child_gets_values_without_argv_environment_or_persistent_file(self):
@@ -52,8 +53,12 @@ print("synthetic-secret")
 sys.stderr.write("synthetic-secret")
 ''')
             provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
-            self.assertEqual(COMMAND.run(child, {"mysql_password": "mysql.backup.password"}, [],
-                                         provider=provider, executable=sys.executable), 2)
+            output = io.StringIO()
+            with redirect_stdout(output), redirect_stderr(output):
+                result = COMMAND.run(child, {"mysql_password": "mysql.backup.password"}, [],
+                                     provider=provider, executable=sys.executable)
+            self.assertEqual(result, 0)
+            self.assertNotIn("synthetic-secret", output.getvalue())
             self.assertEqual(list(Path(directory).iterdir()), [child])
 
     def test_missing_secret_never_starts_child(self):
@@ -68,6 +73,59 @@ sys.stderr.write("synthetic-secret")
             path.write_text("required_secrets:\n  password: mysql.backup.password\n  password: other.api_token\n")
             with self.assertRaises(ValueError):
                 COMMAND.declarations(path)
+
+    def test_ansible_failure_preserves_exit_status_without_exposing_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            playbook = Path(directory) / "failure.yml"
+            playbook.write_text('''---
+- hosts: localhost
+  gather_facts: false
+  become: false
+  tasks:
+    - name: '{{ password }}'
+      ansible.builtin.command:
+        argv: [/bin/sh, -c, 'echo "$1"; echo "$1" >&2', fixture, '{{ password }}']
+    - ansible.builtin.fail:
+        msg: '{{ password }}'
+      no_log: true
+''')
+            provider = SecretResolver({"fixture.secret": "id"}, lambda ids: {"id": "synthetic-secret"})
+            output = io.StringIO()
+            with redirect_stdout(output), redirect_stderr(output):
+                result = COMMAND.run(playbook, {"password": "fixture.secret"},
+                                     ["-i", "localhost,", "-c", "local",
+                                      "-e", f"ansible_python_interpreter={sys.executable}"], provider=provider)
+            self.assertEqual(result, 2)
+            self.assertEqual(output.getvalue(), "provision: Ansible exited with status 2\n")
+
+    def test_adjacent_and_environment_callbacks_cannot_consume_injected_secrets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "loaded"
+            for name in ("callback_plugins", "external"):
+                plugins = root / name
+                plugins.mkdir()
+                (plugins / "untrusted.py").write_text(
+                    f"from pathlib import Path\nPath({str(marker)!r}).touch()\n")
+            playbook = root / "fixture.yml"
+            playbook.write_text('''---
+- hosts: localhost
+  gather_facts: false
+  become: false
+  tasks:
+    - ansible.builtin.debug:
+        msg: '{{ password }}'
+''')
+            provider = SecretResolver({"fixture.secret": "id"}, lambda ids: {"id": "synthetic-secret"})
+            with patch.dict(os.environ, {
+                "ANSIBLE_CALLBACK_PLUGINS": str(root / "external"),
+                "ANSIBLE_CALLBACKS_ENABLED": "untrusted",
+                "ATLAS_VENV": str(Path(sys.executable).parent.parent),
+            }):
+                result = COMMAND.run(playbook, {"password": "fixture.secret"},
+                                     ["-i", "localhost,", "-c", "local"], provider=provider)
+            self.assertEqual(result, 0)
+            self.assertFalse(marker.exists())
 
 
 if __name__ == "__main__":

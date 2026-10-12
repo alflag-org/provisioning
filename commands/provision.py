@@ -14,9 +14,6 @@ from contextlib import nullcontext
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib.provision_summary import SummaryUnavailable, display_summary, read_summary
-
 from atlas_core.execution import get_run_directory, temporary_run_directory
 from atlas_core.secrets import (
     SecretConfigurationError,
@@ -150,10 +147,7 @@ def run(playbook, required, arguments, *, provider=None, executable=None, transi
                 "ANSIBLE_CACHE_PLUGIN": "memory",
                 "ANSIBLE_RETRY_FILES_ENABLED": "False",
                 "ANSIBLE_STDOUT_CALLBACK": "ansible.builtin.default",
-                "ANSIBLE_CALLBACK_PLUGINS": str(root / "callback_plugins"),
-                "ANSIBLE_CALLBACKS_ENABLED": "provision_summary",
                 "ANSIBLE_LOAD_CALLBACK_PLUGINS": "False",
-                "PROVISION_SUMMARY_PATH": str(Path(directory) / "summary.json"),
             })
             # Atlas may resolve the interpreter symlink outside the program venv.
             bin_dir = (Path(os.environ["ATLAS_VENV"]) / "bin"
@@ -163,7 +157,6 @@ def run(playbook, required, arguments, *, provider=None, executable=None, transi
             if executable is None:
                 argv = [str(bin_dir / "python"), str(root / "scripts/ansible_runner.py"), *argv]
             # Ansible can render secrets in parser errors as well as task output.
-            # Only the separately validated metadata summary is a diagnostic channel.
             process = None
             try:
                 spawning = True
@@ -189,14 +182,6 @@ def run(playbook, required, arguments, *, provider=None, executable=None, transi
                 _stop(process)
             result = 128 - result if result < 0 else result
             print(f"provision: Ansible exited with status {result}")
-            try:
-                summary = read_summary(Path(directory) / "summary.json")
-            except SummaryUnavailable:
-                print("provision: safe execution summary is unavailable", file=sys.stderr)
-                return result or 2
-            display_summary(summary)
-            if result == 0 and (summary["totals"]["failed"] or summary["totals"]["unreachable"]):
-                return 2
             return result
     finally:
         for number, handler in previous.items():
