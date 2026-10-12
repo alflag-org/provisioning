@@ -1,0 +1,51 @@
+---
+- name: Inspect registration files without reading credentials
+  ansible.builtin.stat:
+    path: "{{ services_github_runner_root }}/{{ item }}"
+    follow: false
+  loop: [.runner, .credentials, .credentials_rsaparams, .registration-attempt, .service]
+  register: services_github_runner_files
+
+- name: Refuse partial or uncertain registration and foreign service configuration
+  ansible.builtin.assert:
+    that:
+      - >-
+        (services_github_runner_files.results[:3] | selectattr('stat.exists') | list | length == 3) or
+        (services_github_runner_files.results[:4] | selectattr('stat.exists') | list | length == 0)
+      - not services_github_runner_files.results[4].stat.exists
+    fail_msg: Inspect GitHub and this instance before recovering incomplete registration; do not overwrite credentials or retry an uncertain registration.
+
+- name: Refuse symlinked registration files
+  ansible.builtin.assert:
+    that: item.stat.isreg | default(false) and not item.stat.islnk | default(false)
+  loop: "{{ services_github_runner_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+
+- name: Rebuild this instance registration state
+  ansible.builtin.set_fact:
+    services_github_runner_registered: "{{ services_github_runner_files.results[0].stat.exists }}"
+
+- name: Read registration metadata
+  ansible.builtin.slurp:
+    src: "{{ services_github_runner_root }}/.runner"
+  register: services_github_runner_metadata
+  no_log: true
+  when: services_github_runner_registered
+
+- name: Preserve the configured identity and automatic updates
+  ansible.builtin.assert:
+    that:
+      - settings.gitHubUrl == services_github_runner_instance.url
+      - settings.agentName == services_github_runner_name
+      - settings.agentId | default(0) | int > 0
+      - settings.workFolder == services_github_runner_work
+      - not settings.disableUpdate | default(false)
+      - not settings.ephemeral | default(false)
+    fail_msg: Existing registration differs from inventory. Deregister explicitly before changing identity.
+  vars:
+    # The official Runner writes UTF-8 metadata with a BOM.
+    settings: "{{ services_github_runner_metadata.content | b64decode | regex_replace('^\\ufeff', '') | from_json }}"
+  no_log: true
+  when: services_github_runner_registered

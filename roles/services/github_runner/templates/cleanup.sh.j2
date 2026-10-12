@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+# Parents are root-owned; jobs cannot swap these roots for symlinks.
+for path in {{ services_github_runner_work | quote }} {{ services_github_runner_home | quote }}; do
+  test -d "$path" && test ! -L "$path"
+done
+timeout --kill-after=5s 120s find -P {{ services_github_runner_work | quote }} \
+  -mindepth 1 -maxdepth 1 ! -name _update {% if item == 'start' %}! -name _temp ! -name _actions ! -name _tool {% endif %}\
+  -exec rm -rf -- {} +
+timeout --kill-after=5s 120s find -P {{ services_github_runner_home | quote }} \
+  -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +

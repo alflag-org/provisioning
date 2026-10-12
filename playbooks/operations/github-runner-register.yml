@@ -1,0 +1,13 @@
+---
+- name: Register one GitHub Actions Runner explicitly
+  hosts: svc_github_runner
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    services_github_runner_operation: register
+  pre_tasks:
+    - name: Require a single explicit registration target
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+  roles:
+    - role: services/github_runner  # noqa role-name[path]

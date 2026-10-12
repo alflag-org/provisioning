@@ -49,6 +49,9 @@ invalid. Use local validation without secret injection for syntax diagnostics.
 
 The [GameAP guide](docs/gameap.md) explains enrollment and recovery decisions.
 
+The [GitHub Actions Runner guide](docs/github-runner.md) covers isolated CI VMs,
+explicit registration and removal, and operational verification.
+
 Simple foreground applications can use the shared
 [application service component](roles/components/application_service/). Services
 prepare their executable and configuration before that component enables their

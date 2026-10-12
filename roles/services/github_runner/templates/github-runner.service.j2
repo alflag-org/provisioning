@@ -1,0 +1,27 @@
+[Unit]
+Description=GitHub Actions Runner {{ services_github_runner_instance.id }}
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ services_github_runner_user }}
+Group={{ services_github_runner_user }}
+WorkingDirectory={{ services_github_runner_root }}
+Environment=HOME={{ services_github_runner_home }}
+Environment=ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/github-runner/{{ services_github_runner_instance.id }}-start.sh
+Environment=ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/usr/local/libexec/github-runner/{{ services_github_runner_instance.id }}-end.sh
+ExecStart={{ services_github_runner_root }}/runsvc.sh
+Restart=always
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=300s
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ services_github_runner_root }} {{ services_github_runner_state }}
+InaccessiblePaths=-/run/docker.sock -/run/podman/podman.sock -/etc/atlas
+
+[Install]
+WantedBy=multi-user.target

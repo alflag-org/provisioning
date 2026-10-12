@@ -13,3 +13,6 @@
 
 - name: Converge generic application services after service-specific preparation
   ansible.builtin.import_playbook: services/applications.yml
+
+- name: Converge GitHub Actions Runners
+  ansible.builtin.import_playbook: services/github-runner.yml

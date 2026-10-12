@@ -1,0 +1,60 @@
+---
+- name: Require a list of Runner instances and a valid operation
+  ansible.builtin.assert:
+    that:
+      - services_github_runner_instances is sequence and services_github_runner_instances is not string and services_github_runner_instances is not mapping
+      - services_github_runner_operation in ['install', 'register', 'remove']
+      - services_github_runner_checksum is match('^sha256:[a-f0-9]{64}$')
+
+- name: Validate instance identity and GitHub registration URL
+  ansible.builtin.assert:
+    that:
+      - item.id is match('^[a-z][a-z0-9-]{0,19}$')
+      - item.url is match('^https://github\.com/[A-Za-z0-9-]+(/[A-Za-z0-9_.-]+)?$')
+      - item.name | default(inventory_hostname ~ '-' ~ item.id) | length > 0
+      - item.url.split('/') | length == 4 or 'runner_group' not in item
+    fail_msg: Each Runner needs a safe unique ID and a GitHub organization or repository URL; groups apply only to organizations.
+  loop: "{{ services_github_runner_instances }}"
+  loop_control:
+    label: "{{ item.id | default('invalid') }}"
+
+- name: Refuse duplicate instance IDs and unselected operations
+  ansible.builtin.assert:
+    that:
+      - services_github_runner_instances | map(attribute='id') | unique | length == services_github_runner_instances | length
+      - >-
+        services_github_runner_operation == 'install' or
+        (ansible_play_hosts_all | length == 1 and
+         services_github_runner_instances | selectattr('id', 'equalto', services_github_runner_selected_instance) | list | length == 1)
+    fail_msg: Registration and removal require one inventory host and one configured selected instance.
+
+- name: Require an approved dedicated Ubuntu x64 CI host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version is version('24.04', '>=')
+      - ansible_facts.architecture == 'x86_64'
+      - ansible_facts.service_mgr == 'systemd'
+      - group_names | intersect(['platform_vm', 'platform_lxc']) | length == 1
+      - group_names | select('match', '^svc_') | list == ['svc_github_runner']
+      - "'control_plane_nodes' not in group_names"
+      - "'app_hosts' not in group_names and 'web_hosts' not in group_names"
+      - services_github_runner_operation == 'remove' or services_github_runner_network_approved is sameas true
+    fail_msg: Approve the host network and use a dedicated Ubuntu x64 CI host.
+  when: services_github_runner_instances | length > 0
+
+- name: Inspect the container root UID mapping
+  ansible.builtin.slurp:
+    src: /proc/self/uid_map
+  register: services_github_runner_uid_map
+  when: services_github_runner_instances | length > 0 and ansible_facts.virtualization_type | default('') == 'lxc'
+
+- name: Require an unprivileged LXC
+  ansible.builtin.assert:
+    that:
+      - mapping[0] == '0'
+      - mapping[1] | int > 0
+    fail_msg: Container root must not map to host root; use an unprivileged LXC.
+  vars:
+    mapping: "{{ (services_github_runner_uid_map.content | b64decode).split() }}"
+  when: services_github_runner_instances | length > 0 and ansible_facts.virtualization_type | default('') == 'lxc'

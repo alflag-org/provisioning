@@ -1,0 +1,10 @@
+---
+# Each host records operator approval of its network in inventory.
+services_github_runner_network_approved: false
+services_github_runner_instances:
+  - id: character-agent
+    url: https://github.com/viasnake/character-agent-platform
+    name: "{{ inventory_hostname }}-character-agent-platform"
+  - id: alflag-org
+    url: https://github.com/alflag-org
+    name: "{{ inventory_hostname }}-alflag-org"

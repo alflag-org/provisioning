@@ -1,0 +1,23 @@
+---
+services_github_runner_instances: []
+services_github_runner_operation: install
+services_github_runner_selected_instance: ""
+# Require operator approval of the host network before installing or enrolling.
+services_github_runner_network_approved: false
+# Bootstrap only: installed Runners retain their official automatic updates.
+services_github_runner_version: "2.338.0"
+services_github_runner_checksum: sha256:af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
+services_github_runner_release_url: >-
+  https://github.com/actions/runner/releases/download/v{{ services_github_runner_version }}/actions-runner-linux-x64-{{ services_github_runner_version }}.tar.gz
+services_github_runner_packages:
+  - acl
+  - ca-certificates
+  - curl
+  - git
+  - gzip
+  - libgssapi-krb5-2
+  - libicu-dev
+  - libssl-dev
+  - tar
+  - unzip
+  - zlib1g

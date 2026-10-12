@@ -1,0 +1,37 @@
+---
+- name: Inspect this instance before changing it
+  ansible.builtin.import_tasks: state.yml
+
+- name: Require a transient token for an operation that changes registration
+  ansible.builtin.assert:
+    that: services_github_runner_token | default('') is string and services_github_runner_token | default('') | length > 0
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - >-
+      (services_github_runner_operation == 'register' and not services_github_runner_registered) or
+      (services_github_runner_operation == 'remove' and services_github_runner_registered)
+
+- name: Converge this instance installation
+  ansible.builtin.import_tasks: install.yml
+  when: services_github_runner_operation != 'remove'
+
+- name: Maintain registration without implicitly enrolling
+  ansible.builtin.import_tasks: register.yml
+  when: services_github_runner_operation != 'remove'
+
+# Unit changes take effect after a drained, explicit restart; convergence must not interrupt jobs.
+- name: Enable only a registered instance
+  ansible.builtin.systemd_service:
+    name: "{{ services_github_runner_unit }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode
+    - services_github_runner_operation != 'remove'
+    - services_github_runner_registered
+
+- name: Deregister and remove this instance explicitly
+  ansible.builtin.import_tasks: remove.yml
+  when: services_github_runner_operation == 'remove'
