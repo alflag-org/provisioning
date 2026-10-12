@@ -2,7 +2,7 @@
 
 Provide self-hosted capacity for selected high-volume private CI alongside
 GitHub-hosted jobs. The [service inventory](../inventories/default/group_vars/svc_github_runner.yml)
-contains the initial repository assignment; no VM is assigned yet. Public CI,
+declares the configured instances. Public CI,
 other private CI, Windows/macOS jobs, deployments and release publishing keep
 their existing execution paths.
 
@@ -14,7 +14,7 @@ Runner name. An organization URL registers an Organization Runner; a repository
 URL registers a Repository Runner, including personal-account repositories.
 An organization instance may specify an existing Runner group at registration;
 move an existing Runner between groups in GitHub's settings. Both kinds can
-share a CI VM; each ID has its own OS user, installation, service, HOME and work.
+share a dedicated CI host; each ID has its own OS user, installation, service, HOME and work.
 Changing an ID creates a different instance. Removing an entry does not retire
 its deployed resources: deregister it before removing the inventory entry.
 
@@ -23,13 +23,15 @@ and run history. Configure trusted private repositories and workflows there;
 exclude untrusted fork PRs from self-hosted routing in the workflows. Ansible does
 not copy those policies or inspect job events. Different trust boundaries belong
 on separate VMs; separate users and cleanup do not provide VM-level isolation.
+LXC shares the Proxmox host kernel. The role rejects containers that map root to
+host root; unprivileged mapping does not provide a separate kernel.
 
-Assign only a dedicated Ubuntu CI VM after verifying its address and
+Use a dedicated Ubuntu VM or unprivileged LXC after verifying its address and
 **guest-external** isolation, including IPv6 and same-subnet traffic. Allow
 controller SSH and necessary outbound GitHub, registry, DNS and time traffic;
 deny unnecessary management, production and Proxmox API access. The inventory
 confirmation value records the operator's verification; the role does not create
-or prove the network rules. Add the VM to its network, provider, platform and
+or prove the network rules. Add the host to its network, provider, platform and
 Runner service groups, then use the [install playbook](../playbooks/components/services/github-runner.yml)
 with the [standard check/apply procedure](../README.md).
 
@@ -86,7 +88,7 @@ state and private temporary files may outlive a job; cleanup is not a security
 boundary. Use existing system logs, Runner diagnostics and GitHub Runner status
 for troubleshooting; service activity alone is not Online acceptance.
 
-Before CI routing changes, verify VM apply/check convergence, Online status,
+Before CI routing changes, verify host apply/check convergence, Online status,
 reboot recovery, dependencies, blocked network paths and repeated Push/PR jobs.
 Check that all existing validations run, and compare GitHub usage after real jobs.
 Restore the previous workflow `runs-on` value to roll back. Local tests do not

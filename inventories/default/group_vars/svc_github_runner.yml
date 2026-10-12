@@ -1,5 +1,5 @@
 ---
-# No host is assigned until guest-external isolation has been implemented and tested.
+# Each host confirms guest-external isolation in its inventory variables.
 services_github_runner_isolation_confirmed: false
 services_github_runner_instances:
   - id: character-agent

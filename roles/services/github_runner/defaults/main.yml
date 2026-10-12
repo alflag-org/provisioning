@@ -2,7 +2,7 @@
 services_github_runner_instances: []
 services_github_runner_operation: install
 services_github_runner_selected_instance: ""
-# Confirm guest-external isolation before assigning a CI VM to this service.
+# Confirm guest-external isolation before assigning a CI host to this service.
 services_github_runner_isolation_confirmed: false
 # Bootstrap only: installed Runners retain their official automatic updates.
 services_github_runner_version: "2.338.0"

@@ -28,17 +28,33 @@
          services_github_runner_instances | selectattr('id', 'equalto', services_github_runner_selected_instance) | list | length == 1)
     fail_msg: Registration and removal require one inventory host and one configured selected instance.
 
-- name: Require an isolated dedicated Ubuntu x64 CI VM
+- name: Require an isolated dedicated Ubuntu x64 CI host
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == 'Ubuntu'
       - ansible_facts.distribution_version is version('24.04', '>=')
       - ansible_facts.architecture == 'x86_64'
       - ansible_facts.service_mgr == 'systemd'
-      - "'platform_vm' in group_names"
+      - group_names | intersect(['platform_vm', 'platform_lxc']) | length == 1
       - group_names | select('match', '^svc_') | list == ['svc_github_runner']
       - "'control_plane_nodes' not in group_names"
       - "'app_hosts' not in group_names and 'web_hosts' not in group_names"
       - services_github_runner_operation == 'remove' or services_github_runner_isolation_confirmed is sameas true
-    fail_msg: Confirm guest-external isolation and use a dedicated Ubuntu x64 CI VM.
+    fail_msg: Confirm guest-external isolation and use a dedicated Ubuntu x64 CI host.
   when: services_github_runner_instances | length > 0
+
+- name: Inspect the container root UID mapping
+  ansible.builtin.slurp:
+    src: /proc/self/uid_map
+  register: services_github_runner_uid_map
+  when: services_github_runner_instances | length > 0 and ansible_facts.virtualization_type | default('') == 'lxc'
+
+- name: Require an unprivileged LXC
+  ansible.builtin.assert:
+    that:
+      - mapping[0] == '0'
+      - mapping[1] | int > 0
+    fail_msg: Container root must not map to host root; use an unprivileged LXC.
+  vars:
+    mapping: "{{ (services_github_runner_uid_map.content | b64decode).split() }}"
+  when: services_github_runner_instances | length > 0 and ansible_facts.virtualization_type | default('') == 'lxc'
