@@ -8,32 +8,6 @@ mysql_replicaset_initial_primary: mysql-shared01
 mysql_replicaset_admin_user: mysql_replicaset_admin
 mysql_replicaset_replication_allowed_host: "{{ network_zones.infra.cidr }}"
 
-mysql_shared_privilege_profiles:
-  application:
-    - SELECT
-    - INSERT
-    - UPDATE
-    - DELETE
-    - EXECUTE
-  migration:
-    - SELECT
-    - INSERT
-    - UPDATE
-    - DELETE
-    - CREATE
-    - ALTER
-    - INDEX
-    - DROP
-    - TRIGGER
-    - REFERENCES
-    - CREATE TEMPORARY TABLES
-    - LOCK TABLES
-    - EXECUTE
-  read_only:
-    - SELECT
-    - SHOW VIEW
-mysql_shared_tenants: []
-
 # Enable physical backups after configuring the B2 bucket and application key.
 mysql_backup_enabled: false
 mysql_backup_schedule: "*-*-* 02:15:00"

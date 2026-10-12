@@ -15,5 +15,5 @@
   "binlog_directory": {{ mysql_backup_binlog_dir | to_json }},
   "replicaset_name": {{ mysql_backup_replicaset_name | to_json }},
   "source_node": {{ inventory_hostname | to_json }},
-  "expected_databases": {{ (['mysql'] + ((mysql_server_databases + mysql_shared_expanded.databases) | map(attribute='name') | list)) | unique | list | to_json }}
+  "expected_databases": {{ (['mysql'] + (mysql_server_databases | map(attribute='name') | list)) | unique | list | to_json }}
 }
