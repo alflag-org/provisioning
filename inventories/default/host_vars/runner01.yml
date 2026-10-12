@@ -1,3 +1,3 @@
 ---
-services_github_runner_isolation_confirmed: true
+services_github_runner_isolation_confirmed: false
 services_github_runner_selected_instance: character-agent
