@@ -213,17 +213,19 @@ class RunnerTests(AnsibleTestCase):
         self.assertRegex(result.stdout, r'changed=0\s')
         self.assertEqual(self.snapshot(self.repo), before)
 
-    def test_initial_archive_is_verified_before_extraction(self):
+    def test_initial_archive_is_verified_and_keeps_installation_private(self):
         root = Path(self.repo['services_github_runner_root'])
         for p in (root / 'bin/Runner.Listener', root / 'runsvc.sh'):
             p.unlink()
+        root.chmod(0o700)
         source = self.directory / 'package'
         (source / 'bin').mkdir(parents=True)
+        source.chmod(0o755)
         (source / 'bin/Runner.Listener').write_text('verified-initial-release')
         (source / 'bin/runsvc.sh').write_text('entry-point')
         archive = self.directory / 'runner.tar.gz'
         with tarfile.open(archive, 'w:gz') as output:
-            output.add(source / 'bin', arcname='bin')
+            output.add(source, arcname='.')
         context = {**self.repo, 'services_github_runner_registered': False,
                    'services_github_runner_release_url': archive.as_uri(),
                    'services_github_runner_checksum': 'sha256:' + '0' * 64}
@@ -234,6 +236,7 @@ class RunnerTests(AnsibleTestCase):
         context['services_github_runner_checksum'] = 'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()
         self.assert_success(self.run_tasks(['release'], context))
         self.assertEqual((root / 'bin/Runner.Listener').read_text(), 'verified-initial-release')
+        self.assertEqual(root.stat().st_mode & 0o777, 0o700)
         self.assertEqual(self.snapshot(self.org), other)
 
     def test_cleanup_preserves_other_instance_and_symlink_targets(self):

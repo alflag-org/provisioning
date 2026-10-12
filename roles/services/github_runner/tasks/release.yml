@@ -39,6 +39,14 @@
         remote_src: true
         owner: "{{ services_github_runner_user }}"
         group: "{{ services_github_runner_user }}"
+    # The official archive includes directory entries that can replace this mode.
+    - name: Restore private installation directory after extraction
+      ansible.builtin.file:
+        path: "{{ services_github_runner_root }}"
+        state: directory
+        owner: "{{ services_github_runner_user }}"
+        group: "{{ services_github_runner_user }}"
+        mode: "0700"
   always:
     - name: Remove temporary archive
       ansible.builtin.file:
