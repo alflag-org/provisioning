@@ -11,7 +11,6 @@ mysql_backup_status_path: /var/lib/mysql-backup/status.json
 mysql_backup_status_dir: "{{ mysql_backup_status_path | dirname }}"
 mysql_backup_program_path: /usr/local/sbin/mysql-physical-backup
 mysql_backup_restore_program_path: /usr/local/sbin/mysql-restore-test
-mysql_backup_status_program_path: /usr/local/libexec/mysql-backup-status
 mysql_backup_lock_path: /run/lock/mysql-physical-backup.lock
 mysql_backup_mysql_socket: /var/run/mysqld/mysqld.sock
 mysql_backup_mysql_datadir: "{{ mysql_server_datadir | default('/var/lib/mysql') }}"

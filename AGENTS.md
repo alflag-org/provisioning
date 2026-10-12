@@ -33,6 +33,42 @@
   secret handling, destructive operations, and backup integrity. A local check
   does not prove remote CI, a real database operation, or a deployed change.
 
+- Keep one small fixture per behavior. Exercise standard modules only where their
+  interaction with our code can cause a concrete failure. Do not copy several
+  roles and replace their tasks to reconstruct a deployment in a test.
+- Test dependency behavior in the dependency's repository. Keep integration tests
+  here only when they exercise a Provisioning boundary, such as secret injection
+  or cleanup of its consumers. Remove tests when the behavior they protect is removed.
+
+## Minimal implementation and placement
+
+- Prefer standard Ansible modules and existing tool interfaces. Add custom code
+  only for a current requirement they cannot satisfy clearly. A convenience,
+  hypothetical extension, or desire for uniform wrappers is not enough.
+- Establish the requirement independently of the implementation. Code being
+  called, or having tests, does not justify retaining it. Remove unused input
+  formats and presets when existing inventory fields express the same operation.
+- Keep host membership and deployment values in `inventories/`, execution order
+  in `playbooks/`, and reusable configuration in role tasks and templates.
+- Put programs that run on managed hosts in the owning role's `files/` directory.
+  Keep filters beside their role; use top-level `filter_plugins/` only for filters
+  shared across roles. Keep controller entry points in `commands/` and required
+  Ansible startup controls in `scripts/`.
+- Keep the execution command limited to secret resolution, safe Ansible startup,
+  consumer cleanup, and exit status. Do not add custom callbacks, reporting files,
+  or parsers to recover optional information from suppressed output.
+- Use `ansible.builtin.apt` directly for package state. Let it determine whether
+  packages need changes; preserve explicit cache and service-start policy at the
+  call site. Do not add a package-state probe or wrapper role.
+- Keep shared helpers only when multiple current consumers need the same behavior.
+  Remove obsolete implementations, their tests, and unused directories together.
+  Trace configured paths through variables, included tasks, and operation playbooks
+  before declaring a helper unused. Check deployed schedules and monitoring
+  configuration for external consumers before removing installed tools.
+- Simplify optional features and redundant validation before weakening secret
+  handling, destructive-operation guards, storage identity checks, backup integrity,
+  or topology authorization.
+
 ## Implementation constraints
 
 - Convergence declares desired resources and applies their differences. Keep only
@@ -58,8 +94,9 @@
   Ansible. Preserve literal secret values, verified volatile storage, and cleanup
   after all consumers stop, including signal and timeout paths. Keep secret-bearing
   tasks under `no_log`; do not persist or expose child output or injected values.
-  The execution summary may contain only recap counters and changed host/action/
-  source locations. Do not add task names or result payloads to this boundary.
+  Report only Ansible's exit status. Restrict callback imports to Ansible's built-in
+  directory so adjacent plugins cannot persist injected secrets. A zero exit status
+  does not establish that a run needed no changes; verify target state separately.
 - Database roles come from live ReplicaSet state. Preserve the separation between
   stable host identities, runtime roles, and client routing metadata. Normal
   convergence must not promote a primary. Keep emergency promotion explicitly

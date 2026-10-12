@@ -21,20 +21,6 @@
       before converging svc_mysql.
     quiet: true
 
-- name: Expand MySQL shared tenant declarations
-  ansible.builtin.set_fact:
-    mysql_shared_expanded: >-
-      {{ mysql_shared_tenants | mysql_expand_tenants(hostvars, mysql_shared_privilege_profiles) }}
-
-- name: Validate MySQL shared tenant secrets
-  ansible.builtin.assert:
-    that:
-      - lookup('ansible.builtin.vars', item, default='') | string | length > 0
-    fail_msg: "Required MySQL tenant secret {{ item }} is not defined."
-    quiet: true
-  loop: "{{ mysql_shared_expanded.required_secret_vars }}"
-  run_once: true
-
 - name: Resolve ReplicaSet administrator source addresses from inventory
   ansible.builtin.set_fact:
     mysql_replicaset_admin_allowed_addresses: >-
@@ -62,8 +48,7 @@
   ansible.builtin.set_fact:
     mysql_platform_users: >-
       {{
-        mysql_shared_expanded.users
-        + [
+        [
             {
               'name': mysql_backup_user,
               'host': 'localhost',
@@ -109,7 +94,7 @@
   ansible.builtin.set_fact:
     mysql_managed_databases: >-
       {{
-        (mysql_server_databases + mysql_shared_expanded.databases)
+        mysql_server_databases
         | mysql_validate_databases
       }}
   run_once: true
@@ -136,7 +121,7 @@
   ansible.builtin.include_role:
     name: components/mysql_replicaset
 
-- name: Manage shared tenant databases on the current PRIMARY
+- name: Manage declared databases on the current PRIMARY
   ansible.mysql.mysql_db:
     login_user: root
     login_unix_socket: /var/run/mysqld/mysqld.sock
