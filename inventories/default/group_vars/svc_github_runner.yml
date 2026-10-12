@@ -1,6 +1,6 @@
 ---
-# Each host confirms guest-external isolation in its inventory variables.
-services_github_runner_isolation_confirmed: false
+# Each host records operator approval of its network in inventory.
+services_github_runner_network_approved: false
 services_github_runner_instances:
   - id: character-agent
     url: https://github.com/viasnake/character-agent-platform

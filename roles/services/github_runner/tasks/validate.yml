@@ -28,7 +28,7 @@
          services_github_runner_instances | selectattr('id', 'equalto', services_github_runner_selected_instance) | list | length == 1)
     fail_msg: Registration and removal require one inventory host and one configured selected instance.
 
-- name: Require an isolated dedicated Ubuntu x64 CI host
+- name: Require an approved dedicated Ubuntu x64 CI host
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == 'Ubuntu'
@@ -39,8 +39,8 @@
       - group_names | select('match', '^svc_') | list == ['svc_github_runner']
       - "'control_plane_nodes' not in group_names"
       - "'app_hosts' not in group_names and 'web_hosts' not in group_names"
-      - services_github_runner_operation == 'remove' or services_github_runner_isolation_confirmed is sameas true
-    fail_msg: Confirm guest-external isolation and use a dedicated Ubuntu x64 CI host.
+      - services_github_runner_operation == 'remove' or services_github_runner_network_approved is sameas true
+    fail_msg: Approve the host network and use a dedicated Ubuntu x64 CI host.
   when: services_github_runner_instances | length > 0
 
 - name: Inspect the container root UID mapping

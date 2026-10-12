@@ -26,12 +26,13 @@ on separate VMs; separate users and cleanup do not provide VM-level isolation.
 LXC shares the Proxmox host kernel. The role rejects containers that map root to
 host root; unprivileged mapping does not provide a separate kernel.
 
-Use a dedicated Ubuntu VM or unprivileged LXC after verifying its address and
-**guest-external** isolation, including IPv6 and same-subnet traffic. Allow
+Use a dedicated Ubuntu VM or unprivileged LXC with an operator-approved network.
+Verify **guest-external** isolation, including IPv6 and same-subnet traffic. Allow
 controller SSH and necessary outbound GitHub, registry, DNS and time traffic;
 deny unnecessary management, production and Proxmox API access. The inventory
-confirmation value records the operator's verification; the role does not create
-or prove the network rules. Add the host to its network, provider, platform and
+approval value records the operator's acceptance of the current network, including
+any explicitly accepted exceptions. It does not assert that isolation has been
+verified; the role does not create or prove network rules. Add the host to its network, provider, platform and
 Runner service groups, then use the [install playbook](../playbooks/components/services/github-runner.yml)
 with the [standard check/apply procedure](../README.md).
 
