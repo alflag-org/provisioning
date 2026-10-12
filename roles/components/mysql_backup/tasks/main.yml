@@ -172,9 +172,6 @@
     - src: mysql-restore-test.py
       dest: "{{ mysql_backup_restore_program_path }}"
       mode: "0750"
-    - src: mysql-backup-status.py
-      dest: "{{ mysql_backup_status_program_path }}"
-      mode: "0755"
 
 - name: Seed the backup status document when absent
   ansible.builtin.copy:
