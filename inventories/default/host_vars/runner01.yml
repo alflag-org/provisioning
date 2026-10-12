@@ -1,4 +1,4 @@
 ---
 # Guest-external filtering is pending; the operator approves the current network.
 services_github_runner_network_approved: true
-services_github_runner_selected_instance: character-agent
+services_github_runner_selected_instance: alflag-org
