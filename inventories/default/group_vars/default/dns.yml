@@ -5,3 +5,6 @@ dns_static_records:
     - name: proxmox
       type: A
       value: 10.10.10.11
+    - name: storage
+      type: A
+      value: 10.10.20.230
