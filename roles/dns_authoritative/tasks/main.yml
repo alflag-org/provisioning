@@ -2,13 +2,23 @@
 - name: Converge authoritative DNS
   when: dns_authoritative_enabled | bool
   block:
+    - name: Validate and combine static and inventory DNS records before making changes
+      ansible.builtin.set_fact:
+        dns_authoritative_prepared_zones: >-
+          {{ dns_authoritative_zones
+             | dns_authoritative_static_zones(
+                 dns_static_records,
+                 groups.get(dns_authoritative_record_source_group, []),
+                 hostvars,
+                 mysql_role_dns_zone_name | default('srv.alflag.internal')) }}
+
     - name: Install authoritative DNS package
       ansible.builtin.apt:
         name: "{{ dns_authoritative_package }}"
         state: present
         update_cache: true
         cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
-        policy_rc_d: "{{ 101 if dns_authoritative_zones | length == 0 else omit }}"
+        policy_rc_d: "{{ 101 if dns_authoritative_prepared_zones | length == 0 else omit }}"
       become: true
 
     - name: Ensure authoritative DNS zone directory exists
@@ -47,7 +57,7 @@
     - name: Check manual authoritative DNS zone files
       ansible.builtin.stat:
         path: "{{ item.file | default(dns_authoritative_zone_dir ~ '/' ~ item.name ~ '.zone') }}"
-      loop: "{{ dns_authoritative_zones }}"
+      loop: "{{ dns_authoritative_prepared_zones }}"
       register: dns_authoritative_zone_file_stats
       when:
         - not (item.managed | default(false) | bool)
@@ -74,7 +84,7 @@
         owner: root
         group: root
         mode: "0644"
-      loop: "{{ dns_authoritative_zones }}"
+      loop: "{{ dns_authoritative_prepared_zones }}"
       notify: Restart nsd
       when:
         - not (item.managed | default(false) | bool)
@@ -83,7 +93,7 @@
     - name: Render managed authoritative DNS zones
       ansible.builtin.include_tasks:
         file: managed_zone.yml
-      loop: "{{ dns_authoritative_zones }}"
+      loop: "{{ dns_authoritative_prepared_zones }}"
       loop_control:
         loop_var: dns_authoritative_managed_zone
       when:
@@ -115,10 +125,10 @@
     - name: Validate authoritative DNS zones
       ansible.builtin.command:
         cmd: "nsd-checkzone {{ item.name }} {{ item.file | default(dns_authoritative_zone_dir ~ '/' ~ item.name ~ '.zone') }}"
-      loop: "{{ dns_authoritative_zones }}"
+      loop: "{{ dns_authoritative_prepared_zones }}"
       changed_when: false
       when:
-        - dns_authoritative_zones | length > 0
+        - dns_authoritative_prepared_zones | length > 0
         - not ansible_check_mode
 
     - name: Enable and start NSD when zones are configured
@@ -127,15 +137,15 @@
         state: started
         enabled: true
       when:
-        - dns_authoritative_zones | length > 0
+        - dns_authoritative_prepared_zones | length > 0
         - not ansible_check_mode
 
     - name: Apply pending NSD handlers
       ansible.builtin.meta: flush_handlers
-      when: dns_authoritative_zones | length > 0
+      when: dns_authoritative_prepared_zones | length > 0
 
     - name: Leave NSD service external until zones are configured
       ansible.builtin.debug:
         msg: "dns_authoritative_enabled=true, but dns_authoritative_zones is empty; NSD service is not started by this provisioning repository."
         verbosity: 1
-      when: dns_authoritative_zones | length == 0
+      when: dns_authoritative_prepared_zones | length == 0

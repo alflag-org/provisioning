@@ -8,7 +8,7 @@ dns_recursor_allowed_cidrs:
   - "{{ network_zones.dmz.cidr }}"
 dns_recursor_authoritative_addresses: "{{ groups['svc_dns_authoritative'] | sort | map('extract', hostvars, 'ansible_host') | list }}"
 dns_recursor_stub_zones: >-
-  {{ (['alflag.internal', 'access.internal']
+  {{ (['srv.alflag.internal', 'access.internal']
       + ([network_zones.mgmt.cidr, network_zones.infra.cidr, network_zones.dmz.cidr]
          | network_reverse_zones | map(attribute='name') | list))
      | network_stub_zones(dns_recursor_authoritative_addresses) }}

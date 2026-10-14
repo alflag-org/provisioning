@@ -11,9 +11,6 @@ dns_authoritative_nameservers:
   - dns-authoritative01.srv.alflag.internal.
   - dns-authoritative02.srv.alflag.internal.
 dns_authoritative_forward_zones:
-  - name: alflag.internal
-    managed: true
-
   - name: srv.alflag.internal
     managed: true
     inventory_records: server_identity
@@ -23,10 +20,6 @@ dns_authoritative_forward_zones:
   - name: access.internal
     managed: true
     inventory_records: access_aliases
-    records:
-      - name: proxmox
-        type: A
-        value: 10.10.10.11
 
 dns_authoritative_reverse_zones: >-
   {{ [network_zones.mgmt.cidr, network_zones.infra.cidr, network_zones.dmz.cidr]
@@ -34,4 +27,5 @@ dns_authoritative_reverse_zones: >-
 dns_authoritative_zones: "{{ dns_authoritative_forward_zones + dns_authoritative_reverse_zones }}"
 dns_authoritative_retired_paths:
   - /etc/nsd/nsd.conf.d/kng01.conf
+  - "{{ dns_authoritative_zone_dir }}/alflag.internal.zone"
   - "{{ dns_authoritative_zone_dir }}/10.10.30.in-addr.arpa.zone"

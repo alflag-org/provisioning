@@ -68,3 +68,6 @@ host's pinned Talos checkout, configuration, dedicated Atlas venv, and command s
 Foundation convergence prepares its sources before Atlas discovers commands.
 Deployment never runs registry synchronization. Configure external secrets and
 select a verified existing Registry Location before running `registry-sync`.
+
+The [DNS guide](docs/dns.md) covers inventory-generated records, static records
+for unmanaged devices and services, optional reverse records, and DNS convergence.

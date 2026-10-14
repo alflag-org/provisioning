@@ -1,0 +1,7 @@
+---
+dns_static_records:
+  srv.alflag.internal: []
+  access.internal:
+    - name: proxmox
+      type: A
+      value: 10.10.10.11

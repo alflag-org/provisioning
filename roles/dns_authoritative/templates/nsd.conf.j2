@@ -5,7 +5,7 @@ server:
   ip-address: {{ address }}
 {% endfor %}
 
-{% for zone in dns_authoritative_zones %}
+{% for zone in dns_authoritative_prepared_zones %}
 zone:
   name: "{{ zone.name }}"
   zonefile: "{{ zone.file | default(dns_authoritative_zone_dir ~ '/' ~ zone.name ~ '.zone') }}"
