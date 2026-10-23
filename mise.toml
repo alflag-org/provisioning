@@ -22,7 +22,7 @@ PATH="$PWD/.venv/bin:$PATH" ansible-lint playbooks roles
 """
 
 [tasks.test]
-description = "Run behavior and inventory validation tests"
+description = "Run unit tests for repository-owned programs"
 run = ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
 
 [tasks.check]

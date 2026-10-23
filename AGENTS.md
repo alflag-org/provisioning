@@ -26,19 +26,20 @@
   do not maintain lists of individual playbooks or roles in validation commands.
 - Add a test only for a concrete failure in our logic or effects. Prefer small
   synthetic inputs and assertions on decisions, files, or process lifetime.
+- Keep only minimal unit tests for repository-owned programs, filters, and shell
+  logic. Do not retain tests that run Ansible playbooks, apply roles, or verify
+  Ansible's check mode, modules, or idempotence.
 - Do not duplicate configured values, inspect source text, test dependency
   mechanics, or replace most of a workflow with mocks just to exercise its shape.
   Do not add runtime options solely to support test doubles.
 - Remove redundant tests and unused helpers. Keep regression protection for
   secret handling, destructive operations, and backup integrity. A local check
   does not prove remote CI, a real database operation, or a deployed change.
-
-- Keep one small fixture per behavior. Exercise standard modules only where their
-  interaction with our code can cause a concrete failure. Do not copy several
-  roles and replace their tasks to reconstruct a deployment in a test.
-- Test dependency behavior in the dependency's repository. Keep integration tests
-  here only when they exercise a Provisioning boundary, such as secret injection
-  or cleanup of its consumers. Remove tests when the behavior they protect is removed.
+- Keep one small fixture per behavior. Do not copy roles or replace their tasks
+  to reconstruct a deployment in a test.
+- Test dependency behavior in the dependency's repository. Test our secret
+  serialization and consumer cleanup directly without starting Ansible or Atlas.
+  Remove tests when the behavior they protect is removed.
 
 ## Minimal implementation and placement
 

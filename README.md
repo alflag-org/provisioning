@@ -11,8 +11,8 @@ mise run setup
 mise run check
 ```
 
-CI uses the same setup and validation tasks. Tests use synthetic data and local
-processes; they do not establish that a change works on deployed hosts.
+CI uses the same setup and validation tasks. Unit tests cover custom program logic
+with synthetic data; verify Ansible changes and deployed behavior separately.
 
 ## Run
 
