@@ -1,3 +1,6 @@
+from pathlib import PurePosixPath
+
+
 def mysql_systemd_properties(stdout, rc):
     properties = {}
     if isinstance(stdout, str):
@@ -23,9 +26,24 @@ def mysql_backup_service_is_idle(stdout, rc, allow_absent=False):
     )
 
 
+def mysql_backup_paths_are_separate(values):
+    paths = []
+    for value in values:
+        if not isinstance(value, str):
+            return False
+        path = PurePosixPath(value)
+        if not path.is_absolute() or ".." in path.parts or len(path.parts) < 4:
+            return False
+        if any(path.is_relative_to(other) or other.is_relative_to(path) for other in paths):
+            return False
+        paths.append(path)
+    return True
+
+
 class FilterModule:
     def filters(self):
         return {
+            "mysql_backup_paths_are_separate": mysql_backup_paths_are_separate,
             "mysql_systemd_properties": mysql_systemd_properties,
             "mysql_backup_service_is_idle": mysql_backup_service_is_idle,
         }

@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart={{ mysql_backup_program_path }} --config {{ mysql_backup_config_path }} --skip-if-lock-busy
+TimeoutStartSec=6h
+TimeoutStopSec=60
+KillMode=control-group
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7

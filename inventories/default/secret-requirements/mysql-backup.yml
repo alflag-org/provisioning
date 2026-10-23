@@ -1,0 +1,3 @@
+---
+required_secrets:
+  mysql_backup_password: mysql.backup.password

@@ -1,0 +1,15 @@
+---
+- name: Configure physical MySQL backups independently of server convergence
+  hosts: svc_mysql
+  gather_facts: true
+  serial: 1
+
+  pre_tasks:
+    - name: Require explicit backup enablement in inventory
+      ansible.builtin.assert:
+        that:
+          - mysql_backup_enabled | bool
+        fail_msg: Enable physical backups in inventory before applying this playbook.
+
+  roles:
+    - role: components/mysql_backup  # noqa role-name[path]

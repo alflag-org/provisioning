@@ -1,9 +1,18 @@
 import unittest
 
-from roles.components.mysql_backup.filter_plugins.mysql_backup import mysql_backup_service_is_idle
+from roles.components.mysql_backup.filter_plugins.mysql_backup import (
+    mysql_backup_paths_are_separate, mysql_backup_service_is_idle,
+)
 
 
 class MySQLServicePolicyTests(unittest.TestCase):
+    def test_storage_paths_reject_nested_and_relative_locations(self):
+        self.assertTrue(mysql_backup_paths_are_separate(["/var/lib/mysql", "/var/lib/mysql-backup/repository"]))
+        for paths in (["/var/lib/mysql", "/var/lib/mysql/backups"],
+                      ["/var/lib/mysql", "/var/lib/mysql/../mysql-backup"],
+                      ["/var/lib/mysql", "relative/backups"], ["/var/lib/mysql", "/var"]):
+            self.assertFalse(mysql_backup_paths_are_separate(paths))
+
     def test_backup_service_state_is_allowed_only_when_loaded_and_inactive(self):
         for loaded, active, code, expected in (
             ("loaded", "inactive", 0, True),
