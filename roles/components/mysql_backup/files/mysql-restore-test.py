@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 import argparse
-import datetime as dt
 import fcntl
 import grp
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,16 +15,11 @@ import tempfile
 import time
 
 
-UTC = dt.timezone.utc
-RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z$")
-IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-PHYSICAL_ROOT = "physical"
-COMPLETION_MARKER = "complete.json"
+from mysql_backup_storage import (
+    file_sha256, list_backups, read_completion, resolve_backup, timestamp, validate_storage_paths, verify_backup,
+)
+
 MYSQLD_PATH = Path("/usr/sbin/mysqld").resolve()
-
-
-def timestamp():
-    return dt.datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def run(argv, *, capture=False, check=True):
@@ -37,150 +30,42 @@ def run(argv, *, capture=False, check=True):
     else:
         kwargs["stdout"] = sys.stderr
         kwargs["stderr"] = sys.stderr
-    return subprocess.run(argv, **kwargs)
+    return subprocess.run(argv, timeout=3600, **kwargs)
 
 
-def rclone_argv(config, *args):
-    return [config["rclone_binary"], "--config", config["rclone_config_path"], *args]
-
-
-def validate_config(config):
-    for key in ("b2_bucket", "b2_prefix", "rclone_remote", "rclone_version"):
-        if not isinstance(config.get(key), str) or not config[key].strip():
-            raise RuntimeError(f"{key} is required")
-    if config["b2_bucket"].startswith("/") or config["b2_bucket"].endswith("/"):
-        raise RuntimeError("b2_bucket must not start or end with '/'")
-    if config["b2_prefix"].startswith("/") or config["b2_prefix"].endswith("/"):
-        raise RuntimeError("b2_prefix must not start or end with '/'")
-
-
-def b2_path(config, *parts):
-    base = f"{config['rclone_remote']}:{config['b2_bucket']}/{config['b2_prefix']}".rstrip("/")
-    return "/".join([base] + [str(part).strip("/") for part in parts])
-
-
-def rclone_preflight(config):
-    version = run(rclone_argv(config, "version"), capture=True, check=False)
-    if version.returncode != 0 or f"rclone v{config['rclone_version']}" not in version.stdout:
-        raise RuntimeError("rclone version or executable validation failed")
-    bucket_check = run(
-        rclone_argv(config, "lsf", f"{config['rclone_remote']}:", "--dirs-only"),
-        capture=True,
-        check=False,
-    )
-    if bucket_check.returncode != 0 or f"{config['b2_bucket']}/" not in bucket_check.stdout.splitlines():
-        raise RuntimeError("B2 bucket authentication or availability check failed")
-    prefix_check = run(
-        rclone_argv(config, "lsf", b2_path(config), "--max-depth", "1"),
-        capture=True,
-        check=False,
-    )
-    if prefix_check.returncode != 0:
-        raise RuntimeError("B2 backup prefix availability check failed")
-
-
-def rclone_exists(config, path):
-    parent, expected_name = str(path).rsplit("/", 1)
-    result = run(
-        rclone_argv(config, "lsf", parent, "--files-only"),
-        capture=True,
-        check=False,
-    )
-    return result.returncode == 0 and expected_name in result.stdout.splitlines()
-
-
-def rclone_read_text(config, path):
-    result = run(rclone_argv(config, "cat", str(path)), capture=True, check=False)
-    if result.returncode != 0:
-        raise RuntimeError(f"failed to read B2 object: {path}")
-    return result.stdout
-
-
-def rclone_list_dirs(config, root):
-    result = run(
-        rclone_argv(config, "lsf", str(root), "--dirs-only", "--recursive"),
-        capture=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        return []
-    return [line.strip().rstrip("/") for line in result.stdout.splitlines() if line.strip()]
-
-
-def is_complete_backup(config, candidate):
-    if not rclone_exists(config, f"{candidate}/xtrabackup_checkpoints"):
-        return False
+def run_isolated(writable_directory, active_units, *argv):
+    unit = f"mysql-backup-restore-{os.getpid()}-{time.monotonic_ns()}.service"
+    active_units.add(unit)
+    command = [
+        "/usr/bin/systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+        f"--unit={unit}", "--property=RuntimeMaxSec=3600", "--property=TimeoutStopSec=30",
+        "--property=ProtectSystem=strict", f"--property=ReadWritePaths={writable_directory}",
+        "--property=PrivateNetwork=yes", *argv,
+    ]
     try:
-        _, source_node, server_uuid, run_id = candidate.rsplit("/", 3)
-        manifest_text = rclone_read_text(config, f"{candidate}/provisioning-backup.json")
-        completion = json.loads(rclone_read_text(config, f"{candidate}/{COMPLETION_MARKER}"))
-        manifest = json.loads(manifest_text)
-    except (RuntimeError, ValueError):
-        return False
-    if not isinstance(manifest, dict) or not isinstance(completion, dict):
-        return False
-    return (
-        manifest.get("backup_run_id") == run_id
-        and manifest.get("source_node") == source_node
-        and manifest.get("server_uuid") == server_uuid
-        and completion.get("backup_run_id") == run_id
-        and completion.get("source_node") == source_node
-        and completion.get("server_uuid") == server_uuid
-        and completion.get("manifest_sha256") == hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
-    )
+        return run(command)
+    finally:
+        stop_isolated_unit(unit, active_units)
 
 
-def parse_run_id(value):
-    if not isinstance(value, str) or not RUN_ID_RE.fullmatch(value):
-        raise RuntimeError(f"invalid backup id: {value!r}")
-    return dt.datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+def stop_isolated_unit(unit, active_units):
+    run(["/usr/bin/systemctl", "stop", unit], capture=True, check=False)
+    state = run(["/usr/bin/systemctl", "show", unit, "--property=ActiveState", "--value"],
+                capture=True, check=False)
+    if state.returncode != 0 or state.stdout.strip() not in {"inactive", "failed"}:
+        raise RuntimeError("isolated restore command did not stop; temporary files retained")
+    active_units.remove(unit)
 
 
-def list_backups(config):
-    candidates = []
-    for name in rclone_list_dirs(config, b2_path(config, PHYSICAL_ROOT)):
-        parts = [part for part in name.split("/") if part]
-        if len(parts) != 3:
-            continue
-        source_node, server_uuid, run_id = parts
-        if not (
-            IDENTIFIER_RE.fullmatch(source_node)
-            and IDENTIFIER_RE.fullmatch(server_uuid)
-            and RUN_ID_RE.fullmatch(run_id)
-        ):
-            continue
-        candidate = b2_path(config, PHYSICAL_ROOT, source_node, server_uuid, run_id)
-        if is_complete_backup(config, candidate):
-            candidates.append({"run_id": run_id, "run_at": parse_run_id(run_id), "path": candidate})
-    return candidates
-
-
-def resolve_backup(config, backup_id):
-    candidates = list_backups(config)
-    if backup_id:
-        parse_run_id(backup_id)
-        candidates = [candidate for candidate in candidates if candidate["run_id"] == backup_id]
-        if len(candidates) != 1:
-            raise RuntimeError(f"backup id is not uniquely available: {backup_id}")
-        return candidates[0]["path"]
-    if not candidates:
-        raise RuntimeError("no completed physical backup is available")
-    return max(candidates, key=lambda candidate: candidate["run_at"])["path"]
-
-
-def transport_fetch_backup(config, backup_path, destination):
-    destination = Path(destination)
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.mkdir(parents=True)
-    run(rclone_argv(config, "copy", str(backup_path), str(destination)))
-
-
-def update_restore_status(path, success):
+def update_restore_status(path, success, backup, duration, copy_duration, validation):
     path = Path(path)
     status = json.loads(path.read_text(encoding="utf-8"))
     status["restore_test_success"] = success
     status["restore_test_timestamp"] = timestamp()
+    status["restore_test_backup_path"] = backup
+    status["restore_test_duration"] = duration
+    status["restore_test_copy_duration"] = copy_duration
+    status["restore_test_validation"] = validation
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o640)
@@ -236,6 +121,7 @@ def stop_server(pid_path, socket_path, scratch):
         run(
             [
                 "/usr/bin/mysqladmin",
+                "--no-defaults",
                 "--protocol=socket",
                 f"--socket={socket_path}",
                 "--user=root",
@@ -254,10 +140,65 @@ def stop_server(pid_path, socket_path, scratch):
         raise RuntimeError("isolated restored mysqld did not stop")
 
 
+def pitr_binlogs(config, manifest):
+    archive = (validate_storage_paths(config) / "binlog" / manifest["source_node"] / manifest["server_uuid"])
+    if not archive.resolve().is_relative_to(Path(config["repository_directory"]).resolve()):
+        raise RuntimeError("PITR archive escaped the repository")
+    document = json.loads((archive / "manifests" / f"{manifest['backup_run_id']}.json").read_text())
+    if any(document.get(key) != manifest[key] for key in ("source_node", "server_uuid", "backup_run_id")):
+        raise RuntimeError("PITR binlog manifest does not match the backup source")
+    first, position, *_ = manifest["xtrabackup_binlog_info"].split()
+    entries = document["closed_binlogs"]
+    starts = [index for index, item in enumerate(entries) if item["name"] == first]
+    if len(starts) != 1 or Path(first).name != first or not position.isdigit() or int(position) < 4:
+        raise RuntimeError("PITR baseline binlog or position is unavailable")
+    sequence = re.fullmatch(r"(.+\.)(\d+)", first)
+    if not sequence:
+        raise RuntimeError("PITR binlog sequence is invalid")
+    paths = []
+    for index, entry in enumerate(entries[starts[0]:]):
+        expected = sequence[1] + str(int(sequence[2]) + index).zfill(len(sequence[2]))
+        path = archive / expected
+        if (entry["name"] != expected or path.is_symlink() or not path.is_file()
+                or path.stat().st_size != entry["size"] or file_sha256(path) != entry["sha256"]):
+            raise RuntimeError("PITR binlogs have a gap, missing file or checksum mismatch")
+        paths.append(str(path))
+    return int(position), paths
+
+
+def replay_binlogs(config, manifest, socket_path, restored_gtid):
+    position, paths = pitr_binlogs(config, manifest)
+    producer = subprocess.Popen([
+        "/usr/bin/mysqlbinlog", "--no-defaults", "--verify-binlog-checksum",
+        f"--start-position={position}", f"--exclude-gtids={restored_gtid}", *paths,
+    ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    consumer = None
+    try:
+        consumer = subprocess.Popen([
+            "/usr/bin/mysql", "--no-defaults", "--protocol=socket", f"--socket={socket_path}", "--user=root",
+        ], stdin=producer.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        producer.stdout.close()
+        consumer.wait(timeout=3600)
+        producer.wait(timeout=30)
+        if producer.returncode or consumer.returncode:
+            raise RuntimeError("PITR binlog replay failed")
+    finally:
+        producer.stdout.close()
+        for process in (consumer, producer):
+            if process is not None:
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+    return {"binlog_count": len(paths), "last_binlog": Path(paths[-1]).name,
+            "end_position": Path(paths[-1]).stat().st_size}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--backup-id")
+    parser.add_argument("--list", action="store_true")
+    parser.add_argument("--pitr", action="store_true", help="replay through the last archived closed binlog")
     args = parser.parse_args()
 
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -267,112 +208,192 @@ def main():
     except BlockingIOError as error:
         lock_handle.close()
         raise RuntimeError("another backup, restore validation, or topology operation is running") from error
-    validate_config(config)
+    validate_storage_paths(config)
+    if args.list:
+        print(json.dumps([{key: item[key] for key in ("run_id", "path")} for item in list_backups(config)],
+                         sort_keys=True))
+        lock_handle.close()
+        return
 
     scratch = Path(config["restore_directory"]).resolve()
-    production_datadir = Path(config["mysql_datadir"]).resolve()
-    configured_scratch = Path(config["restore_directory"])
-    if (
-        not configured_scratch.is_absolute()
-        or configured_scratch.is_symlink()
-        or scratch == Path("/")
-        or len(scratch.parts) < 4
-        or scratch == production_datadir
-        or scratch.is_relative_to(production_datadir)
-        or production_datadir.is_relative_to(scratch)
-    ):
-        raise RuntimeError("unsafe restore scratch path")
     pid_path = scratch / "mysqld.pid"
     socket_path = scratch / "mysqld.sock"
     log_path = scratch / "mysqld.log"
     status_path = Path(config["status_file"])
     success = False
     backup = None
+    started = time.monotonic()
+    copy_duration = None
+    validation = {}
+    active_units = set()
+    source_backup = None
     try:
-        rclone_preflight(config)
         backup = resolve_backup(config, args.backup_id)
+        _, completion = read_completion(backup)
+        backup_size = completion.get("backup_size")
+        if not isinstance(backup_size, int) or backup_size <= 0:
+            raise RuntimeError("completed backup has no valid size for restore space planning")
+        required_bytes = 2 * backup_size + config["minimum_free_bytes"]
+        if shutil.disk_usage(scratch.parent).free < required_bytes:
+            raise RuntimeError("insufficient free space for backup copy, restored data and reserve")
         if scratch.exists():
             stop_server(pid_path, socket_path, scratch)
             shutil.rmtree(scratch)
         scratch.mkdir(parents=True, mode=0o700)
-        with tempfile.TemporaryDirectory(prefix="mysql-backup-restore-", dir=scratch.parent) as source_root:
-            transport_fetch_backup(config, backup, Path(source_root))
-            source_backup = Path(source_root)
-            run(
-                [
-                    "/usr/bin/xtrabackup",
-                    "--copy-back",
-                    f"--target-dir={source_backup}",
-                    f"--datadir={scratch}",
-                ]
-            )
-            change_owner(scratch, "mysql", "mysql")
-            run(
-                [
-                    "/usr/sbin/mysqld",
-                    "--no-defaults",
-                    f"--datadir={scratch}",
-                    f"--socket={socket_path}",
-                    f"--pid-file={pid_path}",
-                    f"--log-error={log_path}",
-                    "--skip-networking=ON",
-                    "--mysqlx=OFF",
-                    "--skip-log-bin",
-                    "--server-id=4294967000",
-                    "--user=mysql",
-                    "--daemonize",
-                ]
-            )
-            for _ in range(60):
-                query = run(
-                    [
-                        "/usr/bin/mysql",
-                        "--protocol=socket",
-                        f"--socket={socket_path}",
-                        "--user=root",
-                        "--batch",
-                        "--skip-column-names",
-                        "--execute",
-                        "SELECT 1",
-                    ],
-                    capture=True,
-                    check=False,
-                )
-                if query.returncode == 0 and query.stdout.strip() == "1":
-                    break
-                time.sleep(1)
-            else:
-                raise RuntimeError("isolated restored mysqld did not accept SELECT 1")
-            databases = run(
+        source_backup = Path(tempfile.mkdtemp(prefix="mysql-backup-restore-", dir=scratch.parent))
+        copy_started = time.monotonic()
+        manifest = verify_backup(backup)
+        shutil.copytree(backup, source_backup, dirs_exist_ok=True)
+        verify_backup(source_backup, identity=backup)
+        copy_duration = round(time.monotonic() - copy_started, 3)
+        run_isolated(source_backup, active_units, "/usr/bin/xtrabackup", "--no-defaults", "--prepare",
+                     f"--target-dir={source_backup}", f"--tmpdir={source_backup}")
+        run_isolated(
+            scratch, active_units, "/usr/bin/xtrabackup", "--no-defaults", "--copy-back",
+            f"--target-dir={source_backup}", f"--datadir={scratch}", f"--tmpdir={scratch}",
+        )
+        change_owner(scratch, "mysql", "mysql")
+        mysql_unit = f"mysql-backup-restore-{os.getpid()}-{time.monotonic_ns()}.service"
+        active_units.add(mysql_unit)
+        run(
+            [
+                "/usr/bin/systemd-run",
+                "--quiet",
+                "--collect",
+                f"--unit={mysql_unit}",
+                "--property=Type=forking",
+                f"--property=PIDFile={pid_path}",
+                "--property=TimeoutStartSec=60",
+                "--property=TimeoutStopSec=30",
+                "--property=RuntimeMaxSec=3600",
+                "--property=ProtectSystem=strict",
+                f"--property=ReadWritePaths={scratch}",
+                "--property=PrivateNetwork=yes",
+                "/usr/sbin/mysqld",
+                "--no-defaults",
+                f"--datadir={scratch}",
+                f"--tmpdir={scratch}",
+                f"--socket={socket_path}",
+                f"--pid-file={pid_path}",
+                f"--log-error={log_path}",
+                "--skip-networking=ON",
+                "--skip-replica-start=ON",
+                "--persisted-globals-load=OFF",
+                "--read-only=OFF",
+                "--super-read-only=OFF",
+                "--event-scheduler=OFF",
+                "--mysqlx=OFF",
+                "--skip-log-bin",
+                "--gtid-mode=ON",
+                "--enforce-gtid-consistency=ON",
+                "--server-id=4294967000",
+                "--user=mysql",
+                "--daemonize",
+            ]
+        )
+        for _ in range(60):
+            query = run(
                 [
                     "/usr/bin/mysql",
+                    "--no-defaults",
                     "--protocol=socket",
                     f"--socket={socket_path}",
                     "--user=root",
                     "--batch",
                     "--skip-column-names",
                     "--execute",
-                    "SHOW DATABASES",
+                    "SELECT 1",
                 ],
                 capture=True,
-            ).stdout.splitlines()
-            missing = sorted(set(config["expected_databases"]) - set(databases))
-            if missing:
-                raise RuntimeError(f"restored backup is missing expected databases: {', '.join(missing)}")
-            success = True
+                check=False,
+            )
+            if query.returncode == 0 and query.stdout.strip() == "1":
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError("isolated restored mysqld did not accept SELECT 1")
+        databases = run(
+            [
+                "/usr/bin/mysql",
+                "--no-defaults",
+                "--protocol=socket",
+                f"--socket={socket_path}",
+                "--user=root",
+                "--batch",
+                "--skip-column-names",
+                "--execute",
+                "SHOW DATABASES",
+            ],
+            capture=True,
+        ).stdout.splitlines()
+        missing = sorted(set(config["expected_databases"]) - set(databases))
+        if missing:
+            raise RuntimeError(f"restored backup is missing expected databases: {', '.join(missing)}")
+        result = run(
+            [
+                "/usr/bin/mysql", "--no-defaults", "--protocol=socket", f"--socket={socket_path}",
+                "--user=root", "--batch", "--skip-column-names", "--execute",
+                "SELECT VERSION(), REPLACE(@@GLOBAL.gtid_executed, CHAR(10), ''), "
+                "(SELECT COUNT(*) FROM mysql.user)",
+            ], capture=True,
+        )
+        version, restored_gtid, account_count = result.stdout.strip().split("\t")
+        position = manifest["xtrabackup_binlog_info"].split(None, 2)
+        expected_gtid = re.sub(r"\s+", "", position[2]) if len(position) == 3 else ""
+        if not expected_gtid or not re.fullmatch(r"[A-Fa-f0-9:,-]+", expected_gtid + restored_gtid):
+            raise RuntimeError("backup or restored GTID metadata is missing or invalid")
+        gtid_check = run(
+            [
+                "/usr/bin/mysql", "--no-defaults", "--protocol=socket", f"--socket={socket_path}",
+                "--user=root", "--batch", "--skip-column-names", "--execute",
+                f"SELECT GTID_SUBSET('{expected_gtid}', '{restored_gtid}'), "
+                f"GTID_SUBSET('{restored_gtid}', '{expected_gtid}')",
+            ], capture=True,
+        )
+        if gtid_check.stdout.strip() != "1\t1" or int(account_count) < 1:
+            raise RuntimeError("restored GTID or representative table validation failed")
+        if version.split(".")[:2] != manifest["mysql_version"].split(".")[:2]:
+            raise RuntimeError("restore server series differs from the source server")
+        validation = {"mysql_version": version, "database_count": len(databases),
+                      "representative_row_count": int(account_count), "gtid_matches_backup": True}
+        if args.pitr:
+            replay = replay_binlogs(config, manifest, socket_path, restored_gtid)
+            after = run([
+                "/usr/bin/mysql", "--no-defaults", "--protocol=socket", f"--socket={socket_path}", "--user=root",
+                "--batch", "--skip-column-names", "--execute",
+                f"SELECT GTID_SUBSET('{restored_gtid}', @@GLOBAL.gtid_executed), "
+                f"GTID_SUBTRACT(@@GLOBAL.gtid_executed, '{restored_gtid}') != '', "
+                "(SELECT COUNT(*) FROM mysql.user)",
+            ], capture=True).stdout.strip().split("\t")
+            if len(after) != 3 or after[0] != "1" or int(after[2]) < 1:
+                raise RuntimeError("PITR recovered data or GTID validation failed")
+            validation["pitr"] = replay | {"success": True, "new_transactions_applied": after[1] == "1"}
+        success = True
     finally:
         try:
             stop_server(pid_path, socket_path, scratch)
+            for unit in list(active_units):
+                stop_isolated_unit(unit, active_units)
             if scratch.exists():
                 shutil.rmtree(scratch)
-        except Exception:
+            if source_backup and source_backup.exists():
+                shutil.rmtree(source_backup)
+        except BaseException:
             success = False
             raise
         finally:
-            update_restore_status(status_path, success)
+            update_restore_status(status_path, success, str(backup) if backup else None, round(time.monotonic() - started, 3),
+                                  copy_duration, validation)
             lock_handle.close()
-    print(json.dumps({"backup_id": args.backup_id, "backup_path": backup, "changed": True, "restore_test_success": success}, sort_keys=True))
+    print(json.dumps({"backup_id": args.backup_id, "backup_path": str(backup) if backup else None, "changed": True,
+                      "restore_test_success": success, "duration": round(time.monotonic() - started, 3),
+                      "copy_duration": copy_duration, "validation": validation}, sort_keys=True))
 
 
 if __name__ == "__main__":
+    def interrupted(signum, frame):
+        raise SystemExit(128 + signum)
+
+    for number in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(number, interrupted)
     main()

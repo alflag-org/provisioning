@@ -8,8 +8,8 @@ mysql_replicaset_initial_primary: mysql-shared01
 mysql_replicaset_admin_user: mysql_replicaset_admin
 mysql_replicaset_replication_allowed_host: "{{ network_zones.infra.cidr }}"
 
-# Enable physical backups after configuring the B2 bucket and application key.
-mysql_backup_enabled: false
+mysql_backup_enabled: true
+mysql_backup_timer_enabled: false
 mysql_backup_schedule: "*-*-* 02:15:00"
 mysql_backup_randomized_delay_seconds: 1800
 

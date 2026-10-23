@@ -11,7 +11,6 @@ from ansible.plugins.loader import PluginPathContext, callback_loader
 def callback_paths(subdirs=True):
     # Ansible also discovers callbacks beside playbooks and roles, even when
     # CALLBACK_PLUGINS and CALLBACKS_ENABLED are explicit. Do not import them.
-    # This loader hook is verified with the pinned ansible-core integration tests.
     return [
         PluginPathContext(str(Path(ansible.plugins.callback.__file__).parent), True),
     ]

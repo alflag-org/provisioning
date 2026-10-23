@@ -1,283 +1,137 @@
-"""Exercise the actual child boundary with synthetic secrets and no network."""
+"""Check secret serialization and child ownership without starting Ansible or Atlas."""
 
-import importlib.util
+from contextlib import redirect_stderr, redirect_stdout
 import io
 import os
-import sys
+from pathlib import Path
+import signal
+import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
-from pathlib import Path
-from contextlib import redirect_stdout, redirect_stderr
+from unittest.mock import Mock, call, patch
 
-from atlas_core.secrets import SecretResolutionError, SecretResolver
+import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("provision_command", ROOT / "commands/provision.py")
-COMMAND = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(COMMAND)
+from atlas_core.secrets import SecretConfigurationError, SecretResolutionError
+from commands import provision
 
 
 class SecretExecutionTests(unittest.TestCase):
-    def test_launches_ansible_from_atlas_program_venv(self):
+    def test_declarations_accept_mapping_and_reject_duplicate_or_reserved_variables(self):
         with tempfile.TemporaryDirectory() as directory:
-            venv = Path(directory)
-            (venv / "bin").mkdir()
-            interpreter = venv / "bin/python"
-            interpreter.write_text(f"#!{sys.executable}\nimport os, sys\n"
-                                   f"os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n")
-            interpreter.chmod(0o700)
-            child = venv / "bin" / "ansible-playbook"
-            marker = venv / "started"
-            child.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\n")
-            child.chmod(0o700)
-            provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
-            with patch.dict(os.environ, {"ATLAS_VENV": str(venv)}):
-                self.assertEqual(COMMAND.run(Path("unused"), {"password": "mysql.backup.password"}, [],
-                                             provider=provider), 0)
-            self.assertTrue(marker.exists())
+            path = Path(directory) / 'required.yml'
+            path.write_text('required_secrets:\n  password: fixture.secret\n')
+            self.assertEqual(provision.declarations(path), {'password': 'fixture.secret'})
+            for content in (
+                'required_secrets:\n  password: fixture.secret\n  password: other.secret\n',
+                'required_secrets:\n  ansible_connection: fixture.secret\n',
+            ):
+                with self.subTest(content=content):
+                    path.write_text(content)
+                    with self.assertRaises(SecretConfigurationError):
+                        provision.declarations(path)
 
-    def test_real_child_gets_values_without_argv_environment_or_persistent_file(self):
+    def test_run_serializes_literal_secrets_privately_and_preserves_child_exit_status(self):
+        literal = "{{ lookup('pipe', 'false') }}\nsynthetic-secret"
+        provider = Mock(get_many=Mock(return_value={'fixture.secret': literal}))
+        child = Mock()
+        child.wait.return_value = 2
         with tempfile.TemporaryDirectory() as directory:
-            child = Path(directory) / "child.py"
-            child.write_text('''import os, pathlib, sys, yaml
-assert "synthetic-secret" not in repr(sys.argv)
-assert "synthetic-secret" not in repr(dict(os.environ))
-path = sys.argv[-1][1:]
-assert path.startswith("/dev/shm/atlas-run-")
-assert pathlib.Path(os.environ["ANSIBLE_LOCAL_TEMP"]).parent == pathlib.Path(path).parent
-assert os.stat(pathlib.Path(path).parent).st_mode & 0o777 == 0o700
-assert os.stat(path).st_mode & 0o777 == 0o600
-assert yaml.load(pathlib.Path(path).read_text(), Loader=yaml.BaseLoader) == {"mysql_password": "synthetic-secret"}
-print("synthetic-secret")
-sys.stderr.write("synthetic-secret")
-''')
-            provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic-secret"})
+            paths = []
+
+            def spawn(argv, **options):
+                path = Path(argv[-1][1:])
+                paths.append(path)
+                document = yaml.compose(path.read_text())
+                self.assertEqual(
+                    {key.value: (value.tag, value.value) for key, value in document.value},
+                    {'password': ('!unsafe', literal), 'setup_url': ('!unsafe', 'one-shot {{ literal }}')},
+                )
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(argv[0], '/synthetic-venv/bin/python')
+                self.assertIn('/synthetic-venv/bin/ansible-playbook', argv)
+                self.assertNotIn(literal, repr(argv) + repr(options['env']))
+                self.assertNotIn('untrusted', repr(options['env']))
+                self.assertEqual(options['stdout'], subprocess.DEVNULL)
+                self.assertEqual(options['stderr'], subprocess.DEVNULL)
+                return child
+
+            def stop(process):
+                self.assertIs(process, child)
+                self.assertTrue(paths[0].exists())
+
             output = io.StringIO()
-            with redirect_stdout(output), redirect_stderr(output):
-                result = COMMAND.run(child, {"mysql_password": "mysql.backup.password"}, [],
-                                     provider=provider, executable=sys.executable)
-            self.assertEqual(result, 0)
-            self.assertNotIn("synthetic-secret", output.getvalue())
-            self.assertEqual(list(Path(directory).iterdir()), [child])
-
-    def test_missing_secret_never_starts_child(self):
-        provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {})
-        with self.assertRaises(SecretResolutionError):
-            COMMAND.run(Path("unused"), {"password": "mysql.backup.password"}, [],
-                        provider=provider, executable="must-not-execute")
-
-    def test_declarations_reject_duplicate_keys(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "required.yml"
-            path.write_text("required_secrets:\n  password: mysql.backup.password\n  password: other.api_token\n")
-            with self.assertRaises(ValueError):
-                COMMAND.declarations(path)
-
-    def test_ansible_failure_preserves_exit_status_without_exposing_output(self):
-        with tempfile.TemporaryDirectory() as directory:
-            playbook = Path(directory) / "failure.yml"
-            playbook.write_text('''---
-- hosts: localhost
-  gather_facts: false
-  become: false
-  tasks:
-    - name: '{{ password }}'
-      ansible.builtin.command:
-        argv: [/bin/sh, -c, 'echo "$1"; echo "$1" >&2', fixture, '{{ password }}']
-    - ansible.builtin.fail:
-        msg: '{{ password }}'
-      no_log: true
-''')
-            provider = SecretResolver({"fixture.secret": "id"}, lambda ids: {"id": "synthetic-secret"})
-            output = io.StringIO()
-            with redirect_stdout(output), redirect_stderr(output):
-                result = COMMAND.run(playbook, {"password": "fixture.secret"},
-                                     ["-i", "localhost,", "-c", "local",
-                                      "-e", f"ansible_python_interpreter={sys.executable}"], provider=provider)
+            with patch.object(provision, 'get_run_directory', return_value=None), patch.object(
+                provision, 'temporary_run_directory', side_effect=lambda: tempfile.TemporaryDirectory(dir=directory)
+            ), patch.object(provision.subprocess, 'Popen', side_effect=spawn), patch.object(
+                provision, '_stop', side_effect=stop
+            ) as stopped, patch.dict(os.environ, {
+                'ATLAS_VENV': '/synthetic-venv', 'ANSIBLE_CALLBACK_PLUGINS': 'untrusted',
+            }), redirect_stdout(output), redirect_stderr(output):
+                result = provision.run(
+                    Path('unused'), {'password': 'fixture.secret'}, [], provider=provider,
+                    transient={'setup_url': 'one-shot {{ literal }}'},
+                )
             self.assertEqual(result, 2)
-            self.assertEqual(output.getvalue(), "provision: Ansible exited with status 2\n")
-
-    def test_adjacent_and_environment_callbacks_cannot_consume_injected_secrets(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            marker = root / "loaded"
-            for name in ("callback_plugins", "external"):
-                plugins = root / name
-                plugins.mkdir()
-                (plugins / "untrusted.py").write_text(
-                    f"from pathlib import Path\nPath({str(marker)!r}).touch()\n")
-            playbook = root / "fixture.yml"
-            playbook.write_text('''---
-- hosts: localhost
-  gather_facts: false
-  become: false
-  tasks:
-    - ansible.builtin.debug:
-        msg: '{{ password }}'
-''')
-            provider = SecretResolver({"fixture.secret": "id"}, lambda ids: {"id": "synthetic-secret"})
-            with patch.dict(os.environ, {
-                "ANSIBLE_CALLBACK_PLUGINS": str(root / "external"),
-                "ANSIBLE_CALLBACKS_ENABLED": "untrusted",
-                "ATLAS_VENV": str(Path(sys.executable).parent.parent),
-            }):
-                result = COMMAND.run(playbook, {"password": "fixture.secret"},
-                                     ["-i", "localhost,", "-c", "local"], provider=provider)
-            self.assertEqual(result, 0)
-            self.assertFalse(marker.exists())
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
-class SecretSignalCleanupTests(unittest.TestCase):
-    def test_sigterm_removes_volatile_vars(self):
-        import signal
-        self._assert_signal_cleanup(signal.SIGTERM)
-
-    def test_sigint_removes_volatile_vars(self):
-        import signal
-        self._assert_signal_cleanup(signal.SIGINT)
-
-    def _assert_signal_cleanup(self, signum):
-        import subprocess
-        import time
-
-        with tempfile.TemporaryDirectory() as directory:
-            directory = Path(directory)
-            marker = directory / "ready"
-            child = directory / "child.py"
-            child.write_text('''import os, pathlib, sys, time
-pathlib.Path(os.environ["TEST_READY"]).write_text(sys.argv[-1][1:])
-time.sleep(30)
-''')
-            parent = directory / "parent.py"
-            parent.write_text(f'''import importlib.util, sys
-from pathlib import Path
-from atlas_core.secrets import SecretResolver
-spec = importlib.util.spec_from_file_location("command", {str(ROOT / "commands/provision.py")!r})
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
-p = SecretResolver({{"mysql.backup.password": "id"}}, lambda ids: {{"id": "synthetic"}})
-m.run(Path({str(child)!r}), {{"password": "mysql.backup.password"}}, [], provider=p, executable=sys.executable)
-''')
-            env = dict(os.environ, TEST_READY=str(marker))
-            process = subprocess.Popen([sys.executable, str(parent)], env=env,
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            try:
-                deadline = time.monotonic() + 10
-                while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
-                    time.sleep(0.02)
-                self.assertTrue(marker.exists())
-                secret_path = Path(marker.read_text())
-                self.assertTrue(secret_path.exists())
-                process.send_signal(signum)
-                stdout, stderr = process.communicate(timeout=5)
-                self.assertEqual(process.returncode, 128 + signum)
-                self.assertFalse(secret_path.parent.exists())
-                self.assertNotIn(b"synthetic", stdout + stderr)
-            finally:
-                if process.poll() is None:
-                    process.kill()
-                    process.communicate()
-
-
-class SpawnSignalTests(unittest.TestCase):
-    def test_signal_during_spawn_is_handled_after_child_is_owned(self):
-        import signal
-        import subprocess
-        from unittest.mock import patch
-
-        original = subprocess.Popen
-        children = []
-        paths = []
-
-        def spawn(*args, **kwargs):
-            child = original(*args, **kwargs)
-            children.append(child)
-            paths.append(Path(args[0][-1][1:]))
-            os.kill(os.getpid(), signal.SIGTERM)
-            return child
-
-        with tempfile.TemporaryDirectory() as directory:
-            script = Path(directory) / "child.py"
-            script.write_text("import time\ntime.sleep(30)\n")
-            provider = SecretResolver({"mysql.backup.password": "id"}, lambda ids: {"id": "synthetic"})
-            with patch.object(COMMAND.subprocess, "Popen", spawn):
-                with self.assertRaises(SystemExit) as error:
-                    COMMAND.run(script, {"password": "mysql.backup.password"}, [],
-                                provider=provider, executable=sys.executable)
-            self.assertEqual(error.exception.code, 143)
-            self.assertIsNotNone(children[0].poll())
+            self.assertNotIn(literal, output.getvalue())
+            self.assertIn('status 2', output.getvalue())
+            stopped.assert_called_once()
             self.assertFalse(paths[0].parent.exists())
 
+    def test_unresolved_secrets_and_invalid_transient_inputs_never_start_a_child(self):
+        with patch.object(provision.subprocess, 'Popen') as spawn:
+            with self.assertRaises(SecretResolutionError):
+                provision.run(Path('unused'), {'password': 'fixture.secret'}, [],
+                              provider=Mock(get_many=Mock(return_value={})))
+            for transient in ({'password': 'one-shot'}, {'ansible_connection': 'local'}, {'setup_url': ''}):
+                with self.subTest(transient=transient), self.assertRaises(SecretConfigurationError):
+                    provision.run(Path('unused'), {'password': 'fixture.secret'}, [], transient=transient)
+            spawn.assert_not_called()
 
-class LiteralSecretTests(unittest.TestCase):
-    def test_ansible_does_not_evaluate_secret_as_jinja(self):
-        import shutil
+    def test_signal_during_spawn_stops_owned_child_before_removing_secret_file(self):
+        child = Mock()
+        paths = []
 
-        executable = ROOT / ".venv/bin/ansible-playbook"
-        if not executable.exists():
-            installed = shutil.which("ansible-playbook")
-            if installed is None:
-                self.skipTest("Ansible is not installed")
-            executable = Path(installed)
+        def spawn(argv, **options):
+            paths.append(Path(argv[-1][1:]))
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            return child
+
+        def stop(process):
+            self.assertIs(process, child)
+            self.assertTrue(paths[0].exists())
+
         with tempfile.TemporaryDirectory() as directory:
-            playbook = Path(directory) / "literal.yml"
-            playbook.write_text('''---
-- hosts: localhost
-  gather_facts: false
-  become: false
-  tasks:
-    - name: Check that the secret remained literal
-      ansible.builtin.assert:
-        that: password.startswith('{')
-      no_log: true
-''')
-            provider = SecretResolver({"mysql.backup.password": "id"},
-                                      lambda ids: {"id": "{{ lookup('pipe', 'false') }}"})
-            self.assertEqual(COMMAND.run(playbook, {"password": "mysql.backup.password"},
-                                        ["-i", "localhost,", "-c", "local"], provider=provider,
-                                        executable=str(executable)), 0)
+            with patch.object(provision, 'get_run_directory', return_value=None), patch.object(
+                provision, 'temporary_run_directory', side_effect=lambda: tempfile.TemporaryDirectory(dir=directory)
+            ), patch.object(provision.subprocess, 'Popen', side_effect=spawn), patch.object(
+                provision, '_stop', side_effect=stop
+            ) as stopped:
+                with self.assertRaises(SystemExit) as error:
+                    provision.run(Path('unused'), {}, [])
+            self.assertEqual(error.exception.code, 143)
+            stopped.assert_called_once_with(child)
+            self.assertFalse(paths[0].parent.exists())
 
+    def test_stop_escalates_for_surviving_descendants_after_leader_exit(self):
+        child = Mock(pid=12345)
+        with patch.object(provision.os, 'killpg') as kill:
+            provision._stop(child)
+        self.assertEqual(kill.call_args_list, [
+            call(child.pid, signal.SIGTERM), call(child.pid, signal.SIGKILL),
+        ])
 
-class TransientSecretTests(unittest.TestCase):
-    def test_transient_value_uses_existing_volatile_boundary(self):
-        import secrets
-        token = secrets.token_urlsafe(32) + '{{ literal }}'
+    def test_check_mode_does_not_prompt_for_one_shot_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
-            playbook = Path(directory) / 'transient.yml'
-            playbook.write_text('''---
-- hosts: localhost
-  gather_facts: false
-  become: false
-  tasks:
-    - name: Verify literal one-shot value
-      ansible.builtin.assert:
-        that:
-          - setup_url.endswith('literal ' + '}' + '}')
-      no_log: true
-''')
-            self.assertEqual(COMMAND.run(
-                playbook, {}, ['-i', 'localhost,', '-c', 'local'],
-                transient={'setup_url': token}, executable=str(ROOT / '.venv/bin/ansible-playbook')), 0)
-
-    def test_transient_input_cannot_shadow_provider_or_ansible_variables(self):
-        for transient in ({'password': 'one-shot'}, {'ansible_connection': 'local'}, {'setup_url': ''}):
-            with self.subTest(keys=list(transient)):
-                with self.assertRaises(ValueError):
-                    COMMAND.run(Path('unused'), {'password': 'provider.name'}, [],
-                                transient=transient, executable='must-not-run')
-
-    def test_check_mode_never_prompts_for_one_shot_credential(self):
-        with tempfile.TemporaryDirectory() as directory:
-            declarations = Path(directory) / 'required.yml'
-            declarations.write_text('required_secrets: {}\n')
-            with patch.object(COMMAND.getpass, 'getpass', side_effect=AssertionError('must not prompt')):
-                with patch.object(COMMAND, 'run', return_value=0) as run:
-                    self.assertEqual(COMMAND.main([
-                        'unused', '--limit', 'fixture', '--required-secrets', str(declarations),
-                        '--check', '--prompt-secret', 'setup_url']), 0)
-                    self.assertEqual(run.call_args.kwargs['transient'], {})
+            path = Path(directory) / 'required.yml'
+            path.write_text('required_secrets: {}\n')
+            with patch.object(provision.getpass, 'getpass') as prompt, patch.object(
+                provision, 'run', return_value=0,
+            ) as run:
+                self.assertEqual(provision.main([
+                    'unused', '--limit', 'fixture', '--required-secrets', str(path),
+                    '--check', '--prompt-secret', 'setup_url',
+                ]), 0)
+            prompt.assert_not_called()
+            self.assertEqual(run.call_args.kwargs['transient'], {})

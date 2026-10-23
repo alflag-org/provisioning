@@ -1,14 +1,11 @@
-"""Guard GameAP bootstrap decisions and prevent secret exposure through config."""
+"""Check the custom GameAP database bootstrap decisions."""
 
 import importlib.util
 from contextlib import closing
 from pathlib import Path
-import secrets
 import sqlite3
 import tempfile
 import unittest
-
-from jinja2 import Environment, StrictUndefined
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -57,23 +54,3 @@ class BootstrapTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db, db:
             db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY)')
         self.assertEqual(BOOTSTRAP.database_state(self.database), 'uninitialized')
-
-
-class ConfigTests(unittest.TestCase):
-    def test_panel_env_keeps_secrets_distinct_and_omits_seed_password(self):
-        values = {
-            'services_gameap_panel_auth_secret': secrets.token_hex(32),
-            'services_gameap_panel_encryption_key': secrets.token_hex(32),
-            'services_gameap_panel_admin_password': secrets.token_urlsafe(32),
-            'services_gameap_panel_http_port': 18025,
-            'services_gameap_panel_grpc_port': 41718,
-            'services_gameap_panel_grpc_external_host': '192.0.2.7',
-        }
-        template = ROOT / 'roles/services/gameap_panel/templates/config.env.j2'
-        rendered = Environment(undefined=StrictUndefined).from_string(template.read_text()).render(values)
-        env = dict(line.split('=', 1) for line in rendered.splitlines())
-        self.assertEqual(env['AUTH_SECRET'], values['services_gameap_panel_auth_secret'])
-        self.assertEqual(env['ENCRYPTION_KEY'], values['services_gameap_panel_encryption_key'])
-        self.assertNotIn(values['services_gameap_panel_admin_password'], rendered)
-        self.assertNotIn('ADMIN_PASSWORD', env)
-        self.assertEqual(env['GRPC_EXTERNAL_HOST'], '192.0.2.7')

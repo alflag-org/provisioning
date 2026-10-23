@@ -1,0 +1,90 @@
+---
+- name: Download the pinned Percona repository package
+  ansible.builtin.get_url:
+    url: "{{ mysql_backup_percona_release_url }}"
+    dest: "{{ mysql_backup_percona_release_path }}"
+    checksum: "{{ mysql_backup_percona_release_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check the downloaded Percona repository package
+  ansible.builtin.stat:
+    path: "{{ mysql_backup_percona_release_path }}"
+  register: mysql_backup_percona_release_package
+
+- name: Install the Percona repository package
+  ansible.builtin.apt:
+    deb: "{{ mysql_backup_percona_release_path }}"
+    state: present
+    fail_on_autoremove: true
+    policy_rc_d: 101
+  when: mysql_backup_percona_release_package.stat.exists
+
+- name: Check the Percona XtraBackup repository definition
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/percona-pxb-84-lts-release.list
+  register: mysql_backup_percona_repository
+
+- name: Enable the Percona XtraBackup 8.4 LTS repository
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/percona-release
+      - enable
+      - pxb-84-lts
+      - release
+  register: mysql_backup_percona_repository_enable
+  changed_when: true
+  when:
+    - not mysql_backup_percona_repository.stat.exists
+    - not ansible_check_mode
+
+- name: Refresh package metadata before previewing backup dependencies
+  ansible.builtin.apt:
+    update_cache: "{{ apt_update_cache }}"
+    cache_valid_time: "{{ 0 if mysql_backup_percona_repository_enable.changed | default(false) else apt_cache_valid_time }}"
+  when: not ansible_check_mode or mysql_backup_percona_repository.stat.exists
+
+- name: Preview physical backup package changes
+  ansible.builtin.command:
+    argv: "{{ ['apt-get', '--simulate', '--no-remove', 'install'] + mysql_backup_packages }}"
+  environment:
+    LC_ALL: C
+  register: mysql_backup_package_plan
+  check_mode: false
+  changed_when: false
+  when: not ansible_check_mode or mysql_backup_percona_repository.stat.exists
+
+- name: Refuse a package plan that changes the database server
+  ansible.builtin.assert:
+    that:
+      - mysql_backup_package_plan.stdout is not search('(?m)^(Inst|Remv) (mysql|mariadb|percona-server)')
+    fail_msg: Physical backup tools must not install, replace, upgrade, or remove database server packages.
+  when: not mysql_backup_package_plan.skipped | default(false)
+
+- name: Install Percona XtraBackup 8.4 and transfer tools
+  ansible.builtin.apt:
+    name: "{{ mysql_backup_packages }}"
+    state: present
+    fail_on_autoremove: true
+    policy_rc_d: 101
+    update_cache: false
+  become: true
+  when:
+    - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
+
+- name: Validate Percona XtraBackup 8.4
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/xtrabackup
+      - --version
+  register: mysql_backup_xtrabackup_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require the XtraBackup 8.4 series
+  ansible.builtin.assert:
+    that:
+      - (mysql_backup_xtrabackup_version.stdout ~ mysql_backup_xtrabackup_version.stderr) is search('8\\.4\\.')
+    fail_msg: "Installed XtraBackup is outside the required 8.4 series: {{ mysql_backup_xtrabackup_version.stdout }}{{ mysql_backup_xtrabackup_version.stderr }}"
+  when: not ansible_check_mode

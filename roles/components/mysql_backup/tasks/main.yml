@@ -2,117 +2,21 @@
 - name: Validate physical backup inputs
   ansible.builtin.assert:
     that:
-      - not mysql_backup_enabled | bool or mysql_backup_b2_bucket | string | length > 0
-      - not mysql_backup_enabled | bool or mysql_backup_b2_prefix | string | length > 0
-      - not mysql_backup_enabled | bool or mysql_backup_rclone_remote | string | length > 0
-      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key_id | string | length > 0
-      - not mysql_backup_enabled | bool or mysql_backup_b2_application_key | string | length > 0
       - lookup('ansible.builtin.vars', mysql_backup_password_var, default='') | string | length > 0
     fail_msg: >-
-      Physical backup is enabled, but B2 configuration or backup account secrets are missing.
+      The physical backup account secret is missing.
     quiet: true
 
-- name: Download the pinned Percona repository package
-  ansible.builtin.get_url:
-    url: "{{ mysql_backup_percona_release_url }}"
-    dest: "{{ mysql_backup_percona_release_path }}"
-    checksum: "{{ mysql_backup_percona_release_checksum }}"
-    owner: root
-    group: root
-    mode: "0644"
+- name: Require separate production and local backup storage paths
+  ansible.builtin.assert:
+    that:
+      - >-
+        [mysql_backup_mysql_datadir, mysql_backup_repository_dir,
+         mysql_backup_staging_dir, mysql_backup_restore_dir] | mysql_backup_paths_are_separate
+    fail_msg: Production data, backup repository, staging and restore paths must be separate absolute directories.
 
-- name: Check the downloaded Percona repository package
-  ansible.builtin.stat:
-    path: "{{ mysql_backup_percona_release_path }}"
-  register: mysql_backup_percona_release_package
-
-- name: Install the Percona repository package
-  ansible.builtin.apt:
-    deb: "{{ mysql_backup_percona_release_path }}"
-    state: present
-  when: mysql_backup_percona_release_package.stat.exists
-
-- name: Check the Percona XtraBackup repository definition
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/percona-pxb-84-lts-release.list
-  register: mysql_backup_percona_repository
-
-- name: Enable only the Percona XtraBackup 8.4 LTS repository
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/percona-release
-      - enable-only
-      - pxb-84-lts
-      - release
-  register: mysql_backup_percona_repository_enable
-  changed_when: true
-  when:
-    - not mysql_backup_percona_repository.stat.exists
-    - not ansible_check_mode
-
-- name: Install Percona XtraBackup 8.4 and transfer tools
-  ansible.builtin.apt:
-    name: "{{ mysql_backup_packages }}"
-    state: present
-    update_cache: true
-    cache_valid_time: >-
-      {{ 0 if (mysql_backup_percona_repository_enable.changed | default(false)) | bool else apt_cache_valid_time | default(86400) }}
-  become: true
-  when:
-    - not ansible_check_mode or mysql_backup_percona_repository.stat.exists
-
-- name: Require Percona XtraBackup 8.4
-  ansible.builtin.command:
-    argv: [/usr/bin/xtrabackup, --version]
-  register: mysql_backup_xtrabackup_version
-  changed_when: false
-  failed_when: >-
-    mysql_backup_xtrabackup_version.rc != 0 or
-    not (mysql_backup_xtrabackup_version.stderr is search('version 8[.]4[.]'))
-  when: not ansible_check_mode
-
-- name: Install pinned rclone
-  block:
-    - name: Download the pinned rclone binary
-      ansible.builtin.get_url:
-        url: "{{ mysql_backup_rclone_url }}"
-        dest: "{{ mysql_backup_rclone_archive_path }}"
-        checksum: "{{ mysql_backup_rclone_checksum }}"
-        owner: root
-        group: root
-        mode: "0644"
-
-    - name: Ensure the rclone extraction directory exists
-      ansible.builtin.file:
-        path: "{{ mysql_backup_rclone_extract_path }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
-
-    - name: Extract the pinned rclone binary
-      ansible.builtin.unarchive:
-        src: "{{ mysql_backup_rclone_archive_path }}"
-        dest: "{{ mysql_backup_rclone_extract_path }}"
-        remote_src: true
-        creates: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
-      when: not ansible_check_mode
-
-    - name: Inspect the pinned rclone source in check mode
-      ansible.builtin.stat:
-        path: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
-      register: mysql_backup_rclone_source
-      when: ansible_check_mode
-
-    - name: Install the pinned rclone binary
-      ansible.builtin.copy:
-        src: "{{ mysql_backup_rclone_extract_path }}/rclone-v{{ mysql_backup_rclone_version }}-linux-amd64/rclone"
-        dest: "{{ mysql_backup_rclone_binary }}"
-        remote_src: true
-        owner: root
-        group: root
-        mode: "0755"
-      when: not ansible_check_mode or mysql_backup_rclone_source.stat.exists
+- name: Install the physical backup tools
+  ansible.builtin.import_tasks: install.yml
 
 - name: Ensure physical backup directories exist
   ansible.builtin.file:
@@ -126,20 +30,15 @@
       group: root
       mode: "0750"
     - path: "{{ mysql_backup_status_dir }}"
+      # mysqld needs traversal; sensitive child directories remain owner-only.
       group: root
-      mode: "0750"
+      mode: "0711"
+    - path: "{{ mysql_backup_repository_dir }}"
+      group: root
+      mode: "0700"
     - path: "{{ mysql_backup_staging_dir }}"
       group: root
       mode: "0700"
-
-- name: Render the B2 rclone config
-  ansible.builtin.template:
-    src: rclone.conf.j2
-    dest: "{{ mysql_backup_rclone_config_path }}"
-    owner: root
-    group: root
-    mode: "0600"
-  no_log: true
 
 - name: Render physical backup credentials
   ansible.builtin.template:
@@ -173,6 +72,15 @@
       dest: "{{ mysql_backup_restore_program_path }}"
       mode: "0750"
 
+- name: Install shared local backup storage logic
+  ansible.builtin.copy:
+    src: mysql_backup_storage.py
+    dest: "{{ item }}/mysql_backup_storage.py"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: "{{ [mysql_backup_program_path | dirname, mysql_backup_restore_program_path | dirname] | unique }}"
+
 - name: Seed the backup status document when absent
   ansible.builtin.copy:
     content: |
@@ -180,16 +88,16 @@
         "last_attempt": null,
         "last_success": null,
         "last_failure": null,
-        "destination_backend": "b2",
-        "destination_target": "{{ mysql_backup_rclone_remote }}:{{ mysql_backup_b2_bucket }}/{{ mysql_backup_b2_prefix }}",
+        "destination_backend": "local",
+        "destination_target": {{ mysql_backup_repository_dir | to_json }},
         "destination_available": false,
         "duration": null,
         "backup_size": null,
         "backup_path": null,
         "source_node": "{{ inventory_hostname }}",
         "source_role": null,
-        "transfer_success": false,
-        "remote_validation_success": false,
+        "storage_success": false,
+        "local_validation_success": false,
         "prepare_success": false,
         "restore_test_success": false,
         "restore_test_timestamp": null
@@ -232,10 +140,10 @@
 - name: Apply pending physical backup handlers
   ansible.builtin.meta: flush_handlers
 
-- name: Enable the physical backup timer on both MySQL nodes
+- name: Manage the physical backup timer
   ansible.builtin.systemd_service:
     name: "{{ mysql_backup_timer_name }}"
-    state: started
-    enabled: true
+    state: "{{ 'started' if mysql_backup_timer_enabled | bool else 'stopped' }}"
+    enabled: "{{ mysql_backup_timer_enabled | bool }}"
     daemon_reload: true
   when: not ansible_check_mode

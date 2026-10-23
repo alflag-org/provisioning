@@ -1,10 +1,5 @@
 {
-  "b2_bucket": {{ mysql_backup_b2_bucket | to_json }},
-  "b2_prefix": {{ mysql_backup_b2_prefix | to_json }},
-  "rclone_remote": {{ mysql_backup_rclone_remote | to_json }},
-  "rclone_version": {{ mysql_backup_rclone_version | to_json }},
-  "rclone_binary": {{ mysql_backup_rclone_binary | to_json }},
-  "rclone_config_path": {{ mysql_backup_rclone_config_path | to_json }},
+  "repository_directory": {{ mysql_backup_repository_dir | to_json }},
   "credentials_file": {{ mysql_backup_credentials_path | to_json }},
   "staging_directory": {{ mysql_backup_staging_dir | to_json }},
   "restore_directory": {{ mysql_backup_restore_dir | to_json }},
@@ -13,6 +8,8 @@
   "mysql_socket": {{ mysql_backup_mysql_socket | to_json }},
   "mysql_datadir": {{ mysql_backup_mysql_datadir | to_json }},
   "binlog_directory": {{ mysql_backup_binlog_dir | to_json }},
+  "maximum_replication_lag_seconds": {{ mysql_backup_maximum_replication_lag_seconds | int }},
+  "minimum_free_bytes": {{ mysql_backup_minimum_free_bytes | int }},
   "replicaset_name": {{ mysql_backup_replicaset_name | to_json }},
   "source_node": {{ inventory_hostname | to_json }},
   "expected_databases": {{ (['mysql'] + (mysql_server_databases | map(attribute='name') | list)) | unique | list | to_json }}

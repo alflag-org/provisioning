@@ -1,14 +1,15 @@
 """Exercise credential parsing and preservation of vendor enrollment identity."""
 
 import importlib.util
+from contextlib import redirect_stderr
+import io
 import json
 import os
 from pathlib import Path
 import secrets
-import subprocess
-import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / 'roles/services/gameap_daemon/files/gameap-enroll.py'
@@ -71,8 +72,8 @@ class EnrollmentTests(unittest.TestCase):
 
     def test_malformed_stdin_never_leaks_into_output(self):
         credential = secrets.token_urlsafe(32)
-        result = subprocess.run([sys.executable, str(HELPER)], input=credential,
-                                capture_output=True, text=True, timeout=10)
-        self.assertEqual(result.returncode, 1)
-        self.assertNotIn(credential, result.stdout + result.stderr)
-        self.assertNotIn('Traceback', result.stderr)
+        output = io.StringIO()
+        with patch.object(ENROLL.sys, 'stdin', io.StringIO(credential)), redirect_stderr(output):
+            self.assertEqual(ENROLL.main(), 1)
+        self.assertNotIn(credential, output.getvalue())
+        self.assertNotIn('Traceback', output.getvalue())
