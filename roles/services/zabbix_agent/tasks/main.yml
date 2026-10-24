@@ -1,0 +1,74 @@
+---
+- name: Require one server and a unique per-host PSK
+  ansible.builtin.assert:
+    that:
+      - groups['svc_zabbix_server'] | length == 1
+      - zabbix_agent_psk is match('^[0-9a-fA-F]{64,512}$')
+      - zabbix_agent_psk | length % 2 == 0
+      - zabbix_agent_psk_identity == 'provisioning/' ~ inventory_hostname
+      - zabbix_agent_psks.values() | list | unique | length == zabbix_agent_psks | length
+  no_log: true
+
+- name: Configure the official RC2 package repository
+  ansible.builtin.include_role:
+    name: components/zabbix_repository  # noqa role-name[path]
+    public: true
+
+- name: Inspect installed packages
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Refuse implicit agent upgrades and downgrades
+  ansible.builtin.assert:
+    that:
+      - >-
+        'zabbix-agent2' not in ansible_facts.packages or
+        ansible_facts.packages['zabbix-agent2'][0].version == zabbix_package_version
+    fail_msg: Agent version changes require an explicit reviewed package update.
+
+- name: Install the exact RC2 agent without starting an unencrypted listener
+  ansible.builtin.apt:
+    name: "zabbix-agent2={{ zabbix_package_version }}"
+    state: present
+    policy_rc_d: 101
+    install_recommends: false
+  when: not ansible_check_mode or zabbix_repository_existing.stat.exists
+
+- name: Inspect agent configuration prerequisite
+  ansible.builtin.stat:
+    path: /etc/zabbix
+  register: zabbix_agent_directory
+
+- name: Configure the enrolled agent
+  when: not ansible_check_mode or zabbix_agent_directory.stat.exists
+  block:
+    - name: Prepare explicitly enabled DNS statistics
+      ansible.builtin.include_tasks: dns.yml
+      when: zabbix_dns_statistics | default('') in ['unbound', 'nsd']
+
+    - name: Install per-host PSK
+      ansible.builtin.copy:
+        content: "{{ zabbix_agent_psk }}\n"
+        dest: /etc/zabbix/agent2.psk
+        owner: root
+        group: zabbix
+        mode: "0640"
+      no_log: true
+      diff: false
+      notify: Restart Zabbix agent 2
+
+    - name: Configure encrypted active checks without a passive listener
+      ansible.builtin.template:
+        src: zabbix_agent2.conf.j2
+        dest: /etc/zabbix/zabbix_agent2.conf
+        owner: root
+        group: zabbix
+        mode: "0640"
+      notify: Restart Zabbix agent 2
+
+    - name: Enable agent after its secure configuration is installed
+      ansible.builtin.systemd_service:
+        name: zabbix-agent2
+        enabled: true
+        state: started
+      when: not ansible_check_mode

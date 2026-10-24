@@ -1,0 +1,17 @@
+---
+zabbix_server_packages:
+  - zabbix-server-pgsql
+  - zabbix-frontend-php
+  - zabbix-sql-scripts
+  - zabbix-agent2
+zabbix_database: zabbix
+# Archive the matching RC packages because prerelease repositories may rotate.
+zabbix_server_recovery_packages:
+  - file: zabbix-server-pgsql_8.0.0~rc2-1+ubuntu24.04_amd64.deb
+    sha256: 001033016fc413581f05db62d909a1c5ec42244c36948116676e431600fec50d
+  - file: zabbix-frontend-php_8.0.0~rc2-1+ubuntu24.04_all.deb
+    sha256: 148124137b41a65c8871ceb779d5104c452d25438d46019b38c0e4c1061f608a
+  - file: zabbix-sql-scripts_8.0.0~rc2-1+ubuntu24.04_all.deb
+    sha256: 19f065a24719a427a5ccf08c0a8934e11705ae64f2768132c85b5b0f3fdc68ee
+  - file: zabbix-agent2_8.0.0~rc2-1+ubuntu24.04_amd64.deb
+    sha256: 8e8c5c20263b14634b5ff8f9c1d773edac868d65313e8c6136fdc9d1d032b0e1

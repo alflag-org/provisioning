@@ -1,0 +1,114 @@
+---
+- name: Require credentials before preparing the server
+  ansible.builtin.assert:
+    that:
+      - zabbix_db_password | default('') | length >= 24
+      - zabbix_db_password is not search('[\r\n]')
+      - zabbix_db_password == zabbix_db_password | trim
+      - "'\u0000' not in zabbix_db_password"
+      - zabbix_admin_password | default('') | length >= 24
+      - zabbix_admin_password != 'zabbix'
+      - zabbix_frontend_certificate | default('') is search('BEGIN CERTIFICATE')
+      - zabbix_frontend_private_key | default('') is search('PRIVATE KEY')
+      - zabbix_database is match('^[a-z][a-z0-9_]*$')
+  no_log: true
+
+- name: Require a declared external backup mount
+  ansible.builtin.assert:
+    that:
+      - zabbix_backup_mount | default('') is match('^/[^\r\n]+$')
+      - zabbix_backup_mount != '/'
+      - zabbix_backup_source | default('') | length > 0
+    fail_msg: Declare and mount external backup storage; a directory on the VM is not an external backup.
+
+- name: Verify backup storage identity before mutation
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --json
+      - --mountpoint
+      - "{{ zabbix_backup_mount }}"
+      - --output
+      - SOURCE,FSTYPE,TARGET
+  register: zabbix_server_backup_mount
+  changed_when: false
+  check_mode: false
+
+- name: Require the declared remote filesystem
+  ansible.builtin.assert:
+    that:
+      - (zabbix_server_backup_mount.stdout | from_json).filesystems[0].source == zabbix_backup_source
+      - (zabbix_server_backup_mount.stdout | from_json).filesystems[0].fstype in ['nfs', 'nfs4', 'cifs']
+      - (zabbix_server_backup_mount.stdout | from_json).filesystems[0].target == zabbix_backup_mount
+
+- name: Configure the official RC2 repository
+  ansible.builtin.include_role:
+    name: components/zabbix_repository  # noqa role-name[path]
+    public: true
+
+- name: Inspect installed packages before selecting any change
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Refuse implicit server or schema upgrades
+  ansible.builtin.assert:
+    that:
+      - item not in ansible_facts.packages or ansible_facts.packages[item][0].version == zabbix_package_version
+    fail_msg: Take and verify an external recovery backup before the explicit upgrade workflow.
+  loop: "{{ zabbix_server_packages }}"
+
+- name: Install PostgreSQL, PHP and the exact RC2 packages without auto-start
+  ansible.builtin.apt:
+    name: >-
+      {{ zabbix_server_packages | map('regex_replace', '$', '=' ~ zabbix_package_version) | list
+         + ['postgresql-16', 'postgresql-client-16', 'python3-psycopg2', 'php8.3-fpm',
+            'php8.3-pgsql', 'php8.3-mbstring', 'php8.3-bcmath', 'php8.3-xml',
+            'php8.3-gd', 'php8.3-ldap', 'php8.3-curl', 'nftables'] }}
+    state: present
+    policy_rc_d: 101
+    install_recommends: false
+  when: not ansible_check_mode or zabbix_repository_existing.stat.exists
+
+- name: Inspect server prerequisites for check mode
+  ansible.builtin.stat:
+    path: /usr/share/zabbix/sql-scripts/postgresql/server.sql.gz
+  register: zabbix_server_schema_file
+
+- name: Explain deferred initialization on a fresh host
+  ansible.builtin.debug:
+    msg: Database, frontend and API initialization require the pinned packages during apply.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not zabbix_server_schema_file.stat.exists
+
+- name: Configure installed monitoring components
+  when: not ansible_check_mode or zabbix_server_schema_file.stat.exists
+  block:
+    - name: Prepare dedicated PostgreSQL
+      ansible.builtin.import_tasks: database.yml
+
+    - name: Prepare server and private frontend
+      ansible.builtin.import_tasks: frontend.yml
+
+    - name: Install external recovery backups
+      ansible.builtin.import_tasks: backup.yml
+
+    - name: Configure enrolled-agent ingress
+      ansible.builtin.import_tasks: ingress.yml
+
+    - name: Take the initial external backup with the complete configuration
+      ansible.builtin.systemd_service:
+        name: zabbix-backup.service
+        state: started
+      when:
+        - not ansible_check_mode
+        - zabbix_server_schema_import is changed
+
+    - name: Enable Zabbix server after configuration and bootstrap
+      ansible.builtin.systemd_service:
+        name: zabbix-server
+        state: "{{ 'restarted' if zabbix_server_configuration.changed or zabbix_server_ingress_dependency.changed else 'started' }}"
+        enabled: true
+        daemon_reload: true
+      when: not ansible_check_mode
