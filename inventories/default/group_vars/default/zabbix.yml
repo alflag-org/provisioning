@@ -12,12 +12,6 @@ zabbix_service_units_by_group:
   svc_mysql: [mysql.service]
   svc_gameap_panel: [gameap.service]
   svc_gameap_daemon: [gameap-daemon.service]
-  svc_zabbix_server:
-    - zabbix-server.service
-    - postgresql@16-main.service
-    - php8.3-fpm.service
-    - nginx.service
-    - zabbix-backup.timer
 zabbix_monitor_services: >-
   {{ (zabbix_service_units_by_group | dict2items | selectattr('key', 'in', group_names)
       | map(attribute='value') | flatten)

@@ -5,13 +5,33 @@ zabbix_server_packages:
   - zabbix-sql-scripts
   - zabbix-agent2
 zabbix_database: zabbix
+zabbix_server_platform: "{{ zabbix_server_platforms[ansible_facts.distribution_version] }}"
+zabbix_postgresql_version: "{{ zabbix_server_platform.postgresql }}"
+zabbix_php_version: "{{ zabbix_server_platform.php }}"
+zabbix_server_platforms:
+  "24.04":
+    postgresql: "16"
+    php: "8.3"
+    checksums:
+      zabbix-server-pgsql: 001033016fc413581f05db62d909a1c5ec42244c36948116676e431600fec50d
+      zabbix-frontend-php: 148124137b41a65c8871ceb779d5104c452d25438d46019b38c0e4c1061f608a
+      zabbix-sql-scripts: 19f065a24719a427a5ccf08c0a8934e11705ae64f2768132c85b5b0f3fdc68ee
+      zabbix-agent2: 8e8c5c20263b14634b5ff8f9c1d773edac868d65313e8c6136fdc9d1d032b0e1
+  "26.04":
+    postgresql: "18"
+    php: "8.5"
+    checksums:
+      zabbix-server-pgsql: c3b4ddfb825b489d4bc9aac97ecf23705fcf4748f0158d2996d4d09450a123a8
+      zabbix-frontend-php: 311aa75425ec28e79fdf36e51d734a5ec17b6341767e09c0f1c7faaee0e5f269
+      zabbix-sql-scripts: b390ef97c02de09f10d30ebe798d53f44393705deb32d40cf461b2dd4347908e
+      zabbix-agent2: 4532387d454bb14e8e96b8f5b5ed763f127b15d8e02b21498fa3709bacf65fb5
 # Archive the matching RC packages because prerelease repositories may rotate.
 zabbix_server_recovery_packages:
-  - file: zabbix-server-pgsql_8.0.0~rc2-1+ubuntu24.04_amd64.deb
-    sha256: 001033016fc413581f05db62d909a1c5ec42244c36948116676e431600fec50d
-  - file: zabbix-frontend-php_8.0.0~rc2-1+ubuntu24.04_all.deb
-    sha256: 148124137b41a65c8871ceb779d5104c452d25438d46019b38c0e4c1061f608a
-  - file: zabbix-sql-scripts_8.0.0~rc2-1+ubuntu24.04_all.deb
-    sha256: 19f065a24719a427a5ccf08c0a8934e11705ae64f2768132c85b5b0f3fdc68ee
-  - file: zabbix-agent2_8.0.0~rc2-1+ubuntu24.04_amd64.deb
-    sha256: 8e8c5c20263b14634b5ff8f9c1d773edac868d65313e8c6136fdc9d1d032b0e1
+  - file: "zabbix-server-pgsql_{{ zabbix_package_version.split(':')[1] }}_amd64.deb"
+    sha256: "{{ zabbix_server_platform.checksums['zabbix-server-pgsql'] }}"
+  - file: "zabbix-frontend-php_{{ zabbix_package_version.split(':')[1] }}_all.deb"
+    sha256: "{{ zabbix_server_platform.checksums['zabbix-frontend-php'] }}"
+  - file: "zabbix-sql-scripts_{{ zabbix_package_version.split(':')[1] }}_all.deb"
+    sha256: "{{ zabbix_server_platform.checksums['zabbix-sql-scripts'] }}"
+  - file: "zabbix-agent2_{{ zabbix_package_version.split(':')[1] }}_amd64.deb"
+    sha256: "{{ zabbix_server_platform.checksums['zabbix-agent2'] }}"

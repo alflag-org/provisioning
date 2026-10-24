@@ -39,7 +39,8 @@
     dest: /etc/zabbix/recovery.json
     content: >-
       {{ {'mount': zabbix_backup_mount, 'source': zabbix_backup_source,
-          'database': zabbix_database} | to_nice_json }}
+          'database': zabbix_database, 'postgresql_version': zabbix_postgresql_version,
+          'php_version': zabbix_php_version} | to_nice_json }}
     owner: root
     group: root
     mode: "0600"

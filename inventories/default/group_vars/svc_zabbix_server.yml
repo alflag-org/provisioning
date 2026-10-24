@@ -1,5 +1,13 @@
 ---
 zabbix_managed: true
+zabbix_postgresql_version: "18"
+zabbix_php_version: "8.5"
+zabbix_monitor_services:
+  - zabbix-server.service
+  - "postgresql@{{ zabbix_postgresql_version }}-main.service"
+  - "php{{ zabbix_php_version }}-fpm.service"
+  - nginx.service
+  - zabbix-backup.timer
 zabbix_frontend_name: "{{ network_primary_fqdn }}"
 zabbix_frontend_allow:
   - "{{ network_zones.mgmt.cidr }}"

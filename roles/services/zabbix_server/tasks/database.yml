@@ -1,7 +1,7 @@
 ---
 - name: Keep the dedicated database on loopback
   ansible.builtin.lineinfile:
-    path: /etc/postgresql/16/main/postgresql.conf
+    path: "/etc/postgresql/{{ zabbix_postgresql_version }}/main/postgresql.conf"
     regexp: '^#?listen_addresses\s*='
     line: "listen_addresses = '127.0.0.1'"
   notify: Restart monitoring PostgreSQL
@@ -20,11 +20,19 @@
     - name: Inspect database existence before previewing initialization
       community.postgresql.postgresql_query:
         login_db: postgres
-        query: SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=%(database)s) AS present
+        query: >-
+          SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=%(database)s) AS present,
+          current_setting('server_version_num')::integer / 10000 AS major_version
         named_args:
           database: "{{ zabbix_database }}"
       register: zabbix_server_existing_database
       check_mode: false
+
+    - name: Refuse database changes through a different PostgreSQL major
+      ansible.builtin.assert:
+        that:
+          - zabbix_server_existing_database.query_result[0].major_version | int == zabbix_postgresql_version | int
+        fail_msg: Inspect existing PostgreSQL clusters; the default connection is not the selected major version.
 
     - name: Create an unprivileged database owner
       community.postgresql.postgresql_user:

@@ -3,9 +3,9 @@
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == 'Ubuntu'
-      - ansible_facts.distribution_version == '24.04'
+      - ansible_facts.distribution_version in zabbix_package_versions
       - ansible_facts.architecture == 'x86_64'
-    fail_msg: RC2 packages were verified for Ubuntu 24.04 amd64; do not substitute versions.
+    fail_msg: RC2 packages were verified for Ubuntu 24.04 and 26.04 amd64; do not substitute versions.
 
 - name: Create apt keyring directory
   ansible.builtin.file:
@@ -30,7 +30,7 @@
     content: |
       Types: deb
       URIs: {{ zabbix_repository_url }}
-      Suites: noble
+      Suites: {{ ansible_facts.distribution_release }}
       Components: main
       Architectures: amd64
       Signed-By: /etc/apt/keyrings/zabbix-8.0.asc

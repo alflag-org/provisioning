@@ -81,7 +81,19 @@ def validate_backup(path):
     return metadata
 
 
+def configuration_paths(config):
+    postgresql_version = str(config['postgresql_version'])
+    php_version = str(config['php_version'])
+    if (not re.fullmatch(r'[1-9][0-9]*', postgresql_version)
+            or not re.fullmatch(r'[1-9][0-9]*\.[0-9]+', php_version)):
+        raise ValueError('invalid recovery runtime versions')
+    return ('/etc/zabbix', '/etc/nginx', f'/etc/php/{php_version}/fpm',
+            f'/etc/postgresql/{postgresql_version}/main', '/etc/apt/preferences.d/zabbix-8.0',
+            '/etc/apt/sources.list.d/zabbix-8.0.sources')
+
+
 def backup(config, repository):
+    paths = configuration_paths(config)
     identifier = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex
     staging = repository / (".incomplete-" + identifier)
     destination = repository / identifier
@@ -97,13 +109,12 @@ def backup(config, repository):
                                      stdout=subprocess.PIPE, text=True).stdout
         metadata = {"host": socket.gethostname(), "database": config["database"],
                     "created_at": datetime.now(timezone.utc).isoformat(), "packages": packages,
+                    "php_version": str(config['php_version']),
                     "postgresql": query(config["database"], "SHOW server_version"),
                     "dbversion": query(config["database"], "SELECT mandatory,optional FROM dbversion")}
         (staging / "metadata.json").write_text(json.dumps(metadata, sort_keys=True) + "\n")
         with tarfile.open(staging / "configuration.tar", "w") as archive:
-            for name in ("/etc/zabbix", "/etc/nginx", "/etc/php/8.3/fpm",
-                         "/etc/postgresql/16/main", "/etc/apt/preferences.d/zabbix-8.0",
-                         "/etc/apt/sources.list.d/zabbix-8.0.sources"):
+            for name in paths:
                 archive.add(name, arcname=name.lstrip("/"))
             archive.add("/usr/local/sbin/zabbix-recovery", arcname="usr/local/sbin/zabbix-recovery")
             for path in sorted(Path("/etc/systemd/system").glob("zabbix-*")):

@@ -6,7 +6,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param HTTP_AUTHORIZATION $http_authorization;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/run/php/php{{ zabbix_php_version }}-fpm.sock;
     }
     location / { deny all; }
 }

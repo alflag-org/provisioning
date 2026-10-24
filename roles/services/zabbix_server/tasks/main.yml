@@ -50,6 +50,13 @@
   ansible.builtin.package_facts:
     manager: apt
 
+- name: Require the inventory runtime to match the supported OS combination
+  ansible.builtin.assert:
+    that:
+      - zabbix_postgresql_version | string == zabbix_server_platform.postgresql
+      - zabbix_php_version | string == zabbix_server_platform.php
+    fail_msg: Select the PostgreSQL and PHP versions supported for this Ubuntu release.
+
 - name: Refuse implicit server or schema upgrades
   ansible.builtin.assert:
     that:
@@ -61,9 +68,10 @@
   ansible.builtin.apt:
     name: >-
       {{ zabbix_server_packages | map('regex_replace', '$', '=' ~ zabbix_package_version) | list
-         + ['postgresql-16', 'postgresql-client-16', 'python3-psycopg2', 'php8.3-fpm',
-            'php8.3-pgsql', 'php8.3-mbstring', 'php8.3-bcmath', 'php8.3-xml',
-            'php8.3-gd', 'php8.3-ldap', 'php8.3-curl', 'nftables'] }}
+         + ['postgresql-' ~ zabbix_postgresql_version, 'postgresql-client-' ~ zabbix_postgresql_version,
+            'python3-psycopg2', 'nftables']
+         + (['fpm', 'pgsql', 'mbstring', 'bcmath', 'xml', 'gd', 'ldap', 'curl']
+            | map('regex_replace', '^', 'php' ~ zabbix_php_version ~ '-') | list) }}
     state: present
     policy_rc_d: 101
     install_recommends: false

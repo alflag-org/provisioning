@@ -8,12 +8,13 @@ definitions and history. Retire resources explicitly after reviewing retention.
 ## Prepare the VM and access
 
 Create the guest separately in Proxmox. This repository configures existing
-guests and does not create the monitoring VM. Use Ubuntu 24.04 amd64, initially
+guests and does not create the monitoring VM. Use Ubuntu 24.04 or 26.04 amd64, initially
 2 vCPU, 4 GiB memory and 40 GiB SSD. Verify the template, MGMT VLAN, guest address,
 SSH access and available storage before adding `monitor01` to inventory under
 `mgmt`, `provider_proxmox`, `platform_vm` and `svc_zabbix_server`.
-The agent group includes the server group automatically. No address is reserved
-by the empty monitoring groups.
+The agent group includes the server group automatically.
+Select the supported PostgreSQL/PHP combination in server inventory; convergence
+rejects a runtime selection that disagrees with the guest's Ubuntu release.
 
 Use the existing private access path to the inventory address. The frontend
 requires an operator-supplied TLS certificate trusted by the controller, with
@@ -189,8 +190,9 @@ The server takes an initial backup after bootstrap and schedules subsequent
 backups. The recovery program serializes backup and restore validation with the
 same lock. Systemd bounds the job and its child processes. Completed backups have
 checksums, database/schema versions, matching official RC packages and a private
-configuration archive. Incomplete backups are not selectable; completed archives
-are never overwritten. Backup failure and stale successful-backup time have an
+configuration archive for the selected PostgreSQL and PHP versions. Incomplete
+backups are not selectable; completed archives are never overwritten. Backup
+failure and stale successful-backup time have an
 explicit trigger.
 
 Run the backup operation playbook for an additional recovery point. Select a

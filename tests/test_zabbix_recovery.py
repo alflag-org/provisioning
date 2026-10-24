@@ -80,5 +80,20 @@ class RecoveryIntegrityTests(unittest.TestCase):
         self.assertFalse((mount / 'zabbix-recovery').exists())
 
 
+class RecoveryConfigurationTests(unittest.TestCase):
+    def test_archive_paths_use_the_selected_runtime_versions(self):
+        paths = recovery.configuration_paths({'postgresql_version': '91', 'php_version': '92.3'})
+        self.assertIn('/etc/postgresql/91/main', paths)
+        self.assertIn('/etc/php/92.3/fpm', paths)
+
+    def test_runtime_versions_cannot_escape_configuration_directories(self):
+        for key in ['postgresql_version', 'php_version']:
+            with self.subTest(key=key):
+                config = {'postgresql_version': '91', 'php_version': '92.3'}
+                config[key] = '../../outside'
+                with self.assertRaises(ValueError):
+                    recovery.configuration_paths(config)
+
+
 if __name__ == "__main__":
     unittest.main()
