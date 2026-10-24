@@ -17,6 +17,10 @@
     that:
       - zabbix_api_identity.api.version == '8.0.0'
 
+- name: Configure the default frontend language
+  community.zabbix.zabbix_settings:
+    default_lang: "{{ zabbix_frontend_language }}"
+
 - name: Configure history and trend retention
   community.zabbix.zabbix_housekeeping:
     hk_history_mode: true

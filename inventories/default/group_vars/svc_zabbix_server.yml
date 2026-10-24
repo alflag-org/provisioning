@@ -8,6 +8,8 @@ zabbix_monitor_services:
   - "php{{ zabbix_php_version }}-fpm.service"
   - nginx.service
 zabbix_frontend_name: monitor.access.internal
+zabbix_frontend_language: ja_JP
+zabbix_frontend_locale: ja_JP.UTF-8
 network_service_aliases:
   - "{{ zabbix_frontend_name }}"
 zabbix_frontend_allow:

@@ -39,7 +39,7 @@
     name: >-
       {{ zabbix_server_packages | map('regex_replace', '$', '=' ~ zabbix_package_version) | list
          + ['postgresql-' ~ zabbix_postgresql_version, 'postgresql-client-' ~ zabbix_postgresql_version,
-            'python3-psycopg2', 'nftables', 'fping']
+            'python3-psycopg2', 'nftables', 'fping', 'locales', 'fonts-ipafont-gothic']
          + (['fpm', 'pgsql', 'mbstring', 'bcmath', 'xml', 'gd', 'ldap', 'curl']
             | map('regex_replace', '^', 'php' ~ zabbix_php_version ~ '-') | list) }}
     state: present

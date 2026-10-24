@@ -1,4 +1,20 @@
 ---
+- name: Generate the frontend UTF-8 locale
+  community.general.locale_gen:
+    name: "{{ zabbix_frontend_locale }}"
+    state: present
+  when: not ansible_check_mode or 'locales' in ansible_facts.packages
+  notify: Restart monitoring PHP
+
+- name: Select a graph font with Japanese glyphs
+  community.general.alternatives:
+    name: zabbix-frontend-font
+    link: /usr/share/zabbix/ui/assets/fonts/graphfont.ttf
+    path: /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf
+    priority: 20
+    state: selected
+  when: not ansible_check_mode or 'fonts-ipafont-gothic' in ansible_facts.packages
+
 - name: Create private frontend configuration directory
   ansible.builtin.file:
     path: /etc/zabbix/web
