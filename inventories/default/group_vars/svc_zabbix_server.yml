@@ -7,7 +7,9 @@ zabbix_monitor_services:
   - "postgresql@{{ zabbix_postgresql_version }}-main.service"
   - "php{{ zabbix_php_version }}-fpm.service"
   - nginx.service
-zabbix_frontend_name: "{{ network_primary_fqdn }}"
+zabbix_frontend_name: monitor.access.internal
+network_service_aliases:
+  - "{{ zabbix_frontend_name }}"
 zabbix_frontend_allow:
   - "{{ network_zones.mgmt.cidr }}"
   - "{{ network_zones.infra.cidr }}"
