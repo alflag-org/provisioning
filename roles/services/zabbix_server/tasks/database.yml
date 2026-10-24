@@ -97,7 +97,7 @@
     that:
       - zabbix_server_dbversion.query_result[0].mandatory | int == zabbix_schema_version | int
       - zabbix_server_dbversion.query_result[0].optional | int == zabbix_schema_version | int
-    fail_msg: Schema differs from the pinned release; inspect the recovery backup before any upgrade.
+    fail_msg: Schema differs from the pinned release; inspect the existing database before proceeding.
   when: zabbix_server_dbversion.query_result is defined
 
 - name: Explain schema initialization deferred by check mode

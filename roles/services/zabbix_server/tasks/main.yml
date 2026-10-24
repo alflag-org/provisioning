@@ -13,34 +13,6 @@
       - zabbix_database is match('^[a-z][a-z0-9_]*$')
   no_log: true
 
-- name: Require a declared external backup mount
-  ansible.builtin.assert:
-    that:
-      - zabbix_backup_mount | default('') is match('^/[^\r\n]+$')
-      - zabbix_backup_mount != '/'
-      - zabbix_backup_source | default('') | length > 0
-    fail_msg: Declare and mount external backup storage; a directory on the VM is not an external backup.
-
-- name: Verify backup storage identity before mutation
-  ansible.builtin.command:
-    argv:
-      - findmnt
-      - --json
-      - --mountpoint
-      - "{{ zabbix_backup_mount }}"
-      - --output
-      - SOURCE,FSTYPE,TARGET
-  register: zabbix_server_backup_mount
-  changed_when: false
-  check_mode: false
-
-- name: Require the declared remote filesystem
-  ansible.builtin.assert:
-    that:
-      - (zabbix_server_backup_mount.stdout | from_json).filesystems[0].source == zabbix_backup_source
-      - (zabbix_server_backup_mount.stdout | from_json).filesystems[0].fstype in ['nfs', 'nfs4', 'cifs']
-      - (zabbix_server_backup_mount.stdout | from_json).filesystems[0].target == zabbix_backup_mount
-
 - name: Configure the official RC2 repository
   ansible.builtin.include_role:
     name: components/zabbix_repository  # noqa role-name[path]
@@ -61,7 +33,7 @@
   ansible.builtin.assert:
     that:
       - item not in ansible_facts.packages or ansible_facts.packages[item][0].version == zabbix_package_version
-    fail_msg: Take and verify an external recovery backup before the explicit upgrade workflow.
+    fail_msg: Version changes require a reviewed release change and a fresh monitoring VM.
   loop: "{{ zabbix_server_packages }}"
 
 - name: Install PostgreSQL, PHP and the exact RC2 packages without auto-start
@@ -99,19 +71,8 @@
     - name: Prepare server and private frontend
       ansible.builtin.import_tasks: frontend.yml
 
-    - name: Install external recovery backups
-      ansible.builtin.import_tasks: backup.yml
-
     - name: Configure enrolled-agent ingress
       ansible.builtin.import_tasks: ingress.yml
-
-    - name: Take the initial external backup with the complete configuration
-      ansible.builtin.systemd_service:
-        name: zabbix-backup.service
-        state: started
-      when:
-        - not ansible_check_mode
-        - zabbix_server_schema_import is changed
 
     - name: Enable Zabbix server after configuration and bootstrap
       ansible.builtin.systemd_service:

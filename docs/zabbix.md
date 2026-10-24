@@ -24,14 +24,6 @@ inventory IPv4 address and permits the declared private networks. It does not
 create a public route, Access application or Tunnel. Verify MGMT reachability
 and the upstream network ACL before deployment; leave StatusFrame unchanged.
 
-Mount external NFS or CIFS backup storage before convergence and declare its
-exact mount point and source in the server's inventory values. Both convergence
-and every backup operation reject a missing or different filesystem. A local
-directory, local block device, or same-VM backup is insufficient. Protect the
-remote filesystem and its own backups: recovery archives contain credentials
-and private keys. Configure retention on the external storage; the recovery
-program never expires archives automatically.
-
 ## Apply in stages
 
 Use the repository's normal setup and targeted foundation workflow first.
@@ -184,61 +176,26 @@ local server and PostgreSQL are ready. The external service must deliver alerts
 without relying on the monitored site or Zabbix. No provider is selected
 implicitly, and existing StatusFrame configuration is untouched.
 
-## Back up and validate recovery
+## Rebuild after data loss
 
-The server takes an initial backup after bootstrap and schedules subsequent
-backups. The recovery program serializes backup and restore validation with the
-same lock. Systemd bounds the job and its child processes. Completed backups have
-checksums, database/schema versions, matching official RC packages and a private
-configuration archive for the selected PostgreSQL and PHP versions. Incomplete
-backups are not selectable; completed archives are never overwritten. Backup
-failure and stale successful-backup time have an
-explicit trigger.
-
-Run the backup operation playbook for an additional recovery point. Select a
-specific completed directory for restore validation:
-
-```bash
-atlas run provision playbooks/operations/zabbix-backup.yml --limit monitor01
-atlas run provision playbooks/operations/zabbix-restore-test.yml --limit monitor01 \
-  --extra-vars 'zabbix_restore_backup=<absolute-completed-backup-directory>'
-```
-
-The restore test verifies checksums, restores into a new randomly named database,
-checks schema and core tables, and drops that database. It does not replace
-production data or extract configuration over the live host. Inspect isolated
-restore databases after a forced termination before removing them.
-
-For disaster recovery, retain the failed VM and recover onto an isolated guest.
-Verify the selected completion record and checksums first. Install the package
-versions archived with that backup, restore the configuration for those versions,
-and restore `database.dump` into a new empty database owned by `zabbix`, using
-`pg_restore --exit-on-error --single-transaction --no-owner --role=zabbix`.
-Verify `dbversion` against the selected metadata before enabling the server.
-Recheck private addresses, certificate identity and storage source before exposing
-the recovered frontend. Do not point old packages at a database already upgraded
-by newer packages.
+Monitoring history and UI/API changes outside inventory are disposable. This
+service does not take backups or require external backup storage. After loss,
+create a fresh monitoring VM and reapply the server, agent and API configuration
+from inventory using the existing Atlas secrets. History starts again from the
+new deployment. Inventory-managed definitions are recreated; manual changes are
+not restored. MySQL backup monitoring remains independent of this policy.
 
 ## Update a release explicitly
 
 Normal convergence rejects installed versions different from the pinned release.
 APT preferences reject other Zabbix versions, including GA. A release change
-requires a reviewed change to exact package versions, checksums and expected
-schema, together with validation against a restored backup in an isolated guest.
-Use the [official upgrade instructions](https://www.zabbix.com/documentation/8.0/en/manual/installation/upgrade/packages/debian_ubuntu)
-for that release as well.
-
-For the maintenance window, stop scheduled backups, the frontend's PHP process
-and the Zabbix server, and verify they have stopped. Take an external recovery
-backup with the old packages/configuration and complete restore validation before
-changing packages. Keep the writers stopped, acquire the maintenance lock, and
-use an explicit Ansible apt operation with `policy_rc_d: 101` for the reviewed
-package set. Never authorize a version transition by rerunning normal convergence
-or by disabling its version guard. Validate configuration before starting services,
-then verify binary/API/schema versions, real collection and notifications, and
-resume scheduled backups. If the schema changes, recovery uses the complete old
-backup and its matching packages/configuration; reinstalling old packages alone
-is not a rollback. Keep the recovery point until post-update acceptance completes.
+requires a reviewed change to exact package versions and the expected schema,
+followed by validation on a fresh isolated VM. Replace the monitoring VM for the
+release change and reapply inventory-managed configuration, accepting the loss
+of monitoring history and manual changes. Normal convergence never upgrades an
+existing schema or recreates an existing database. Reinstalling old packages
+against a newer schema is not a rollback; use a fresh VM with the selected
+release instead.
 
 ## Accept the deployment
 
@@ -247,7 +204,7 @@ selected hosts, services, listeners and exact binary/schema versions after apply
 then repeat the same checks. Confirm enabled items collect real values, discovery
 has completed and no unsupported enabled item remains. In a maintenance window,
 stop and restore an enrolled agent, then one DNS peer, checking problem and recovery
-events and actual Discord deliveries. Validate a backup from external storage
-and the independent heartbeat's missing-heartbeat alert. Device collection,
-notification delivery, external storage and failure injection require the real
-VM, credentials and network paths; do not infer them from CI or a test fixture.
+events and actual Discord deliveries. Validate the independent heartbeat's
+missing-heartbeat alert. Device collection, notification delivery and failure
+injection require the real VM, credentials and network paths; do not infer them
+from CI or a test fixture.

@@ -7,16 +7,10 @@ zabbix_monitor_services:
   - "postgresql@{{ zabbix_postgresql_version }}-main.service"
   - "php{{ zabbix_php_version }}-fpm.service"
   - nginx.service
-  - zabbix-backup.timer
 zabbix_frontend_name: "{{ network_primary_fqdn }}"
 zabbix_frontend_allow:
   - "{{ network_zones.mgmt.cidr }}"
   - "{{ network_zones.infra.cidr }}"
-# The remote filesystem must be mounted by the operator before convergence.
-# Require its exact source as well as its mount point to protect backup identity.
-zabbix_backup_mount: ""
-zabbix_backup_source: ""
-zabbix_backup_schedule: "*-*-* 03:30:00"
 zabbix_history: 30d
 zabbix_trends: 365d
 zabbix_api_ca_path: ""

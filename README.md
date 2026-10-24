@@ -73,4 +73,4 @@ The [DNS guide](docs/dns.md) covers inventory-generated records, static records
 for unmanaged devices and services, optional reverse records, and DNS convergence.
 
 The [monitoring guide](docs/zabbix.md) covers the dedicated private Zabbix VM,
-explicit agent enrollment, API configuration, and external recovery backups.
+explicit agent enrollment, API configuration, and rebuilding after data loss.
