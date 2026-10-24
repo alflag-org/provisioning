@@ -5,7 +5,6 @@
       - groups['svc_zabbix_server'] == ['monitor01']
       - groups['svc_zabbix_agent'] | length > 0
       - inventory_hostname in groups['svc_zabbix_agent']
-      - zabbix_discord_webhook is match('^https://discord.com/api/webhooks/[^\s]+$')
   no_log: true
 
 - name: Read API identity
@@ -130,63 +129,6 @@
   loop: "{{ (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort }}"
   loop_control:
     loop_var: zabbix_dns_target
-
-- name: Configure notification links
-  community.zabbix.zabbix_globalmacro:
-    macro_name: ZABBIX.URL
-    macro_value: "http://{{ zabbix_frontend_name }}"
-
-- name: Prepare a read-only notification group
-  community.zabbix.zabbix_usergroup:
-    name: Provisioning notifications
-    gui_access: disable
-    hostgroup_rights:
-      - host_group: Provisioning
-        permission: read-only
-
-- name: Configure the Discord recipient with the packaged official media type
-  community.zabbix.zabbix_user:
-    username: provisioning-notifications
-    usrgrps: [Provisioning notifications]
-    role_name: User role
-    # The recipient cannot log into the frontend. Only creation sets this password.
-    passwd: "{{ lookup('ansible.builtin.password', '/dev/null', length=64) }}"
-    override_passwd: false
-    user_medias:
-      - mediatype: Discord
-        sendto: "{{ zabbix_discord_webhook }}"
-        severity:
-          not_classified: false
-          information: false
-          warning: true
-          average: true
-          high: true
-          disaster: true
-  no_log: true
-
-- name: Notify once for problems and once for their recovery
-  community.zabbix.zabbix_action:
-    name: Provisioning Discord problems and recovery
-    event_source: trigger
-    status: enabled
-    esc_period: 1h
-    pause_in_maintenance: true
-    conditions:
-      - type: host_group
-        operator: '='
-        value: Provisioning
-      - type: trigger_severity
-        operator: '>='
-        value: warning
-    eval_type: and
-    operations:
-      - type: send_message
-        send_to_users: [provisioning-notifications]
-        media_type: Discord
-        esc_step_from: 1
-        esc_step_to: 1
-    recovery_operations:
-      - type: notify_all_involved
 
 - name: Disable the package's demonstration host without deleting history
   community.zabbix.zabbix_host:

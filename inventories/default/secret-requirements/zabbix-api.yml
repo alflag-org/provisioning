@@ -2,4 +2,3 @@
 required_secrets:
   zabbix_admin_password: zabbix.admin.password
   zabbix_agent_psks_json: zabbix.agent.psks
-  zabbix_discord_webhook: zabbix.discord.webhook

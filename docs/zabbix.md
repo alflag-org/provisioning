@@ -157,10 +157,15 @@ verified private endpoints and expected responses.
 
 ## Alerts and capacity
 
-API configuration uses the packaged Discord media type. The notification action
-sends a single problem message and a recovery message and pauses during
-maintenance. Its recipient has read-only host access and cannot use the frontend.
-Review the standard templates' initial thresholds against collected baselines.
+Monitoring API configuration creates measurements and triggers without requiring
+a notification destination. Configure Discord delivery separately with the
+[notification playbook](../playbooks/operations/zabbix-notifications.yml) and its
+[secret declaration](../inventories/default/secret-requirements/zabbix-notifications.yml)
+using the same explicit server target. That operation uses the packaged Discord
+media type and a recipient with read-only host access and no frontend access.
+The action sends one problem message and one recovery message and pauses during
+maintenance. Review the standard templates' initial thresholds against collected
+baselines.
 
 Use the packaged Linux and Zabbix health dashboards to examine usage, saturation,
 NVPS, item/host counts, queue, cache and poller utilization, and unsupported items.
@@ -205,7 +210,7 @@ selected hosts, services, listeners and exact binary/schema versions after apply
 then repeat the same checks. Confirm enabled items collect real values, discovery
 has completed and no unsupported enabled item remains. In a maintenance window,
 stop and restore an enrolled agent, then one DNS peer, checking problem and recovery
-events and actual Discord deliveries. Validate the independent heartbeat's
-missing-heartbeat alert. Device collection, notification delivery and failure
-injection require the real VM, credentials and network paths; do not infer them
-from CI or a test fixture.
+events. Once notifications are configured, verify actual Discord deliveries.
+Validate the independent heartbeat's missing-heartbeat alert. Device collection,
+notification delivery and failure injection require the real VM, credentials and
+network paths; do not infer them from CI or a test fixture.
