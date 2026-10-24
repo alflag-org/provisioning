@@ -1,4 +1,6 @@
 ---
+dns_authoritative_control_enabled: false
+dns_authoritative_control_socket: /run/nsd/nsd.ctl
 dns_authoritative_enabled: false
 dns_authoritative_package: nsd
 dns_authoritative_service_name: nsd

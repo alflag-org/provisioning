@@ -1,0 +1,6 @@
+Plugins.Mysql.Sessions.monitoring.Uri=unix:/var/run/mysqld/mysqld.sock
+Plugins.Mysql.Sessions.monitoring.User=zabbix_monitor_rc2
+Plugins.Mysql.Sessions.monitoring.Password={{ zabbix_mysql_password }}
+Plugins.Mysql.CustomQueriesEnabled=true
+Plugins.Mysql.CustomQueriesPath=/etc/zabbix/mysql-queries
+UserParameter=mysql.backup.status,/usr/bin/sudo -n /usr/bin/cat /var/lib/mysql-backup/status.json 2>/dev/null || printf '%s' '{"unavailable":true}'

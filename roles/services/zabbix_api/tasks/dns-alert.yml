@@ -1,0 +1,14 @@
+---
+- name: Alert on an individual DNS server failure
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_target }} is unavailable"
+    params:
+      expression: >-
+        max(/{{ inventory_hostname }}/net.dns[{{ hostvars[zabbix_dns_target].ansible_host }},{{ hostvars[zabbix_dns_target].network_primary_fqdn }},A,2,1],2m)=0
+      severity: high
+    dependencies:
+      - host_name: "{{ inventory_hostname }}"
+        name: >-
+          DNS {{ 'svc_dns_recursive' if zabbix_dns_target in groups['svc_dns_recursive']
+                 else 'svc_dns_authoritative' }} all peers are unavailable

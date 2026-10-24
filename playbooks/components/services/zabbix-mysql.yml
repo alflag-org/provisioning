@@ -1,0 +1,6 @@
+---
+- name: Prepare local MySQL monitoring on both live ReplicaSet members
+  hosts: svc_zabbix_mysql
+  gather_facts: true
+  roles:
+    - role: services/zabbix_mysql  # noqa role-name[path]

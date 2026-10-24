@@ -1,0 +1,18 @@
+---
+- name: Configure monitoring through the private HTTPS API
+  hosts: svc_zabbix_server
+  gather_facts: false
+  become: false
+  connection: ansible.netcommon.httpapi
+  vars:
+    ansible_network_os: community.zabbix.zabbix
+    ansible_user: Admin
+    ansible_httpapi_pass: "{{ zabbix_admin_password }}"
+    ansible_httpapi_port: 443
+    ansible_httpapi_use_ssl: true
+    ansible_httpapi_validate_certs: true
+    ansible_httpapi_ca_path: "{{ zabbix_api_ca_path | default(none, true) }}"
+    ansible_zabbix_url_path: ""
+    zabbix_agent_psks: "{{ zabbix_agent_psks_json | from_json }}"
+  roles:
+    - role: services/zabbix_api  # noqa role-name[path]

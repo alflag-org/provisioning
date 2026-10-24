@@ -1,0 +1,17 @@
+---
+- name: Require two declared DNS peers
+  ansible.builtin.assert:
+    that:
+      - groups[zabbix_dns_group] | length == 2
+
+- name: Distinguish complete DNS service loss from a single peer failure
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_group }} all peers are unavailable"
+    params:
+      expression: >-
+        {% for peer in groups[zabbix_dns_group] %}
+        max(/{{ inventory_hostname }}/net.dns[{{ hostvars[peer].ansible_host }},{{ hostvars[peer].network_primary_fqdn }},A,2,1],2m)=0
+        {{ ' and ' if not loop.last else '' }}
+        {% endfor %}
+      severity: disaster

@@ -1,0 +1,4 @@
+---
+required_secrets:
+  zabbix_api_token: zabbix.api.host_sync_token
+  zabbix_agent_psks_json: zabbix.agent.psks

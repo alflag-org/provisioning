@@ -1,0 +1,6 @@
+---
+- name: Restart MySQL monitoring agent
+  ansible.builtin.systemd_service:
+    name: zabbix-agent2
+    state: restarted
+  when: not ansible_check_mode

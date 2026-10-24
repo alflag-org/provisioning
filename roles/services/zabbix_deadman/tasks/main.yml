@@ -1,0 +1,75 @@
+---
+- name: Require an independently hosted HTTPS heartbeat endpoint
+  ansible.builtin.assert:
+    that:
+      - zabbix_deadman_url | default('') is match('^https://[^\s]+$')
+      - "'\u0000' not in zabbix_deadman_url"
+  no_log: true
+
+- name: Install heartbeat HTTP client
+  ansible.builtin.apt:
+    name: curl
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time | default(86400) }}"
+
+- name: Configure the secret heartbeat URL outside process arguments
+  ansible.builtin.copy:
+    dest: /etc/zabbix/deadman.curl
+    content: |
+      url = {{ zabbix_deadman_url | to_json }}
+      request = "POST"
+      fail
+      silent
+      output = "/dev/null"
+      max-time = 15
+      connect-timeout = 5
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+
+- name: Install the independent heartbeat service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zabbix-deadman.service
+    content: |
+      [Unit]
+      Description=Independent monitoring heartbeat
+      [Service]
+      Type=oneshot
+      ExecStartPre=/usr/bin/systemctl is-active --quiet zabbix-server.service
+      ExecStartPre=/usr/bin/pg_isready --quiet --host=127.0.0.1 --dbname=zabbix
+      ExecStart=/usr/bin/curl --config /etc/zabbix/deadman.curl
+      TimeoutStartSec=20
+      UMask=0077
+      NoNewPrivileges=yes
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install the one-minute heartbeat schedule
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zabbix-deadman.timer
+    content: |
+      [Unit]
+      Description=Send independent monitoring heartbeat every minute
+      [Timer]
+      OnBootSec=1min
+      OnUnitActiveSec=1min
+      [Install]
+      WantedBy=timers.target
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable heartbeat scheduling
+  ansible.builtin.systemd_service:
+    name: zabbix-deadman.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
