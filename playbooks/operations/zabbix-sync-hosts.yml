@@ -5,6 +5,7 @@
   become: false
   connection: ansible.netcommon.httpapi
   vars:
+    ansible_become: false
     ansible_network_os: community.zabbix.zabbix
     ansible_zabbix_auth_key: "{{ zabbix_api_token }}"
     ansible_httpapi_port: 80

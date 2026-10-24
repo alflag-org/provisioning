@@ -5,6 +5,7 @@
   become: false
   connection: ansible.netcommon.httpapi
   vars:
+    ansible_become: false
     ansible_network_os: community.zabbix.zabbix
     ansible_user: Admin
     ansible_httpapi_pass: "{{ zabbix_admin_password }}"
