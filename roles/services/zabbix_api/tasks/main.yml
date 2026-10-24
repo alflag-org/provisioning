@@ -134,7 +134,7 @@
 - name: Configure notification links
   community.zabbix.zabbix_globalmacro:
     macro_name: ZABBIX.URL
-    macro_value: "https://{{ zabbix_frontend_name }}"
+    macro_value: "http://{{ zabbix_frontend_name }}"
 
 - name: Prepare a read-only notification group
   community.zabbix.zabbix_usergroup:

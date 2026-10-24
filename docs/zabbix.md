@@ -16,22 +16,22 @@ The agent group includes the server group automatically.
 Select the supported PostgreSQL/PHP combination in server inventory; convergence
 rejects a runtime selection that disagrees with the guest's Ubuntu release.
 
-Use the existing private access path to the inventory address. The frontend
-requires an operator-supplied TLS certificate trusted by the controller, with
-the inventory IP in its subject alternative names. Set the controller CA path
-when the CA is not in the system trust store. The role binds HTTPS to the
-inventory IPv4 address and permits the declared private networks. It does not
-create a public route, Access application or Tunnel. Verify MGMT reachability
-and the upstream network ACL before deployment; leave StatusFrame unchanged.
+The UI and API use HTTP on the inventory IPv4 address, restricted to the
+allowed private source networks. Local access does not require a frontend
+certificate or private key. External access goes through the operator-managed
+Cloudflare Access path; this role does not create or modify that path. HTTP is
+unencrypted between the client or connector and the monitoring VM. Verify the
+existing access path and upstream network ACL before deployment; leave
+StatusFrame unchanged. Agent traffic remains encrypted with per-host TLS PSKs.
 
 ## Apply in stages
 
 Use the repository's normal setup and targeted foundation workflow first.
 Review the [secret declarations](../inventories/default/secret-requirements/)
-and create their logical names in the existing Atlas secret provider. Certificate
-and private key values remain PEM text. The agent PSK secret is a JSON object
-mapping inventory host names to distinct random hexadecimal PSKs of at least
-256 bits. Do not place values in inventory or command arguments.
+and create their logical names in the existing Atlas secret provider. The agent
+PSK secret is a JSON object mapping inventory host names to distinct random
+hexadecimal PSKs of at least 256 bits. Do not place values in inventory or
+command arguments.
 
 Monitoring deployment is separate from `site.yml`. For the prepared VM:
 
@@ -66,7 +66,8 @@ convergence; those preview change flags are not a reliable drift count.
 
 The initial schema is imported into an empty database only. Partial unrelated
 schemas and release/schema mismatches stop deployment. The initial administrator
-password is replaced through a loopback-only API before publishing HTTPS.
+password is replaced through a loopback-only API before publishing the private
+HTTP frontend.
 If initial import succeeds but administrator setup is interrupted, keep the
 frontend private and inspect the database; do not recreate it or leave the default
 password active to bypass a failed run.

@@ -13,4 +13,3 @@ zabbix_frontend_allow:
   - "{{ network_zones.infra.cidr }}"
 zabbix_history: 30d
 zabbix_trends: 365d
-zabbix_api_ca_path: ""

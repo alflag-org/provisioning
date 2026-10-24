@@ -8,8 +8,6 @@
       - "'\u0000' not in zabbix_db_password"
       - zabbix_admin_password | default('') | length >= 24
       - zabbix_admin_password != 'zabbix'
-      - zabbix_frontend_certificate | default('') is search('BEGIN CERTIFICATE')
-      - zabbix_frontend_private_key | default('') is search('PRIVATE KEY')
       - zabbix_database is match('^[a-z][a-z0-9_]*$')
   no_log: true
 

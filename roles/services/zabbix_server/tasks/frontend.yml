@@ -1,30 +1,11 @@
 ---
-- name: Create private configuration directories
+- name: Create private frontend configuration directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: /etc/zabbix/web
     state: directory
     owner: root
     group: www-data
     mode: "0750"
-  loop:
-    - /etc/zabbix/web
-    - /etc/zabbix/tls
-
-- name: Install frontend TLS material
-  ansible.builtin.copy:
-    content: "{{ item.content }}"
-    dest: "/etc/zabbix/tls/{{ item.name }}"
-    owner: root
-    group: root
-    mode: "0600"
-  loop:
-    - name: frontend.crt
-      content: "{{ zabbix_frontend_certificate }}"
-    - name: frontend.key
-      content: "{{ zabbix_frontend_private_key }}"
-  no_log: true
-  diff: false
-  notify: nginx configuration changed
 
 - name: Configure Zabbix server
   ansible.builtin.template:
@@ -157,7 +138,7 @@
   no_log: true
   when: not ansible_check_mode
 
-- name: Install private HTTPS frontend after credential verification
+- name: Install private HTTP frontend after credential verification
   ansible.builtin.template:
     src: nginx.conf.j2
     dest: /etc/nginx/conf.d/zabbix.conf
@@ -166,5 +147,5 @@
     mode: "0644"
   notify: nginx configuration changed
 
-- name: Validate and activate private HTTPS frontend
+- name: Validate and activate private HTTP frontend
   ansible.builtin.meta: flush_handlers
