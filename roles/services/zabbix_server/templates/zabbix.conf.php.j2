@@ -1,0 +1,11 @@
+<?php
+$DB['TYPE'] = 'POSTGRESQL';
+$DB['SERVER'] = '127.0.0.1';
+$DB['PORT'] = '5432';
+$DB['DATABASE'] = '{{ zabbix_database }}';
+$DB['USER'] = 'zabbix';
+$DB['PASSWORD'] = base64_decode('{{ zabbix_db_password | b64encode }}');
+$ZBX_SERVER = '127.0.0.1';
+$ZBX_SERVER_PORT = '10051';
+$ZBX_SERVER_NAME = 'Infrastructure monitoring';
+$IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;

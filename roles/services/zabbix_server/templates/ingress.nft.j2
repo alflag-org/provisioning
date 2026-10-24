@@ -1,0 +1,14 @@
+# Replacing only this owned table is one atomic nft transaction.
+add table inet zabbix_monitoring
+delete table inet zabbix_monitoring
+table inet zabbix_monitoring {
+    set agents {
+        type ipv4_addr
+        elements = { 127.0.0.1{% for host in groups['svc_zabbix_agent'] %}, {{ hostvars[host].ansible_host }}{% endfor %} }
+    }
+    chain input {
+        type filter hook input priority -10; policy accept;
+        meta nfproto ipv4 tcp dport 10051 ip saddr @agents accept
+        tcp dport 10051 drop
+    }
+}

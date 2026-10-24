@@ -13,6 +13,10 @@ server:
   harden-dnssec-stripped: yes
   qname-minimisation: yes
   prefetch: {{ 'yes' if dns_recursor_prefetch else 'no' }}
+{% if dns_recursor_control_enabled %}
+  extended-statistics: yes
+  statistics-cumulative: yes
+{% endif %}
   cache-min-ttl: {{ dns_recursor_cache_min_ttl }}
   cache-max-ttl: {{ dns_recursor_cache_max_ttl }}
   unwanted-reply-threshold: {{ dns_recursor_unwanted_reply_threshold }}

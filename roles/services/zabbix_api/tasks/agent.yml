@@ -1,0 +1,82 @@
+---
+- name: Register an encrypted active agent
+  vars:
+    # PSKs are write-only. Their SHA-256 tag identifies the applied high-entropy
+    # key without rewriting it on every run or storing its value in metadata.
+    zabbix_api_psk_known: >-
+      {{ (zabbix_api_existing_hosts.hosts | selectattr('host', 'equalto', zabbix_target)
+          | map(attribute='tags') | flatten | selectattr('tag', 'equalto', 'psk-sha256')
+          | map(attribute='value') | list) == [zabbix_agent_psks[zabbix_target] | hash('sha256')] }}
+  community.zabbix.zabbix_host:
+    host_name: "{{ zabbix_target }}"
+    host_groups: [Provisioning]
+    link_templates: >-
+      {{ hostvars[zabbix_target].zabbix_monitor_templates
+         + (['Zabbix server health'] if zabbix_target == inventory_hostname else [])
+         + (['MySQL by Zabbix agent 2 active'] if zabbix_target in groups.get('svc_zabbix_mysql', []) else []) }}
+    interfaces:
+      - type: agent
+        main: 1
+        useip: 1
+        ip: "{{ hostvars[zabbix_target].ansible_host }}"
+        dns: ""
+        port: "10050"
+    tls_accept: 2
+    tls_connect: 2
+    tls_psk_identity: "{{ omit if zabbix_api_psk_known else 'provisioning/' ~ zabbix_target }}"
+    tls_psk: "{{ omit if zabbix_api_psk_known else zabbix_agent_psks[zabbix_target] }}"
+    macros: >-
+      {{ hostvars[zabbix_target].zabbix_monitor_macros | default([])
+         + ([{'macro': '{$MYSQL.DSN}', 'value': 'monitoring'}]
+            if zabbix_target in groups.get('svc_zabbix_mysql', []) else []) }}
+    tags:
+      - tag: managed-by
+        value: provisioning
+      - tag: network
+        value: "{{ hostvars[zabbix_target].network_zone }}"
+      - tag: psk-sha256
+        value: "{{ zabbix_agent_psks[zabbix_target] | hash('sha256') }}"
+    state: present
+  no_log: true
+
+- name: Configure counters only when local DNS statistics were explicitly enabled
+  ansible.builtin.include_tasks: dns-statistics.yml
+  when: hostvars[zabbix_target].zabbix_dns_statistics | default('') in ['unbound', 'nsd']
+
+- name: Collect live MySQL role flags independently of stable host identity
+  community.zabbix.zabbix_item:
+    host_name: "{{ zabbix_target }}"
+    name: MySQL runtime role flags
+    params:
+      key: mysql.custom.query[monitoring,,,replicaset_role]
+      type: zabbix_agent_active
+      value_type: text
+      interval: 30s
+      history: 30d
+  when: zabbix_target in groups.get('svc_zabbix_mysql', [])
+
+- name: Monitor the existing MySQL backup completion record
+  ansible.builtin.include_tasks: mysql-backup.yml
+  when: zabbix_target in groups.get('svc_zabbix_mysql', [])
+
+- name: Add selected service state items
+  community.zabbix.zabbix_item:
+    host_name: "{{ zabbix_target }}"
+    name: "Service {{ item }} active state"
+    params:
+      key: "systemd.unit.info[{{ item }},ActiveState]"
+      type: zabbix_agent_active
+      value_type: character
+      interval: 30s
+      history: 30d
+  loop: "{{ hostvars[zabbix_target].zabbix_monitor_services | default([]) }}"
+
+- name: Alert when a selected service remains inactive
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ zabbix_target }}"
+    name: "Service {{ item }} is inactive"
+    params:
+      expression: 'count(/{{ zabbix_target }}/systemd.unit.info[{{ item }},ActiveState],2m,"ne","active")>=4'
+      severity: high
+      manual_close: false
+  loop: "{{ hostvars[zabbix_target].zabbix_monitor_services | default([]) }}"

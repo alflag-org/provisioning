@@ -1,0 +1,21 @@
+---
+- name: Inspect the explicitly enabled local DNS control socket
+  ansible.builtin.stat:
+    path: "{{ '/run/unbound.ctl' if zabbix_dns_statistics == 'unbound' else '/run/nsd/nsd.ctl' }}"
+  register: zabbix_agent_dns_socket
+
+- name: Require the DNS role to prepare its control socket first
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent_dns_socket.stat.issock | default(false)
+    fail_msg: Enable the local control socket in the owning DNS role and apply it before agent enrollment.
+
+- name: Allow only non-resetting statistics through sudo
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/zabbix-dns-statistics
+    content: |
+      zabbix ALL=(root) NOPASSWD: /usr/sbin/{{ zabbix_dns_statistics }}-control -s {{ zabbix_agent_dns_socket.stat.path }} stats_noreset
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

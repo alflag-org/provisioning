@@ -1,0 +1,5 @@
+---
+zabbix_package_version: "2:8.0.0~rc2-1+ubuntu24.04"
+zabbix_schema_version: 7050196
+zabbix_repository_url: https://repo.zabbix.com/zabbix/8.0/unstable/ubuntu
+zabbix_repository_key_url: https://repo.zabbix.com/zabbix-official-repo.key

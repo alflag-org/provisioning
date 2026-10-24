@@ -1,0 +1,111 @@
+---
+- name: Require both declared database members without inventing a runtime role
+  ansible.builtin.assert:
+    that:
+      - ansible_play_hosts_all | sort == groups['svc_mysql'] | sort
+      - groups['svc_zabbix_mysql'] | sort == groups['svc_mysql'] | sort
+      - groups['svc_mysql'] | length == 2
+    fail_msg: Select both ReplicaSet members for monitoring account preparation.
+
+- name: Require the provider-managed monitoring credential
+  ansible.builtin.assert:
+    that:
+      - zabbix_mysql_password | default('') | length >= 24
+      - zabbix_mysql_password is not search('[\r\n]')
+      - zabbix_mysql_password == zabbix_mysql_password | trim
+      - "'\u0000' not in zabbix_mysql_password"
+  no_log: true
+
+- name: Require the explicitly enrolled agent before adding a local session
+  ansible.builtin.stat:
+    path: /etc/zabbix/zabbix_agent2.conf
+  register: zabbix_mysql_agent_config
+
+- name: Require an installed RC2 agent
+  ansible.builtin.assert:
+    that:
+      - zabbix_mysql_agent_config.stat.exists
+    fail_msg: Apply the agent playbook before preparing its local MySQL session.
+
+- name: Read runtime writability and replication threads without changing topology
+  ansible.mysql.mysql_query:
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    query:
+      - SELECT @@GLOBAL.read_only AS read_only, @@GLOBAL.super_read_only AS super_read_only
+      - SELECT SERVICE_STATE FROM performance_schema.replication_connection_status
+      - SELECT SERVICE_STATE FROM performance_schema.replication_applier_status
+  register: zabbix_mysql_runtime
+  check_mode: false
+
+- name: Require a healthy local primary or running replica
+  ansible.builtin.assert:
+    that:
+      - zabbix_mysql_runtime.query_result[0][0].read_only | int == zabbix_mysql_runtime.query_result[0][0].super_read_only | int
+      - >-
+        zabbix_mysql_runtime.query_result[0][0].read_only | int == 0 or
+        (zabbix_mysql_runtime.query_result[1] | length > 0 and
+         zabbix_mysql_runtime.query_result[2] | length > 0 and
+         zabbix_mysql_runtime.query_result[1] | map(attribute='SERVICE_STATE') | unique | list == ['ON'] and
+         zabbix_mysql_runtime.query_result[2] | map(attribute='SERVICE_STATE') | unique | list == ['ON'])
+
+- name: Require exactly one writable member from the live observations
+  ansible.builtin.assert:
+    that:
+      - >-
+        groups['svc_zabbix_mysql'] | map('extract', hostvars, 'zabbix_mysql_runtime')
+        | map(attribute='query_result') | map('first') | map('first')
+        | selectattr('read_only', 'equalto', 0) | list | length == 1
+  run_once: true
+
+- name: Create the local monitoring account only through the writable member
+  ansible.mysql.mysql_user:
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: zabbix_monitor_rc2
+    host: localhost
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ zabbix_mysql_password }}"
+    salt: "{{ ('zabbix_monitor_rc2@localhost' | hash('sha256'))[:20] }}"
+    priv: '*.*:PROCESS,REPLICATION CLIENT,SHOW DATABASES/performance_schema.*:SELECT'
+    state: present
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - zabbix_mysql_runtime.query_result[0][0].read_only | int == 0
+
+- name: Create owned custom-query directory
+  ansible.builtin.file:
+    path: /etc/zabbix/mysql-queries
+    state: directory
+    owner: root
+    group: zabbix
+    mode: "0750"
+
+- name: Permit reading only the existing non-secret backup status
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/zabbix-mysql-backup-status
+    content: "zabbix ALL=(root) NOPASSWD: /usr/bin/cat /var/lib/mysql-backup/status.json\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Expose runtime role flags through a read-only query
+  ansible.builtin.copy:
+    dest: /etc/zabbix/mysql-queries/replicaset_role.sql
+    content: SELECT @@GLOBAL.read_only AS read_only, @@GLOBAL.super_read_only AS super_read_only;
+    owner: root
+    group: zabbix
+    mode: "0640"
+
+- name: Configure the local Unix-socket plugin session
+  ansible.builtin.template:
+    src: mysql.conf.j2
+    dest: /etc/zabbix/zabbix_agent2.d/provisioning-mysql.conf
+    owner: root
+    group: zabbix
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Restart MySQL monitoring agent

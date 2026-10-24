@@ -1,0 +1,259 @@
+---
+- name: Require the intended monitoring endpoint
+  ansible.builtin.assert:
+    that:
+      - groups['svc_zabbix_server'] == ['monitor01']
+      - groups['svc_zabbix_agent'] | length > 0
+      - inventory_hostname in groups['svc_zabbix_agent']
+      - zabbix_discord_webhook is match('^https://discord.com/api/webhooks/[^\s]+$')
+  no_log: true
+
+- name: Read API identity
+  community.zabbix.zabbix_api_info:
+  register: zabbix_api_identity
+  check_mode: false
+
+- name: Require the API protocol shipped with RC2
+  ansible.builtin.assert:
+    that:
+      - zabbix_api_identity.api.version == '8.0.0'
+
+- name: Configure history and trend retention
+  community.zabbix.zabbix_housekeeping:
+    hk_history_mode: true
+    hk_history_global: true
+    hk_history: "{{ zabbix_history }}"
+    hk_trends_mode: true
+    hk_trends_global: true
+    hk_trends: "{{ zabbix_trends }}"
+    hk_events_mode: true
+    hk_events_trigger: 365d
+
+- name: Create the inventory-managed host group
+  community.zabbix.zabbix_group:
+    host_groups: [Provisioning]
+    state: present
+
+- name: Create the reusable active-check supplement
+  community.zabbix.zabbix_template:
+    template_name: Provisioning Linux services
+    template_groups: [Templates/Operating systems]
+    state: present
+
+- name: Collect Linux pressure without executing commands
+  community.zabbix.zabbix_item:
+    template_name: Provisioning Linux services
+    name: "{{ item | upper }} pressure, some avg10"
+    params:
+      key: "vfs.file.contents[/proc/pressure/{{ item }}]"
+      type: zabbix_agent_active
+      value_type: numeric_float
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: "%"
+      preprocessing:
+        - type: regular_expressions
+          params: "some avg10=([0-9.]+)\n\\1"
+          error_handler: zabbix_server
+          error_handler_params: ""
+  loop: [cpu, memory, io]
+
+- name: Secure the packaged Proxmox HTTP template
+  ansible.builtin.import_tasks: proxmox-tls.yml
+
+- name: Synchronize inventory-managed monitoring targets
+  ansible.builtin.import_tasks: hosts.yml
+
+- name: Disable packaged metrics for explicitly unused server features
+  community.zabbix.zabbix_item:
+    template_name: Zabbix server health
+    name: "{{ item }}"
+    params:
+      status: disabled
+  loop: "{{ zabbix_api_unused_server_items }}"
+
+- name: Disable associated optional-feature triggers
+  community.zabbix.zabbix_trigger:
+    template_name: Zabbix server health
+    name: "{{ item }}"
+    params:
+      status: disabled
+  loop: "{{ zabbix_api_unused_server_triggers }}"
+
+- name: Collect the actual monitoring database size
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring database size
+    params:
+      key: pgsql.database.bytes
+      type: zabbix_agent_active
+      value_type: numeric_unsigned
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: B
+
+- name: Collect recovery backup status without exposing credentials
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring recovery backup status
+    params:
+      key: vfs.file.contents[/var/lib/zabbix-recovery/status.json]
+      type: zabbix_agent_active
+      value_type: text
+      interval: 60s
+      history: 30d
+
+- name: Extract last successful monitoring backup time
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring recovery backup last success
+    params:
+      key: zabbix.backup.last_success
+      type: dependent_item
+      value_type: numeric_unsigned
+      history: 30d
+      trends: 365d
+      master_item:
+        host_name: "{{ inventory_hostname }}"
+        item_name: Monitoring recovery backup status
+      preprocessing:
+        - type: jsonpath
+          params: $.last_success
+          error_handler: set_custom_value
+          error_handler_params: "0"
+
+- name: Extract the monitoring backup result
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring recovery backup success
+    params:
+      key: zabbix.backup.success
+      type: dependent_item
+      value_type: numeric_unsigned
+      history: 30d
+      trends: 365d
+      master_item:
+        host_name: "{{ inventory_hostname }}"
+        item_name: Monitoring recovery backup status
+      preprocessing:
+        - type: javascript
+          params: 'return JSON.parse(value).success ? 1 : 0;'
+          error_handler: zabbix_server
+          error_handler_params: ""
+
+- name: Alert on failed or stale monitoring backups
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring recovery backup failed or stale
+    params:
+      expression: >-
+        last(/{{ inventory_hostname }}/zabbix.backup.success)=0 or
+        now()-last(/{{ inventory_hostname }}/zabbix.backup.last_success)>26h or
+        nodata(/{{ inventory_hostname }}/zabbix.backup.last_success,10m)=1
+      severity: high
+
+- name: Measure database growth per collection interval
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring database growth per interval
+    params:
+      key: pgsql.database.growth
+      type: calculated
+      value_type: numeric_float
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: B
+      params: 'last(/{{ inventory_hostname }}/pgsql.database.bytes)-last(/{{ inventory_hostname }}/pgsql.database.bytes,#2)'
+
+- name: Probe each declared DNS server from the monitoring VM
+  ansible.builtin.include_tasks: dns.yml
+  vars:
+    zabbix_dns_address: "{{ hostvars[zabbix_dns_target].ansible_host }}"
+    zabbix_dns_name: "{{ hostvars[zabbix_dns_target].network_primary_fqdn }}"
+  loop: "{{ (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_target
+
+- name: Define DNS aggregate alerts after individual probes exist
+  ansible.builtin.include_tasks: dns-pair.yml
+  loop:
+    - svc_dns_recursive
+    - svc_dns_authoritative
+  loop_control:
+    loop_var: zabbix_dns_group
+
+- name: Suppress individual DNS notifications during a complete service loss
+  ansible.builtin.include_tasks: dns-alert.yml
+  loop: "{{ (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_target
+
+- name: Configure notification links
+  community.zabbix.zabbix_globalmacro:
+    macro_name: ZABBIX.URL
+    macro_value: "https://{{ zabbix_frontend_name }}"
+
+- name: Prepare a read-only notification group
+  community.zabbix.zabbix_usergroup:
+    name: Provisioning notifications
+    gui_access: disable
+    hostgroup_rights:
+      - host_group: Provisioning
+        permission: read-only
+
+- name: Configure the Discord recipient with the packaged official media type
+  community.zabbix.zabbix_user:
+    username: provisioning-notifications
+    usrgrps: [Provisioning notifications]
+    role_name: User role
+    # The recipient cannot log into the frontend. Only creation sets this password.
+    passwd: "{{ lookup('ansible.builtin.password', '/dev/null', length=64) }}"
+    override_passwd: false
+    user_medias:
+      - mediatype: Discord
+        sendto: "{{ zabbix_discord_webhook }}"
+        severity:
+          not_classified: false
+          information: false
+          warning: true
+          average: true
+          high: true
+          disaster: true
+  no_log: true
+
+- name: Notify once for problems and once for their recovery
+  community.zabbix.zabbix_action:
+    name: Provisioning Discord problems and recovery
+    event_source: trigger
+    status: enabled
+    esc_period: 1h
+    pause_in_maintenance: true
+    conditions:
+      - type: host_group
+        operator: '='
+        value: Provisioning
+      - type: trigger_severity
+        operator: '>='
+        value: warning
+    eval_type: and
+    operations:
+      - type: send_message
+        send_to_users: [provisioning-notifications]
+        media_type: Discord
+        esc_step_from: 1
+        esc_step_to: 1
+    recovery_operations:
+      - type: notify_all_involved
+
+- name: Disable the package's demonstration host without deleting history
+  community.zabbix.zabbix_host:
+    host_name: Zabbix server
+    status: disabled
+    state: present
+    force: false
+
+- name: Prepare the restricted host synchronization identity
+  ansible.builtin.import_tasks: identity.yml

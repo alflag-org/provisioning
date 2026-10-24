@@ -4,6 +4,11 @@ server:
 {% for address in dns_authoritative_listen_addresses | unique %}
   ip-address: {{ address }}
 {% endfor %}
+{% if dns_authoritative_control_enabled %}
+remote-control:
+  control-enable: yes
+  control-interface: "{{ dns_authoritative_control_socket }}"
+{% endif %}
 
 {% for zone in dns_authoritative_prepared_zones %}
 zone:

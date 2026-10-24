@@ -1,0 +1,20 @@
+---
+- name: Synchronize monitoring hosts with a restricted API token
+  hosts: svc_zabbix_server
+  gather_facts: false
+  become: false
+  connection: ansible.netcommon.httpapi
+  vars:
+    ansible_network_os: community.zabbix.zabbix
+    ansible_zabbix_auth_key: "{{ zabbix_api_token }}"
+    ansible_httpapi_port: 443
+    ansible_httpapi_use_ssl: true
+    ansible_httpapi_validate_certs: true
+    ansible_httpapi_ca_path: "{{ zabbix_api_ca_path | default(none, true) }}"
+    ansible_zabbix_url_path: ""
+    zabbix_agent_psks: "{{ zabbix_agent_psks_json | from_json }}"
+  tasks:
+    - name: Apply inventory assignments without granting administration rights
+      ansible.builtin.include_role:
+        name: services/zabbix_api  # noqa role-name[path]
+        tasks_from: hosts.yml

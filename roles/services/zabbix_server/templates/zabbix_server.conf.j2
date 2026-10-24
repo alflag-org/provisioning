@@ -1,0 +1,17 @@
+LogType=system
+PidFile=/run/zabbix/zabbix_server.pid
+SocketDir=/run/zabbix
+ListenIP=127.0.0.1,{{ ansible_host }}
+FrontendAllowedIP=127.0.0.1
+DBHost=127.0.0.1
+DBName={{ zabbix_database }}
+DBUser=zabbix
+DBPassword={{ zabbix_db_password }}
+HousekeepingFrequency=1
+StatsAllowedIP=127.0.0.1
+StartVMwareCollectors=0
+StartIPMIPollers=0
+StartJavaPollers=0
+StartSNMPTrapper=0
+StartConnectors=0
+StartReportWriters=0

@@ -1,0 +1,60 @@
+---
+- name: Collect cumulative DNS statistics without resetting counters
+  community.zabbix.zabbix_item:
+    host_name: "{{ zabbix_target }}"
+    name: DNS cumulative statistics
+    params:
+      key: dns.statistics
+      type: zabbix_agent_active
+      value_type: text
+      interval: 60s
+      history: 30d
+      preprocessing:
+        - type: javascript
+          params: |
+            var result = {}, lines = value.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var separator = lines[i].indexOf('=');
+                if (separator > 0) {
+                    result[lines[i].slice(0, separator)] = Number(lines[i].slice(separator + 1));
+                }
+            }
+            if (Object.keys(result).length === 0) { throw 'No DNS statistics'; }
+            return JSON.stringify(result);
+          error_handler: zabbix_server
+          error_handler_params: ""
+
+- name: Extract DNS query and error rates
+  community.zabbix.zabbix_item:
+    host_name: "{{ zabbix_target }}"
+    name: "DNS {{ item.name }} per second"
+    params:
+      key: "dns.rate[{{ item.name }}]"
+      type: dependent_item
+      value_type: numeric_float
+      history: 30d
+      trends: 365d
+      units: qps
+      master_item:
+        host_name: "{{ zabbix_target }}"
+        item_name: DNS cumulative statistics
+      preprocessing:
+        - type: jsonpath
+          params: '$["{{ item.counter }}"]'
+          # Rcode counters may be omitted until the first corresponding answer.
+          error_handler: "{{ 'set_custom_value' if item.optional | default(false) else 'zabbix_server' }}"
+          error_handler_params: "{{ '0' if item.optional | default(false) else '' }}"
+        - type: change_per_second
+          params: ""
+          error_handler: zabbix_server
+          error_handler_params: ""
+  loop: >-
+    {{ [{'name': 'queries', 'counter': 'total.num.queries'},
+        {'name': 'cache_hits', 'counter': 'total.num.cachehits'},
+        {'name': 'cache_misses', 'counter': 'total.num.cachemiss'},
+        {'name': 'SERVFAIL', 'counter': 'num.answer.rcode.SERVFAIL', 'optional': true},
+        {'name': 'NXDOMAIN', 'counter': 'num.answer.rcode.NXDOMAIN', 'optional': true}]
+       if hostvars[zabbix_target].zabbix_dns_statistics == 'unbound' else
+       [{'name': 'queries', 'counter': 'num.queries'},
+        {'name': 'SERVFAIL', 'counter': 'num.rcode.SERVFAIL', 'optional': true},
+        {'name': 'NXDOMAIN', 'counter': 'num.rcode.NXDOMAIN', 'optional': true}] }}

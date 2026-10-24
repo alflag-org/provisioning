@@ -1,0 +1,3 @@
+---
+required_secrets:
+  zabbix_agent_psks_json: zabbix.agent.psks

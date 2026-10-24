@@ -1,0 +1,44 @@
+---
+- name: Require a secret macro for the Proxmox credential
+  ansible.builtin.assert:
+    that:
+      - >-
+        hostvars[zabbix_target].zabbix_monitor_macros
+        | selectattr('macro', 'equalto', '{$PVE.TOKEN.SECRET}')
+        | selectattr('type', 'equalto', 'secret') | list | length == 1
+  when: "'Proxmox VE by HTTP' in hostvars[zabbix_target].zabbix_monitor_templates"
+  no_log: true
+
+- name: Require encrypted SNMPv3 with macro references for secret fields
+  ansible.builtin.assert:
+    that:
+      - item.details.version | int == 3
+      - item.details.securitylevel | int == 2
+      - item.details.authpassphrase is match('^\{\$[^}]+\}$')
+      - item.details.privpassphrase is match('^\{\$[^}]+\}$')
+      - >-
+        hostvars[zabbix_target].zabbix_monitor_macros
+        | selectattr('macro', 'equalto', item.details.authpassphrase)
+        | selectattr('type', 'equalto', 'secret') | list | length == 1
+      - >-
+        hostvars[zabbix_target].zabbix_monitor_macros
+        | selectattr('macro', 'equalto', item.details.privpassphrase)
+        | selectattr('type', 'equalto', 'secret') | list | length == 1
+  loop: "{{ hostvars[zabbix_target].zabbix_monitor_interfaces | default([]) }}"
+  when: item.type | string in ['2', 'snmp']
+  no_log: true
+
+- name: Register explicitly declared remote targets
+  community.zabbix.zabbix_host:
+    host_name: "{{ zabbix_target }}"
+    host_groups: [Provisioning]
+    link_templates: "{{ hostvars[zabbix_target].zabbix_monitor_templates }}"
+    interfaces: "{{ hostvars[zabbix_target].zabbix_monitor_interfaces | default([]) }}"
+    macros: "{{ hostvars[zabbix_target].zabbix_monitor_macros | default([]) }}"
+    tags:
+      - tag: managed-by
+        value: provisioning
+      - tag: role
+        value: "{{ hostvars[zabbix_target].zabbix_monitor_role }}"
+    state: present
+  no_log: true

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily monitoring database backup
+
+[Timer]
+OnCalendar={{ zabbix_backup_schedule }}
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

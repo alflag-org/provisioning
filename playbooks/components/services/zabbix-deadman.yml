@@ -1,0 +1,6 @@
+---
+- name: Configure an explicitly chosen independent monitoring heartbeat
+  hosts: svc_zabbix_server
+  gather_facts: false
+  roles:
+    - role: services/zabbix_deadman  # noqa role-name[path]
