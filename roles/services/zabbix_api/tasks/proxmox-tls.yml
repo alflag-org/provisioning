@@ -1,0 +1,19 @@
+---
+- name: Read the packaged Proxmox template including nested discovery prototypes
+  community.zabbix.zabbix_template_info:
+    template_name: Proxmox VE by HTTP
+    format: json
+  register: zabbix_api_proxmox_template
+  no_log: true
+
+- name: Require peer verification before enrolling any Proxmox token
+  community.zabbix.zabbix_configuration:
+    content_json: "{{ zabbix_api_proxmox_template.template_json | zabbix_verify_http_tls | to_json }}"
+    rules:
+      templates:
+        updateExisting: true
+      items:
+        updateExisting: true
+      discoveryRules:
+        updateExisting: true
+  no_log: true

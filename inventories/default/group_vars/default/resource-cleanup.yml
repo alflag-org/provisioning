@@ -1,17 +1,22 @@
 ---
 # Explicit retired resources, applied to every managed host. Add future removals
 # here; use group/host variables for resources with narrower ownership.
-resource_cleanup_services:
+resource_cleanup_services: "{{ [] if zabbix_managed | default(false) else zabbix_retired_services }}"
+zabbix_retired_services:
   - zabbix-agent.service
   - zabbix-agent2.service
-resource_cleanup_packages:
+resource_cleanup_packages: "{{ [] if zabbix_managed | default(false) else zabbix_retired_packages }}"
+zabbix_retired_packages:
   - zabbix-agent
   - zabbix-agent2
   - zabbix-agent2-plugin-*
   - zabbix-release
 resource_cleanup_task_files:
   - mysql-backup.yml
-resource_cleanup_paths:
+resource_cleanup_paths: >-
+  {{ ['/usr/local/libexec/mysql-platform-status']
+     + ([] if zabbix_managed | default(false) else zabbix_retired_paths) }}
+zabbix_retired_paths:
   - /etc/zabbix
   - /var/log/zabbix
   - /var/lib/zabbix
@@ -21,8 +26,5 @@ resource_cleanup_paths:
   - /etc/apt/preferences.d/zabbix-7.0
   - /etc/apt/keyrings/zabbix-7.0.asc
   - /etc/apt/keyrings/zabbix-7.0.gpg
-  - /usr/local/libexec/mysql-platform-status
-resource_cleanup_users:
-  - zabbix
-resource_cleanup_groups:
-  - zabbix
+resource_cleanup_users: "{{ [] if zabbix_managed | default(false) else ['zabbix'] }}"
+resource_cleanup_groups: "{{ [] if zabbix_managed | default(false) else ['zabbix'] }}"

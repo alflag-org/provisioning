@@ -1,0 +1,66 @@
+---
+- name: Permit only host synchronization API methods
+  community.zabbix.zabbix_user_role:
+    name: Provisioning host synchronization
+    type: Admin
+    rules:
+      ui.default_access: 0
+      modules.default_access: 0
+      actions.default_access: 0
+      api.access: 1
+      api.mode: 1
+      api:
+        - host.get
+        - host.create
+        - host.update
+        - hostgroup.get
+        - hostinterface.get
+        - template.get
+        - usermacro.get
+        - usermacro.create
+        - usermacro.update
+        - item.get
+        - item.create
+        - item.update
+        - trigger.get
+        - trigger.create
+        - trigger.update
+  # This collection module does not support check mode.
+  when: not ansible_check_mode
+
+- name: Restrict synchronization to the managed host group
+  community.zabbix.zabbix_usergroup:
+    name: Provisioning synchronization
+    gui_access: disable
+    hostgroup_rights:
+      - host_group: Provisioning
+        permission: read-write
+    templategroup_rights:
+      - template_group: Templates/Operating systems
+        permission: read-only
+      - template_group: Templates/Applications
+        permission: read-only
+      - template_group: Templates/Databases
+        permission: read-only
+      - template_group: Templates/Network devices
+        permission: read-only
+
+- name: Create a dedicated API identity with no usable frontend password
+  community.zabbix.zabbix_user:
+    username: provisioning-sync
+    role_name: Provisioning host synchronization
+    usrgrps: [Provisioning synchronization]
+    passwd: "{{ lookup('ansible.builtin.password', '/dev/null', length=64) }}"
+    override_passwd: false
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Declare the restricted token without generating or exposing a key
+  community.zabbix.zabbix_token:
+    name: Provisioning host synchronization
+    username: provisioning-sync
+    description: Inventory host synchronization; no host deletion or administration methods.
+    # Leave an operator's token revocation intact on subsequent runs.
+    generate_token: false
+  no_log: true
+  when: not ansible_check_mode

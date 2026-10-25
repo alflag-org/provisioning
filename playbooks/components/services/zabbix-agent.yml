@@ -1,0 +1,9 @@
+---
+- name: Converge explicitly enrolled monitoring agents in small batches
+  hosts: svc_zabbix_agent
+  serial: 1
+  gather_facts: true
+  vars:
+    zabbix_agent_psks: "{{ zabbix_agent_psks_json | from_json }}"
+  roles:
+    - role: services/zabbix_agent  # noqa role-name[path]

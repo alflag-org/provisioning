@@ -1,0 +1,19 @@
+---
+zabbix_managed: true
+zabbix_postgresql_version: "18"
+zabbix_php_version: "8.5"
+zabbix_monitor_services:
+  - zabbix-server.service
+  - "postgresql@{{ zabbix_postgresql_version }}-main.service"
+  - "php{{ zabbix_php_version }}-fpm.service"
+  - nginx.service
+zabbix_frontend_name: monitor.access.internal
+zabbix_frontend_language: ja_JP
+zabbix_frontend_locale: ja_JP.UTF-8
+network_service_aliases:
+  - "{{ zabbix_frontend_name }}"
+zabbix_frontend_allow:
+  - "{{ network_zones.mgmt.cidr }}"
+  - "{{ network_zones.infra.cidr }}"
+zabbix_history: 30d
+zabbix_trends: 365d

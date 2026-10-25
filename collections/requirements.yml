@@ -6,3 +6,9 @@ collections:
     version: ">=11.0.0"
   - name: ansible.posix
     version: ">=2.1.0"
+  - name: community.postgresql
+    version: "5.1.0"
+  - name: community.zabbix
+    version: "4.2.0"
+  - name: ansible.netcommon
+    version: "8.7.1"

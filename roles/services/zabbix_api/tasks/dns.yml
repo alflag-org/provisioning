@@ -1,0 +1,45 @@
+---
+- name: Probe DNS availability independently of the target agent
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_target }} query success"
+    params:
+      key: "net.dns[{{ hostvars[zabbix_dns_target].ansible_host }},{{ hostvars[zabbix_dns_target].network_primary_fqdn }},A,2,1]"
+      type: zabbix_agent_active
+      value_type: numeric_unsigned
+      interval: 30s
+      history: 30d
+      trends: 365d
+
+- name: Measure DNS response time from the monitoring VM
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_target }} response time"
+    params:
+      key: "net.dns.perf[{{ hostvars[zabbix_dns_target].ansible_host }},{{ hostvars[zabbix_dns_target].network_primary_fqdn }},A,2,1]"
+      type: zabbix_agent_active
+      value_type: numeric_float
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: s
+
+- name: Validate the inventory-declared DNS record
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_target }} record contents"
+    params:
+      key: "net.dns.record[{{ hostvars[zabbix_dns_target].ansible_host }},{{ hostvars[zabbix_dns_target].network_primary_fqdn }},A,2,1]"
+      type: zabbix_agent_active
+      value_type: text
+      interval: 60s
+      history: 30d
+
+- name: Alert when a DNS record differs from inventory
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_target }} record differs from inventory"
+    params:
+      expression: >-
+        find(/{{ inventory_hostname }}/net.dns.record[{{ zabbix_dns_address }},{{ zabbix_dns_name }},A,2,1],,"like","{{ zabbix_dns_address }}")=0
+      severity: high

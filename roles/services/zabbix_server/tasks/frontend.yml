@@ -1,0 +1,167 @@
+---
+- name: Generate the frontend UTF-8 locale
+  community.general.locale_gen:
+    name: "{{ zabbix_frontend_locale }}"
+    state: present
+  when: not ansible_check_mode or 'locales' in ansible_facts.packages
+  notify: Restart monitoring PHP
+
+- name: Select a graph font with Japanese glyphs
+  community.general.alternatives:
+    name: zabbix-frontend-font
+    link: /usr/share/zabbix/ui/assets/fonts/graphfont.ttf
+    path: /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf
+    priority: 20
+    state: selected
+  when: not ansible_check_mode or 'fonts-ipafont-gothic' in ansible_facts.packages
+
+- name: Create private frontend configuration directory
+  ansible.builtin.file:
+    path: /etc/zabbix/web
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0750"
+
+- name: Configure Zabbix server
+  ansible.builtin.template:
+    src: zabbix_server.conf.j2
+    dest: /etc/zabbix/zabbix_server.conf
+    owner: root
+    group: zabbix
+    mode: "0640"
+  no_log: true
+  diff: false
+  register: zabbix_server_configuration
+
+- name: Configure PHP frontend
+  ansible.builtin.template:
+    src: zabbix.conf.php.j2
+    dest: /etc/zabbix/web/zabbix.conf.php
+    owner: root
+    group: www-data
+    mode: "0640"
+    validate: /usr/bin/php -l %s
+  no_log: true
+  diff: false
+  notify: Restart monitoring PHP
+
+- name: Configure PHP resource requirements
+  ansible.builtin.copy:
+    dest: "/etc/php/{{ zabbix_php_version }}/fpm/conf.d/99-zabbix.ini"
+    content: |
+      memory_limit = 256M
+      post_max_size = 16M
+      upload_max_filesize = 16M
+      max_execution_time = 300
+      max_input_time = 300
+      date.timezone = Asia/Tokyo
+      expose_php = Off
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring PHP
+
+- name: Enable PHP
+  ansible.builtin.systemd_service:
+    name: "php{{ zabbix_php_version }}-fpm"
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Prepare nginx base configuration
+  ansible.builtin.import_role:
+    name: components/nginx  # noqa role-name[path]
+    public: true
+
+- name: Install the local API endpoint before exposing a fresh database
+  ansible.builtin.template:
+    src: bootstrap-nginx.conf.j2
+    dest: /etc/nginx/conf.d/zabbix-bootstrap.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: nginx configuration changed
+
+- name: Activate local endpoint before initial administrator setup
+  ansible.builtin.meta: flush_handlers
+
+- name: Replace default credentials through the local API
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema_import is changed
+  no_log: true
+  block:
+    - name: Authenticate the newly imported administrator
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/api_jsonrpc.php
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: 1
+          method: user.login
+          params:
+            username: Admin
+            password: zabbix
+      register: zabbix_server_bootstrap_login
+      failed_when: zabbix_server_bootstrap_login.json.result is not defined
+
+    - name: Set the provider-managed administrator password
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/api_jsonrpc.php
+        method: POST
+        headers:
+          Authorization: "Bearer {{ zabbix_server_bootstrap_login.json.result }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: 2
+          method: user.update
+          params:
+            userid: "1"
+            current_passwd: zabbix
+            passwd: "{{ zabbix_admin_password }}"
+      register: zabbix_server_bootstrap_password
+      failed_when: zabbix_server_bootstrap_password.json.result is not defined
+      changed_when: true
+
+- name: Verify the managed administrator before publishing the frontend
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8080/api_jsonrpc.php
+    method: POST
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      id: 3
+      method: user.login
+      params:
+        username: Admin
+        password: "{{ zabbix_admin_password }}"
+  register: zabbix_server_admin_login
+  no_log: true
+  failed_when: zabbix_server_admin_login.json.result is not defined
+  when: not ansible_check_mode
+
+- name: Close administrator verification session
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8080/api_jsonrpc.php
+    method: POST
+    headers:
+      Authorization: "Bearer {{ zabbix_server_admin_login.json.result }}"
+    body_format: json
+    body: {jsonrpc: "2.0", id: 4, method: user.logout, params: []}
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Install private HTTP frontend after credential verification
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/conf.d/zabbix.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: nginx configuration changed
+
+- name: Validate and activate private HTTP frontend
+  ansible.builtin.meta: flush_handlers

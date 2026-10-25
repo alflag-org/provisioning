@@ -1,0 +1,66 @@
+---
+- name: Require the verified RC2 package platform
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version in zabbix_package_versions
+      - ansible_facts.architecture == 'x86_64'
+    fail_msg: RC2 packages were verified for Ubuntu 24.04 and 26.04 amd64; do not substitute versions.
+
+- name: Create apt keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the Zabbix repository signing key
+  ansible.builtin.get_url:
+    url: "{{ zabbix_repository_key_url }}"
+    checksum: sha256:99780bf6013838c95a7f42405ab5c29ba2f7baf6085ff56f0f0fca2fa002be30
+    dest: /etc/apt/keyrings/zabbix-8.0.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure the official RC repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/zabbix-8.0.sources
+    content: |
+      Types: deb
+      URIs: {{ zabbix_repository_url }}
+      Suites: {{ ansible_facts.distribution_release }}
+      Components: main
+      Architectures: amd64
+      Signed-By: /etc/apt/keyrings/zabbix-8.0.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: zabbix_repository_source
+
+- name: Reject every Zabbix package version except the declared RC
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/zabbix-8.0
+    content: |
+      Package: zabbix-*
+      Pin: version {{ zabbix_package_version }}
+      Pin-Priority: 1000
+
+      Package: zabbix-*
+      Pin: version *
+      Pin-Priority: -1
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Inspect package metadata prerequisite in check mode
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/zabbix-8.0.sources
+  register: zabbix_repository_existing
+
+- name: Refresh repository metadata
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ 0 if zabbix_repository_source.changed else apt_cache_valid_time | default(86400) }}"
+  when: not ansible_check_mode or zabbix_repository_existing.stat.exists

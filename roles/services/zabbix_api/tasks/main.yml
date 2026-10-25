@@ -1,0 +1,145 @@
+---
+- name: Require the intended monitoring endpoint
+  ansible.builtin.assert:
+    that:
+      - groups['svc_zabbix_server'] == ['monitor01']
+      - groups['svc_zabbix_agent'] | length > 0
+      - inventory_hostname in groups['svc_zabbix_agent']
+  no_log: true
+
+- name: Read API identity
+  community.zabbix.zabbix_api_info:
+  register: zabbix_api_identity
+  check_mode: false
+
+- name: Require the API protocol shipped with RC2
+  ansible.builtin.assert:
+    that:
+      - zabbix_api_identity.api.version == '8.0.0'
+
+- name: Configure the default frontend language
+  community.zabbix.zabbix_settings:
+    default_lang: "{{ zabbix_frontend_language }}"
+
+- name: Configure history and trend retention
+  community.zabbix.zabbix_housekeeping:
+    hk_history_mode: true
+    hk_history_global: true
+    hk_history: "{{ zabbix_history }}"
+    hk_trends_mode: true
+    hk_trends_global: true
+    hk_trends: "{{ zabbix_trends }}"
+    hk_events_mode: true
+    hk_events_trigger: 365d
+
+- name: Create the inventory-managed host group
+  community.zabbix.zabbix_group:
+    host_groups: [Provisioning]
+    state: present
+
+- name: Create the reusable active-check supplement
+  community.zabbix.zabbix_template:
+    template_name: Provisioning Linux services
+    template_groups: [Templates/Operating systems]
+    state: present
+
+- name: Collect Linux pressure without executing commands
+  community.zabbix.zabbix_item:
+    template_name: Provisioning Linux services
+    name: "{{ item | upper }} pressure, some avg10"
+    params:
+      key: "vfs.file.contents[/proc/pressure/{{ item }}]"
+      type: zabbix_agent_active
+      value_type: numeric_float
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: "%"
+      preprocessing:
+        - type: regular_expressions
+          params: "some avg10=([0-9.]+)\n\\1"
+          error_handler: zabbix_server
+          error_handler_params: ""
+  loop: [cpu, memory, io]
+
+- name: Secure the packaged Proxmox HTTP template
+  ansible.builtin.import_tasks: proxmox-tls.yml
+
+- name: Synchronize inventory-managed monitoring targets
+  ansible.builtin.import_tasks: hosts.yml
+
+- name: Disable packaged metrics for explicitly unused server features
+  community.zabbix.zabbix_item:
+    template_name: Zabbix server health
+    name: "{{ item }}"
+    params:
+      status: disabled
+  loop: "{{ zabbix_api_unused_server_items }}"
+
+- name: Disable associated optional-feature triggers
+  community.zabbix.zabbix_trigger:
+    template_name: Zabbix server health
+    name: "{{ item }}"
+    params:
+      status: disabled
+  loop: "{{ zabbix_api_unused_server_triggers }}"
+
+- name: Collect the actual monitoring database size
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring database size
+    params:
+      key: pgsql.database.bytes
+      type: zabbix_agent_active
+      value_type: numeric_unsigned
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: B
+
+- name: Measure database growth per collection interval
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: Monitoring database growth per interval
+    params:
+      key: pgsql.database.growth
+      type: calculated
+      value_type: numeric_float
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: B
+      params: 'last(/{{ inventory_hostname }}/pgsql.database.bytes)-last(/{{ inventory_hostname }}/pgsql.database.bytes,#2)'
+
+- name: Probe each declared DNS server from the monitoring VM
+  ansible.builtin.include_tasks: dns.yml
+  vars:
+    zabbix_dns_address: "{{ hostvars[zabbix_dns_target].ansible_host }}"
+    zabbix_dns_name: "{{ hostvars[zabbix_dns_target].network_primary_fqdn }}"
+  loop: "{{ (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_target
+
+- name: Define DNS aggregate alerts after individual probes exist
+  ansible.builtin.include_tasks: dns-pair.yml
+  loop:
+    - svc_dns_recursive
+    - svc_dns_authoritative
+  loop_control:
+    loop_var: zabbix_dns_group
+
+- name: Suppress individual DNS notifications during a complete service loss
+  ansible.builtin.include_tasks: dns-alert.yml
+  loop: "{{ (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_target
+
+- name: Disable the package's demonstration host without deleting history
+  community.zabbix.zabbix_host:
+    host_name: Zabbix server
+    status: disabled
+    state: present
+    force: false
+
+- name: Prepare the restricted host synchronization identity
+  ansible.builtin.import_tasks: identity.yml

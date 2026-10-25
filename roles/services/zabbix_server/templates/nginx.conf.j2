@@ -1,0 +1,22 @@
+server {
+    listen {{ ansible_host }}:80;
+    server_name {{ zabbix_frontend_name }};
+{% for cidr in zabbix_frontend_allow %}
+    allow {{ cidr }};
+{% endfor %}
+    deny all;
+    root /usr/share/zabbix/ui;
+    index index.php;
+    client_max_body_size 16m;
+    location / { try_files $uri $uri/ =404; }
+    location ~ /(?:conf|include|locale|vendor)/ { deny all; }
+    location ~ /\. { deny all; }
+    location ~ \.php$ {
+        try_files $uri =404;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTP_AUTHORIZATION $http_authorization;
+        fastcgi_pass unix:/run/php/php{{ zabbix_php_version }}-fpm.sock;
+        fastcgi_read_timeout 300;
+    }
+}

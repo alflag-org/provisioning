@@ -1,0 +1,26 @@
+---
+# These features are explicitly disabled in the server configuration. Keep their
+# packaged metrics and triggers disabled rather than starting unused workers.
+zabbix_api_unused_server_items:
+  - Utilization of vmware collector data collector processes, in %
+  - Utilization of ipmi poller data collector processes, in %
+  - Utilization of java poller data collector processes, in %
+  - Utilization of snmp trapper data collector processes, in %
+  - VMware cache, % used
+  - Utilization of ipmi manager internal processes, in %
+  - Connector queue
+  - Utilization of connector manager internal processes, in %
+  - Utilization of connector worker internal processes, in %
+  - Utilization of report writer internal processes, in %
+  - Utilization of report manager internal processes, in %
+zabbix_api_unused_server_triggers:
+  - "Zabbix server: Utilization of ipmi poller processes is high"
+  - "Zabbix server: Utilization of vmware collector processes is high"
+  - "Zabbix server: Utilization of java poller processes is high"
+  - "Zabbix server: Utilization of snmp trapper processes is high"
+  - "Zabbix server: Excessive vmware cache usage"
+  - "Zabbix server: Utilization of ipmi manager processes is high"
+  - "Zabbix server: Utilization of report manager processes is high"
+  - "Zabbix server: Utilization of report writer processes is high"
+  - "Zabbix server: Utilization of connector manager processes is high"
+  - "Zabbix server: Utilization of connector worker processes is high"

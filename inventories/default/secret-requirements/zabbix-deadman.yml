@@ -1,0 +1,3 @@
+---
+required_secrets:
+  zabbix_deadman_url: zabbix.deadman.url

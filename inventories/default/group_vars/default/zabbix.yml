@@ -1,0 +1,21 @@
+---
+zabbix_dns_statistics: >-
+  {{ 'unbound' if inventory_hostname in groups['svc_dns_recursive'] and
+       dns_recursor_control_enabled | default(false) else
+     ('nsd' if inventory_hostname in groups['svc_dns_authoritative'] and
+       dns_authoritative_control_enabled | default(false) else '') }}
+# These declarations select checks only after explicit agent enrollment.
+zabbix_service_units_by_group:
+  svc_dns_recursive: [unbound.service]
+  svc_dns_authoritative: [nsd.service]
+  svc_connector: [cloudflared.service]
+  svc_mysql: [mysql.service]
+  svc_gameap_panel: [gameap.service]
+  svc_gameap_daemon: [gameap-daemon.service]
+zabbix_monitor_services: >-
+  {{ (zabbix_service_units_by_group | dict2items | selectattr('key', 'in', group_names)
+      | map(attribute='value') | flatten)
+     + (application_services | default([])
+        | map('regex_replace', '^(.*)$', 'application@\1.service') | list)
+     + (services_github_runner_instances | default([]) | map(attribute='id')
+        | map('regex_replace', '^(.*)$', 'github-runner-\1.service') | list) }}

@@ -1,0 +1,3 @@
+---
+required_secrets:
+  zabbix_mysql_password: zabbix.mysql.password

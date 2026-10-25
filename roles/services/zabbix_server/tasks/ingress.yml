@@ -1,0 +1,78 @@
+---
+- name: Configure an owned ingress table without altering other firewall rules
+  ansible.builtin.template:
+    src: ingress.nft.j2
+    dest: /etc/zabbix/ingress.nft
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/nft --check --file %s
+  notify: Apply Zabbix ingress
+
+- name: Install monitoring ingress service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zabbix-ingress.service
+    content: |
+      [Unit]
+      Description=Zabbix enrolled-agent ingress
+      Before=zabbix-server.service
+      After=network.target nftables.service
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/nft --file /etc/zabbix/ingress.nft
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply Zabbix ingress
+
+- name: Require ingress before starting the monitoring listener
+  ansible.builtin.file:
+    path: /etc/systemd/system/zabbix-server.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Tie monitoring listener lifetime to ingress preparation
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zabbix-server.service.d/ingress.conf
+    content: |
+      [Unit]
+      Requires=zabbix-ingress.service
+      After=zabbix-ingress.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: zabbix_server_ingress_dependency
+
+- name: Apply pending ingress configuration before starting the server
+  ansible.builtin.meta: flush_handlers
+
+- name: Inspect the owned ingress table after configuration
+  ansible.builtin.command:
+    argv: [/usr/sbin/nft, list, table, inet, zabbix_monitoring]
+  environment:
+    LC_ALL: C
+  register: zabbix_server_ingress_table
+  changed_when: false
+  failed_when: zabbix_server_ingress_table.rc != 0 and 'No such file or directory' not in zabbix_server_ingress_table.stderr
+  check_mode: false
+
+- name: Report missing live ingress in check mode
+  ansible.builtin.debug:
+    msg: The owned Zabbix ingress table would be restored during apply.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - zabbix_server_ingress_table.rc != 0
+
+- name: Enable monitoring ingress and restore a missing table
+  ansible.builtin.systemd_service:
+    name: zabbix-ingress
+    enabled: true
+    state: "{{ 'restarted' if zabbix_server_ingress_table.rc != 0 else 'started' }}"
+    daemon_reload: true
+  when: not ansible_check_mode

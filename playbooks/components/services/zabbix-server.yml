@@ -1,0 +1,15 @@
+---
+- name: Converge the explicitly selected monitoring server
+  hosts: svc_zabbix_server
+  gather_facts: true
+  pre_tasks:
+    - name: Require one dedicated monitor VM
+      ansible.builtin.assert:
+        that:
+          - groups['svc_zabbix_server'] == ['monitor01']
+          - inventory_hostname in groups['mgmt']
+          - inventory_hostname in groups['platform_vm']
+          - inventory_hostname in groups['provider_proxmox']
+        fail_msg: Create monitor01 and verify its MGMT address before enrollment.
+  roles:
+    - role: services/zabbix_server  # noqa role-name[path]

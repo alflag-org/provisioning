@@ -1,0 +1,17 @@
+---
+zabbix_server_packages:
+  - zabbix-server-pgsql
+  - zabbix-frontend-php
+  - zabbix-sql-scripts
+  - zabbix-agent2
+zabbix_database: zabbix
+zabbix_server_platform: "{{ zabbix_server_platforms[ansible_facts.distribution_version] }}"
+zabbix_postgresql_version: "{{ zabbix_server_platform.postgresql }}"
+zabbix_php_version: "{{ zabbix_server_platform.php }}"
+zabbix_server_platforms:
+  "24.04":
+    postgresql: "16"
+    php: "8.3"
+  "26.04":
+    postgresql: "18"
+    php: "8.5"

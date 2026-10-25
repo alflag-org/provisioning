@@ -1,0 +1,109 @@
+---
+- name: Keep the dedicated database on loopback
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ zabbix_postgresql_version }}/main/postgresql.conf"
+    regexp: '^#?listen_addresses\s*='
+    line: "listen_addresses = '127.0.0.1'"
+  notify: Restart monitoring PostgreSQL
+
+- name: Enable PostgreSQL
+  ansible.builtin.systemd_service:
+    name: postgresql
+    state: started
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Configure the dedicated Zabbix database
+  become: true
+  become_user: postgres
+  block:
+    - name: Inspect database existence before previewing initialization
+      community.postgresql.postgresql_query:
+        login_db: postgres
+        query: >-
+          SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=%(database)s) AS present,
+          current_setting('server_version_num')::integer / 10000 AS major_version
+        named_args:
+          database: "{{ zabbix_database }}"
+      register: zabbix_server_existing_database
+      check_mode: false
+
+    - name: Refuse database changes through a different PostgreSQL major
+      ansible.builtin.assert:
+        that:
+          - zabbix_server_existing_database.query_result[0].major_version | int == zabbix_postgresql_version | int
+        fail_msg: Inspect existing PostgreSQL clusters; the default connection is not the selected major version.
+
+    - name: Create an unprivileged database owner
+      community.postgresql.postgresql_user:
+        name: zabbix
+        password: "{{ zabbix_db_password }}"
+        role_attr_flags: NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+      no_log: true
+
+    - name: Create the monitoring database
+      community.postgresql.postgresql_db:
+        name: "{{ zabbix_database }}"
+        owner: zabbix
+        encoding: UTF8
+        template: template0
+
+    - name: Inspect existing schema before initialization
+      community.postgresql.postgresql_query:
+        login_db: "{{ zabbix_database }}"
+        query: >-
+          SELECT count(*) AS tables, count(*) FILTER (WHERE tablename='dbversion') AS version_tables
+          FROM pg_tables WHERE schemaname='public'
+      register: zabbix_server_schema
+      check_mode: false
+      when: not ansible_check_mode or zabbix_server_existing_database.query_result[0].present
+
+    - name: Refuse partial or unrelated database initialization
+      ansible.builtin.assert:
+        that:
+          - zabbix_server_schema.query_result[0].tables == 0 or zabbix_server_schema.query_result[0].version_tables == 1
+        fail_msg: Inspect partial database initialization; it will not be overwritten.
+      when: zabbix_server_schema.query_result is defined
+
+- name: Import the initial schema atomically as its owner
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      gzip -dc /usr/share/zabbix/sql-scripts/postgresql/server.sql.gz |
+      psql --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction --dbname={{ zabbix_database }}
+    executable: /bin/bash
+  become: true
+  become_user: zabbix
+  changed_when: true
+  register: zabbix_server_schema_import
+  when:
+    - not ansible_check_mode
+    - zabbix_server_schema.query_result[0].tables == 0
+
+- name: Inspect schema identity before starting the server
+  community.postgresql.postgresql_query:
+    login_db: "{{ zabbix_database }}"
+    query: SELECT mandatory, optional FROM dbversion
+  become: true
+  become_user: postgres
+  register: zabbix_server_dbversion
+  check_mode: false
+  when: >-
+    not ansible_check_mode or
+    (zabbix_server_schema.query_result is defined and zabbix_server_schema.query_result[0].version_tables == 1)
+
+- name: Require the schema shipped in the selected RC2 package
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_dbversion.query_result[0].mandatory | int == zabbix_schema_version | int
+      - zabbix_server_dbversion.query_result[0].optional | int == zabbix_schema_version | int
+    fail_msg: Schema differs from the pinned release; inspect the existing database before proceeding.
+  when: zabbix_server_dbversion.query_result is defined
+
+- name: Explain schema initialization deferred by check mode
+  ansible.builtin.debug:
+    msg: Initial schema import would run during apply after the dedicated database is available.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - zabbix_server_dbversion.query_result is not defined

@@ -1,0 +1,4 @@
+---
+required_secrets:
+  zabbix_db_password: zabbix.database.password
+  zabbix_admin_password: zabbix.admin.password

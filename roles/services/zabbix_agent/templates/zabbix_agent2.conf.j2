@@ -1,0 +1,19 @@
+LogType=system
+ServerActive={{ zabbix_agent_server }}:10051
+Hostname={{ inventory_hostname }}
+ListenIP=127.0.0.1
+TLSConnect=psk
+TLSAccept=psk
+TLSPSKIdentity={{ zabbix_agent_psk_identity }}
+TLSPSKFile=/etc/zabbix/agent2.psk
+ControlSocket=/run/zabbix/agent.sock
+Include=/etc/zabbix/zabbix_agent2.d/provisioning-*.conf
+AllowKey=systemd.unit.info[*]
+AllowKey=systemd.unit.discovery[*]
+DenyKey=system.run[*]
+{% if inventory_hostname in groups['svc_zabbix_server'] %}
+UserParameter=pgsql.database.bytes,/usr/bin/psql --no-psqlrc --dbname={{ zabbix_database | default('zabbix') }} --tuples-only --no-align --command='SELECT pg_database_size(current_database())'
+{% endif %}
+{% if zabbix_dns_statistics | default('') in ['unbound', 'nsd'] %}
+UserParameter=dns.statistics,/usr/bin/sudo -n /usr/sbin/{{ zabbix_dns_statistics }}-control -s {{ '/run/unbound.ctl' if zabbix_dns_statistics == 'unbound' else '/run/nsd/nsd.ctl' }} stats_noreset
+{% endif %}

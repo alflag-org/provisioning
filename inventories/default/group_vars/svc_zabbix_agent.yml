@@ -1,0 +1,9 @@
+---
+zabbix_managed: true
+zabbix_agent_server: "{{ hostvars[groups['svc_zabbix_server'] | first].ansible_host }}"
+zabbix_agent_psk_identity: "provisioning/{{ inventory_hostname }}"
+zabbix_agent_psk: "{{ zabbix_agent_psks[inventory_hostname] }}"
+zabbix_monitor_templates:
+  - Linux by Zabbix agent active
+  - ICMP Ping
+  - Provisioning Linux services
