@@ -1,0 +1,56 @@
+---
+- name: Monitor the declared Router service without changing its host definition
+  ansible.builtin.import_tasks: service-units.yml
+  vars:
+    zabbix_service_units: "{{ zabbix_service_units_by_group.mysql_router_clients }}"
+
+# Observe the kernel's listening sockets without initiating database handshakes.
+- name: Observe the inventory-declared Router listener ports
+  vars:
+    zabbix_mysql_router_listeners:
+      - name: read-write
+        port: "{{ hostvars[zabbix_target].mysql_router_rw_port }}"
+      - name: read-only
+        port: "{{ hostvars[zabbix_target].mysql_router_ro_port }}"
+      - name: read-write split
+        port: "{{ hostvars[zabbix_target].mysql_router_split_port }}"
+  block:
+    - name: Collect local TCP LISTEN state through the existing active agent
+      community.zabbix.zabbix_item:
+        host_name: "{{ zabbix_target }}"
+        name: "MySQL Router {{ item.name }} listener state"
+        params:
+          key: "net.tcp.listen[{{ item.port }}]"
+          type: zabbix_agent_active
+          value_type: numeric_unsigned
+          interval: 60s
+          history: 30d
+          trends: 365d
+      loop: "{{ zabbix_mysql_router_listeners }}"
+
+    - name: Alert when a Router listener remains absent
+      community.zabbix.zabbix_trigger:
+        host_name: "{{ zabbix_target }}"
+        name: "MySQL Router {{ item.name }} listener is unavailable"
+        params:
+          expression: >-
+            count(/{{ zabbix_target }}/net.tcp.listen[{{ item.port }}],3m)>=3 and
+            max(/{{ zabbix_target }}/net.tcp.listen[{{ item.port }}],3m)=0
+          severity: high
+          manual_close: false
+        dependencies:
+          - host_name: "{{ zabbix_target }}"
+            name: "Service {{ zabbix_service_units_by_group.mysql_router_clients | first }} is inactive"
+      loop: "{{ zabbix_mysql_router_listeners }}"
+
+- name: Warn once per host when Router listener collection stops
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ zabbix_target }}"
+    name: MySQL Router listener monitoring has no data
+    params:
+      expression: >-
+        nodata(/{{ zabbix_target }}/net.tcp.listen[{{ hostvars[zabbix_target].mysql_router_rw_port }}],5m)=1 or
+        nodata(/{{ zabbix_target }}/net.tcp.listen[{{ hostvars[zabbix_target].mysql_router_ro_port }}],5m)=1 or
+        nodata(/{{ zabbix_target }}/net.tcp.listen[{{ hostvars[zabbix_target].mysql_router_split_port }}],5m)=1
+      severity: warning
+      manual_close: false

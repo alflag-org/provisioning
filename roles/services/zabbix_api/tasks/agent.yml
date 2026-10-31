@@ -59,24 +59,5 @@
   ansible.builtin.include_tasks: mysql-backup.yml
   when: zabbix_target in groups.get('svc_zabbix_mysql', [])
 
-- name: Add selected service state items
-  community.zabbix.zabbix_item:
-    host_name: "{{ zabbix_target }}"
-    name: "Service {{ item }} active state"
-    params:
-      key: "systemd.unit.info[{{ item }},ActiveState]"
-      type: zabbix_agent_active
-      value_type: character
-      interval: 30s
-      history: 30d
-  loop: "{{ hostvars[zabbix_target].zabbix_monitor_services | default([]) }}"
-
-- name: Alert when a selected service remains inactive
-  community.zabbix.zabbix_trigger:
-    host_name: "{{ zabbix_target }}"
-    name: "Service {{ item }} is inactive"
-    params:
-      expression: 'count(/{{ zabbix_target }}/systemd.unit.info[{{ item }},ActiveState],2m,"ne","active")>=4'
-      severity: high
-      manual_close: false
-  loop: "{{ hostvars[zabbix_target].zabbix_monitor_services | default([]) }}"
+- name: Monitor the selected existing service units
+  ansible.builtin.import_tasks: service-units.yml

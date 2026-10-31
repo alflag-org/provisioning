@@ -130,6 +130,13 @@ counters cover queries and response codes. NSD has no recursive cache metrics.
 The implementation follows the [Unbound counters](https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound-control.html)
 and [NSD counters](https://nsd.docs.nlnetlabs.nl/en/latest/manpages/nsd-control.html).
 
+Observe existing MySQL Router clients with the
+[Router API operation](../playbooks/operations/zabbix-mysql-router.yml), its
+administrator secret declaration and the `monitor01` limit. It uses the existing
+agents to read service and kernel listening-socket state from inventory-selected
+clients. These observations preserve Router processes and configuration;
+authenticated routing requires separate SQL credential acceptance.
+
 For MySQL, enroll both ReplicaSet members as agents, then assign both to
 `svc_zabbix_mysql`. Run the dedicated `zabbix-mysql.yml` playbook with that group
 as the limit and its secret declaration. It reads live writability and replication
