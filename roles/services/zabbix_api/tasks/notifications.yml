@@ -62,3 +62,96 @@
         esc_step_to: 1
     recovery_operations:
       - type: notify_all_involved
+
+# The collection's media-type module requires a script and replaces other webhook
+# fields. Update only status so the packaged implementation remains intact.
+- name: Enable the packaged Discord media type after configuring delivery
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+    zabbix_notification_api_url: "http://{{ hostvars[inventory_hostname].ansible_host }}/api_jsonrpc.php"
+  no_log: true
+  block:
+    - name: Authenticate notification media configuration
+      ansible.builtin.uri:
+        url: "{{ zabbix_notification_api_url }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: 1
+          method: user.login
+          params:
+            username: "{{ ansible_user }}"
+            password: "{{ zabbix_admin_password }}"
+      register: zabbix_notification_login
+      failed_when: zabbix_notification_login.json.result is not defined
+      check_mode: false
+
+    - name: Read the packaged Discord media identity and state
+      ansible.builtin.uri:
+        url: "{{ zabbix_notification_api_url }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ zabbix_notification_login.json.result }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: 2
+          method: mediatype.get
+          params:
+            output: [mediatypeid, type, status]
+            filter:
+              name: Discord
+      register: zabbix_notification_media
+      failed_when: zabbix_notification_media.json.result is not defined
+      check_mode: false
+
+    - name: Require the existing official Discord webhook
+      ansible.builtin.assert:
+        that:
+          - zabbix_notification_media.json.result | length == 1
+          - zabbix_notification_media.json.result[0].type == '4'
+
+    - name: Report media activation in check mode
+      ansible.builtin.debug:
+        msg: The packaged Discord media type would be enabled.
+      changed_when: true
+      when:
+        - ansible_check_mode
+        - zabbix_notification_media.json.result[0].status != '0'
+
+    - name: Enable Discord without replacing its script or parameters
+      ansible.builtin.uri:
+        url: "{{ zabbix_notification_api_url }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ zabbix_notification_login.json.result }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: 3
+          method: mediatype.update
+          params:
+            mediatypeid: "{{ zabbix_notification_media.json.result[0].mediatypeid }}"
+            status: "0"
+      register: zabbix_notification_media_update
+      failed_when: zabbix_notification_media_update.json.result is not defined
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - zabbix_notification_media.json.result[0].status != '0'
+  always:
+    - name: Close the notification media configuration session
+      ansible.builtin.uri:
+        url: "{{ zabbix_notification_api_url }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ zabbix_notification_login.json.result }}"
+        body_format: json
+        body: {jsonrpc: "2.0", id: 4, method: user.logout, params: []}
+      register: zabbix_notification_logout
+      failed_when: zabbix_notification_logout.json.result is not defined
+      check_mode: false
+      when: zabbix_notification_login.json.result is defined
