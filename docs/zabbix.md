@@ -121,10 +121,15 @@ the DNS hosts' agents. Separate triggers distinguish one failed peer from a
 complete recursive or authoritative service failure. Complete failure suppresses
 the corresponding individual notifications.
 
-For DNS counters, explicitly enable the owning DNS role's local control socket
-in inventory and converge that DNS host first. Recursive DNS additionally
-enables extended cumulative statistics. Enroll its agent afterwards. The agent
-gets permission only for `stats_noreset`, not other DNS administration commands.
+For DNS counters on already enrolled agents, use the dedicated
+[DNS monitoring component](../playbooks/components/services/zabbix-dns.yml) with
+an empty `required_secrets` mapping and an explicit DNS host limit. It configures
+local control and the existing agent's collector one peer at a time. The
+[DNS API operation](../playbooks/operations/zabbix-dns.yml) uses its matching
+administrator secret declaration with the `monitor01` limit. No agent reinstall
+or PSK transfer is needed. Recursive DNS additionally enables extended cumulative
+statistics. The agent gets permission only for `stats_noreset`, not other DNS
+administration commands.
 Unbound counters cover queries, cache hits/misses, SERVFAIL and NXDOMAIN; NSD
 counters cover queries and response codes. NSD has no recursive cache metrics.
 The implementation follows the [Unbound counters](https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound-control.html)
