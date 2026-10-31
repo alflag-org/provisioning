@@ -141,6 +141,10 @@ query reports runtime read-only flags without treating inventory names as roles.
 Synchronize the API after the local session exists.
 
 Declare Proxmox and verified network devices under `zabbix_remote_targets`.
+The [network playbook](../playbooks/operations/zabbix-network.yml) synchronizes
+only the declared network devices using its matching secret declaration and
+`monitor01` limit. ICMP enrollment changes Zabbix definitions only; SNMP requires
+separately verified device access and credentials.
 Each target supplies its actual template selection, interfaces, role tag and
 macros through inventory. Use the packaged
 [Proxmox VE by HTTP template](https://www.zabbix.com/integrations/proxmox)
