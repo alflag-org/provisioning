@@ -167,6 +167,13 @@ The action sends one problem message and one recovery message and pauses during
 maintenance. Review the standard templates' initial thresholds against collected
 baselines.
 
+Apply the [dashboard playbook](../playbooks/operations/zabbix-dashboard.yml) with
+its matching administrator secret declaration and the `monitor01` limit to create
+the inventory-managed infrastructure dashboard. Inventory owns its pages and
+widgets; applying again replaces manual changes to that dashboard. The host
+navigator opens packaged dashboards for individual hosts. Additional service
+panels require verified enrollment and measurements first.
+
 Use the packaged Linux and Zabbix health dashboards to examine usage, saturation,
 NVPS, item/host counts, queue, cache and poller utilization, and unsupported items.
 Unused VMware, IPMI, Java, trap, connector and report metrics and triggers are
