@@ -18,6 +18,7 @@
     that:
       - zabbix_mysql_backup_status.stat.isreg | default(false)
       - zabbix_mysql_backup_status_path is match('^/[A-Za-z0-9_./-]+$')
+      - zabbix_mysql_backup_status_path == zabbix_mysql_backup_status_path | trim
     fail_msg: Configure an existing backup status file with no shell or sudoers metacharacters in its path.
 
 - name: Permit reading only the existing non-secret backup status
