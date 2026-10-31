@@ -85,6 +85,19 @@ inventory service assignments and can be overridden per host. Only explicitly
 enabled services belong in that selection; do not add a Minecraft unit or an
 unregistered Runner based on an assumed service name.
 
+For existing Cloudflare connectors, the
+[monitoring-only component](../playbooks/components/services/cloudflared-monitoring.yml)
+selects an explicit loopback metrics listener while preserving the installed
+binary and credential file. Use its empty secret declaration and an explicit
+connector limit. It activates peers one at a time and requires a connected
+ready response before continuing. The
+[Cloudflare API operation](../playbooks/operations/zabbix-cloudflare.yml) uses its
+matching administrator secret declaration with the `monitor01` limit to collect
+readiness and edge connection counts through existing active agents.
+[Cloudflare readiness](https://github.com/cloudflare/cloudflared/blob/master/metrics/readiness.go)
+measures connectivity to the edge. StatusFrame continues to cover independent
+external availability.
+
 ## Synchronize with a restricted token
 
 Initial API configuration uses the administrator because retention, users,
