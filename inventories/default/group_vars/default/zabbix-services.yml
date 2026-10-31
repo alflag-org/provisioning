@@ -1,0 +1,7 @@
+---
+# Private application health complements external StatusFrame availability checks.
+zabbix_http_checks:
+  - host: game-control01
+    name: GameAP API health
+    url: http://10.10.20.63:8025/api/health
+    required: '"status"\s*:\s*"ok"'
