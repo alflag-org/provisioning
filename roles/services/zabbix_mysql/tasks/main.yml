@@ -82,14 +82,8 @@
     group: zabbix
     mode: "0750"
 
-- name: Permit reading only the existing non-secret backup status
-  ansible.builtin.copy:
-    dest: /etc/sudoers.d/zabbix-mysql-backup-status
-    content: "zabbix ALL=(root) NOPASSWD: /usr/bin/cat /var/lib/mysql-backup/status.json\n"
-    owner: root
-    group: root
-    mode: "0440"
-    validate: /usr/sbin/visudo -cf %s
+- name: Configure the independent backup status reader
+  ansible.builtin.import_tasks: backup-status.yml
 
 - name: Expose runtime role flags through a read-only query
   ansible.builtin.copy:

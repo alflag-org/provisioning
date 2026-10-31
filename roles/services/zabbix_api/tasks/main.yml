@@ -68,6 +68,9 @@
 - name: Synchronize inventory-managed monitoring targets
   ansible.builtin.import_tasks: hosts.yml
 
+- name: Monitor completed backups across the declared ReplicaSet members
+  ansible.builtin.import_tasks: mysql-backup-alerts.yml
+
 - name: Disable packaged metrics for explicitly unused server features
   community.zabbix.zabbix_item:
     template_name: Zabbix server health

@@ -1,0 +1,57 @@
+---
+- name: Read the owning backup component's defaults without overriding inventory
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../components/mysql_backup/defaults/main.yml"
+    name: zabbix_mysql_backup_defaults
+
+- name: Select the declared backup status path
+  ansible.builtin.set_fact:
+    zabbix_mysql_backup_status_path: "{{ mysql_backup_status_path | default(zabbix_mysql_backup_defaults.mysql_backup_status_path) }}"
+
+- name: Inspect the existing backup completion record
+  ansible.builtin.stat:
+    path: "{{ zabbix_mysql_backup_status_path }}"
+  register: zabbix_mysql_backup_status
+
+- name: Require the backup role to prepare its status record first
+  ansible.builtin.assert:
+    that:
+      - zabbix_mysql_backup_status.stat.isreg | default(false)
+      - zabbix_mysql_backup_status_path is match('^/[A-Za-z0-9_./-]+$')
+      - zabbix_mysql_backup_status_path == zabbix_mysql_backup_status_path | trim
+    fail_msg: Configure an existing backup status file with no shell or sudoers metacharacters in its path.
+
+- name: Permit reading only the existing non-secret backup status
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/zabbix-mysql-backup-status
+    content: "zabbix ALL=(root) NOPASSWD: /usr/bin/cat {{ zabbix_mysql_backup_status_path }}\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Inspect the optional SQL plugin configuration for parameter migration
+  ansible.builtin.stat:
+    path: /etc/zabbix/zabbix_agent2.d/provisioning-mysql.conf
+  register: zabbix_mysql_backup_plugin_config
+  no_log: true
+  diff: false
+
+- name: Remove the backup parameter from the SQL credential file
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/zabbix_agent2.d/provisioning-mysql.conf
+    regexp: '^UserParameter=mysql\.backup\.status,'
+    state: absent
+  when: zabbix_mysql_backup_plugin_config.stat.isreg | default(false)
+  no_log: true
+  diff: false
+  notify: Restart MySQL monitoring agent
+
+- name: Configure backup collection independently of SQL credentials
+  ansible.builtin.copy:
+    dest: /etc/zabbix/zabbix_agent2.d/provisioning-mysql-backup.conf
+    content: "UserParameter=mysql.backup.status,/usr/bin/sudo -n /usr/bin/cat {{ zabbix_mysql_backup_status_path }}\n"
+    owner: root
+    group: zabbix
+    mode: "0640"
+  notify: Restart MySQL monitoring agent
