@@ -5,7 +5,7 @@ zabbix_dashboard_linux_hosts_json: >-
   {% set _ = fields.append({'type': 1, 'name': 'ds.0.hosts.' ~ loop.index0, 'value': target}) %}
   {% endfor %}
   {{ fields | to_json }}
-zabbix_dashboard:
+zabbix_dashboard_base:
   name: Provisioning infrastructure
   private: 0
   display_period: 30
@@ -139,3 +139,119 @@ zabbix_dashboard:
             - {type: 1, name: ds.0.hosts.0, value: "{{ inventory_hostname }}"}
             - {type: 1, name: ds.0.items.0, value: '*Number of processed values per second*'}
             - {type: 1, name: ds.0.color, value: F63100}
+zabbix_dashboard: >-
+  {{ zabbix_dashboard_base | combine({'pages': zabbix_dashboard_base.pages
+     + ([zabbix_dashboard_network_page] if zabbix_dashboard_network_hosts_json | from_json | length > 0 else [])
+     + ([zabbix_dashboard_dns_page] if zabbix_dashboard_dns_hosts_json | from_json | length > 0 else [])}) }}
+zabbix_dashboard_network_hosts_json: >-
+  {% set fields = [] %}
+  {% for target in groups.get('zabbix_network_devices', []) | sort %}
+  {% if 'ICMP Ping' in hostvars[target].zabbix_monitor_templates | default([]) %}
+  {% set _ = fields.append({'type': 1, 'name': 'ds.0.hosts.' ~ (fields | length), 'value': target}) %}
+  {% endif %}
+  {% endfor %}
+  {{ fields | to_json }}
+zabbix_dashboard_dns_hosts_json: >-
+  {% set fields = [] %}
+  {% for target in (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort %}
+  {% if target in groups['svc_zabbix_agent'] and
+        hostvars[target].zabbix_dns_statistics | default('') in ['unbound', 'nsd'] %}
+  {% set _ = fields.append({'type': 1, 'name': 'ds.0.hosts.' ~ (fields | length), 'value': target}) %}
+  {% endif %}
+  {% endfor %}
+  {{ fields | to_json }}
+zabbix_dashboard_dns_cache_hosts_json: >-
+  {% set fields = [] %}
+  {% for target in groups['svc_dns_recursive'] | sort %}
+  {% if target in groups['svc_zabbix_agent'] and
+        hostvars[target].zabbix_dns_statistics | default('') == 'unbound' %}
+  {% set _ = fields.append({'type': 1, 'name': 'ds.0.hosts.' ~ (fields | length), 'value': target}) %}
+  {% endif %}
+  {% endfor %}
+  {{ fields | to_json }}
+zabbix_dashboard_network_page:
+  name: Network ICMP
+  display_period: 0
+  widgets:
+    - type: svggraph
+      name: Device reachability
+      x: 0
+      y: 0
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_network_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'ICMPS'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP ping'},
+          {'type': 1, 'name': 'ds.0.color', 'value': '199C0D'}] }}
+    - type: svggraph
+      name: Device response time
+      x: 36
+      y: 0
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_network_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'ICMPR'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP response time'},
+          {'type': 1, 'name': 'ds.0.color', 'value': '2774A4'}] }}
+    - type: svggraph
+      name: Device packet loss
+      x: 0
+      y: 5
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_network_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'ICMPL'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP loss'},
+          {'type': 1, 'name': 'ds.0.color', 'value': 'F63100'}] }}
+zabbix_dashboard_dns_page:
+  name: DNS counters
+  display_period: 0
+  widgets: >-
+    {{ zabbix_dashboard_dns_counter_widgets
+       + ([zabbix_dashboard_dns_cache_widget] if zabbix_dashboard_dns_cache_hosts_json | from_json | length > 0 else []) }}
+zabbix_dashboard_dns_counter_widgets:
+  - type: svggraph
+    name: DNS queries per second
+    x: 0
+    y: 0
+    width: 36
+    height: 5
+    view_mode: 0
+    fields: >-
+      {{ (zabbix_dashboard_dns_hosts_json | from_json) + [
+        {'type': 1, 'name': 'reference', 'value': 'DNSQR'},
+        {'type': 1, 'name': 'ds.0.items.0', 'value': 'DNS queries per second'},
+        {'type': 1, 'name': 'ds.0.color', 'value': '199C0D'}] }}
+  - type: svggraph
+    name: DNS response codes per second
+    x: 36
+    y: 0
+    width: 36
+    height: 5
+    view_mode: 0
+    fields: >-
+      {{ (zabbix_dashboard_dns_hosts_json | from_json) + [
+        {'type': 1, 'name': 'reference', 'value': 'DNSRC'},
+        {'type': 1, 'name': 'ds.0.items.0', 'value': 'DNS SERVFAIL per second'},
+        {'type': 1, 'name': 'ds.0.items.1', 'value': 'DNS NXDOMAIN per second'},
+        {'type': 1, 'name': 'ds.0.color', 'value': 'F63100'}] }}
+zabbix_dashboard_dns_cache_widget:
+  type: svggraph
+  name: Recursive DNS cache hits and misses per second
+  x: 0
+  y: 5
+  width: 36
+  height: 5
+  view_mode: 0
+  fields: >-
+    {{ (zabbix_dashboard_dns_cache_hosts_json | from_json) + [
+      {'type': 1, 'name': 'reference', 'value': 'DNSCH'},
+      {'type': 1, 'name': 'ds.0.items.0', 'value': 'DNS cache_hits per second'},
+      {'type': 1, 'name': 'ds.0.items.1', 'value': 'DNS cache_misses per second'},
+      {'type': 1, 'name': 'ds.0.color', 'value': '2774A4'}] }}
