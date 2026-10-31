@@ -1,21 +1,57 @@
 ---
+- name: Require explicitly selected DNS statistics
+  ansible.builtin.assert:
+    that:
+      - zabbix_dns_statistics | default('') in ['unbound', 'nsd']
+      - inventory_hostname in groups['svc_zabbix_agent']
+
+- name: Select the owning DNS role's local control socket
+  ansible.builtin.set_fact:
+    zabbix_agent_dns_control_socket: >-
+      {{ dns_recursor_control_socket | default('/run/unbound.ctl')
+         if zabbix_dns_statistics == 'unbound' else
+         dns_authoritative_control_socket | default('/run/nsd/nsd.ctl') }}
+
+- name: Inspect the enrolled agent prerequisite
+  ansible.builtin.stat:
+    path: /etc/zabbix/zabbix_agent2.conf
+  register: zabbix_agent_dns_config
+
 - name: Inspect the explicitly enabled local DNS control socket
   ansible.builtin.stat:
-    path: "{{ '/run/unbound.ctl' if zabbix_dns_statistics == 'unbound' else '/run/nsd/nsd.ctl' }}"
+    path: "{{ zabbix_agent_dns_control_socket }}"
   register: zabbix_agent_dns_socket
 
 - name: Require the DNS role to prepare its control socket first
   ansible.builtin.assert:
     that:
-      - zabbix_agent_dns_socket.stat.issock | default(false)
-    fail_msg: Enable the local control socket in the owning DNS role and apply it before agent enrollment.
+      - ansible_check_mode or zabbix_agent_dns_socket.stat.issock | default(false)
+    fail_msg: Enable the local control socket in the owning DNS role before collecting statistics.
 
 - name: Allow only non-resetting statistics through sudo
   ansible.builtin.copy:
     dest: /etc/sudoers.d/zabbix-dns-statistics
     content: |
-      zabbix ALL=(root) NOPASSWD: /usr/sbin/{{ zabbix_dns_statistics }}-control -s {{ zabbix_agent_dns_socket.stat.path }} stats_noreset
+      zabbix ALL=(root) NOPASSWD: /usr/sbin/{{ zabbix_dns_statistics }}-control -s {{ zabbix_agent_dns_control_socket }} stats_noreset
     owner: root
     group: root
     mode: "0440"
     validate: /usr/sbin/visudo -cf %s
+
+- name: Move the legacy inline parameter into the included DNS fragment
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/zabbix_agent2.conf
+    regexp: '^UserParameter=dns\.statistics,'
+    state: absent
+  notify: Restart Zabbix agent 2
+  when: zabbix_agent_dns_config.stat.isreg | default(false)
+
+- name: Configure statistics without reinstalling the enrolled agent
+  ansible.builtin.copy:
+    dest: /etc/zabbix/zabbix_agent2.d/provisioning-dns.conf
+    content: |
+      UserParameter=dns.statistics,/usr/bin/sudo -n /usr/sbin/{{ zabbix_dns_statistics }}-control -s {{ zabbix_agent_dns_control_socket }} stats_noreset
+    owner: root
+    group: zabbix
+    mode: "0640"
+  notify: Restart Zabbix agent 2
