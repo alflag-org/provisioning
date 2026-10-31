@@ -1,0 +1,26 @@
+---
+- name: Enable local DNS statistics on enrolled DNS hosts one peer at a time
+  hosts: svc_dns_recursive:svc_dns_authoritative
+  serial: 1
+  gather_facts: false
+  pre_tasks:
+    - name: Inspect the enrolled agent prerequisite
+      ansible.builtin.stat:
+        path: /etc/zabbix/zabbix_agent2.conf
+      register: zabbix_dns_enrolled_agent
+
+    - name: Require agent enrollment before configuring DNS statistics
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in groups['svc_zabbix_agent']
+          - zabbix_dns_enrolled_agent.stat.isreg | default(false)
+        fail_msg: Enroll the DNS agent before configuring its statistics collector.
+
+  roles:
+    - role: dns_recursor
+    - role: dns_authoritative
+  tasks:
+    - name: Configure only the existing agent's DNS collector
+      ansible.builtin.include_role:
+        name: services/zabbix_agent  # noqa role-name[path]
+        tasks_from: dns.yml

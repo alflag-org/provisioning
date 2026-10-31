@@ -1,0 +1,88 @@
+---
+- name: Require two recursive peers and a simple verified external query name
+  ansible.builtin.assert:
+    that:
+      - groups['svc_dns_recursive'] | length == 2
+      - zabbix_dns_external_name is match('^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?[.]?$')
+      - zabbix_dns_external_name == zabbix_dns_external_name | trim
+
+- name: Probe external-name resolution through each recursive peer
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_external_peer }} external query success"
+    params:
+      key: "net.dns[{{ hostvars[zabbix_dns_external_peer].ansible_host }},{{ zabbix_dns_external_name }},A,2,1]"
+      type: zabbix_agent_active
+      value_type: numeric_unsigned
+      interval: 30s
+      history: 30d
+      trends: 365d
+      description: >-
+        A lookup for {{ zabbix_dns_external_name }} from {{ inventory_hostname }}.
+        Cached answers count as successful resolution; this does not force a fresh upstream lookup.
+  loop: "{{ groups['svc_dns_recursive'] | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_external_peer
+
+- name: Measure external-name response time independently of query success
+  community.zabbix.zabbix_item:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_external_peer }} external response time"
+    params:
+      key: "net.dns.perf[{{ hostvars[zabbix_dns_external_peer].ansible_host }},{{ zabbix_dns_external_name }},A,2,1]"
+      type: zabbix_agent_active
+      value_type: numeric_float
+      interval: 60s
+      history: 30d
+      trends: 365d
+      units: s
+      description: >-
+        Time waiting for this peer's reply about {{ zabbix_dns_external_name }}, including error replies.
+        Inspect the query-success item for availability.
+  loop: "{{ groups['svc_dns_recursive'] | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_external_peer
+
+- name: Distinguish missing measurements from external-resolution failures
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: DNS external probe data is missing
+    params:
+      expression: >-
+        {% for peer in groups['svc_dns_recursive'] | sort %}
+        nodata(/{{ inventory_hostname }}/net.dns[{{ hostvars[peer].ansible_host }},{{ zabbix_dns_external_name }},A,2,1],10m)=1
+        {{ ' or ' if not loop.last else '' }}
+        {% endfor %}
+      severity: high
+
+- name: Alert when no recursive peer can resolve the external name
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: DNS all recursive peers cannot resolve the external name
+    params:
+      expression: >-
+        {% for peer in groups['svc_dns_recursive'] | sort %}
+        max(/{{ inventory_hostname }}/net.dns[{{ hostvars[peer].ansible_host }},{{ zabbix_dns_external_name }},A,2,1],2m)=0
+        {{ ' and ' if not loop.last else '' }}
+        {% endfor %}
+      severity: disaster
+    dependencies:
+      - host_name: "{{ inventory_hostname }}"
+        name: DNS external probe data is missing
+
+- name: Alert on an individual peer's external-resolution failure
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ inventory_hostname }}"
+    name: "DNS {{ zabbix_dns_external_peer }} cannot resolve the external name"
+    params:
+      expression: >-
+        max(/{{ inventory_hostname }}/net.dns[{{ hostvars[zabbix_dns_external_peer].ansible_host }},{{ zabbix_dns_external_name }},A,2,1],2m)=0
+      severity: high
+    dependencies:
+      - host_name: "{{ inventory_hostname }}"
+        name: DNS all recursive peers cannot resolve the external name
+      - host_name: "{{ inventory_hostname }}"
+        name: DNS external probe data is missing
+  loop: "{{ groups['svc_dns_recursive'] | sort }}"
+  loop_control:
+    loop_var: zabbix_dns_external_peer
