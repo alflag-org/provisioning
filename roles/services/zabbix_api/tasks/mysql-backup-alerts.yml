@@ -37,12 +37,16 @@
             max({% for peer in zabbix_api_backup_targets %}last(/{{ peer }}/mysql.backup.{{ item }}){{ ',' if not loop.last else '' }}{% endfor %})
       loop: [last_success, last_failure]
 
+    # Zabbix derives trigger membership from referenced items. A source member
+    # identifies this status check while its aggregate references cover monitor01.
     - name: Alert when recorded backup evidence becomes unavailable
       community.zabbix.zabbix_trigger:
-        host_name: "{{ inventory_hostname }}"
+        host_name: "{{ zabbix_api_backup_targets | first }}"
         name: MySQL ReplicaSet backup status is unavailable
         params:
           expression: >-
+            nodata(/{{ inventory_hostname }}/mysql.replicaset.backup.last_success,10m)=1 or
+            nodata(/{{ inventory_hostname }}/mysql.replicaset.backup.last_failure,10m)=1 or
             {% for peer in zabbix_api_backup_targets %}
             nodata(/{{ peer }}/mysql.backup.last_success,10m)=1 or
             nodata(/{{ peer }}/mysql.backup.last_failure,10m)=1
