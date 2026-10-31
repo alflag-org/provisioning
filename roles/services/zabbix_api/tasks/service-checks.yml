@@ -40,3 +40,39 @@
       severity: warning
       manual_close: false
   loop: "{{ zabbix_http_checks }}"
+
+- name: Measure declared TCP listeners independently of process state
+  community.zabbix.zabbix_item:
+    host_name: "{{ item.host }}"
+    name: "{{ item.name }}"
+    params:
+      key: "net.tcp.service[tcp,{{ item.address }},{{ item.port }}]"
+      type: simple_check
+      value_type: numeric_unsigned
+      interval: 60s
+      history: 30d
+      trends: 365d
+  loop: "{{ zabbix_tcp_checks }}"
+
+- name: Follow the declared uptime policy for TCP availability alerts
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ item.host }}"
+    name: "{{ item.name }} is unavailable"
+    params:
+      expression: >-
+        count(/{{ item.host }}/net.tcp.service[tcp,{{ item.address }},{{ item.port }}],3m)>=3 and
+        max(/{{ item.host }}/net.tcp.service[tcp,{{ item.address }},{{ item.port }}],3m)=0
+      severity: average
+      status: "{{ 'enabled' if item.alert_when_down else 'disabled' }}"
+      manual_close: false
+  loop: "{{ zabbix_tcp_checks }}"
+
+- name: Alert when TCP measurement collection stops
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ item.host }}"
+    name: "{{ item.name }} has no monitoring data"
+    params:
+      expression: 'nodata(/{{ item.host }}/net.tcp.service[tcp,{{ item.address }},{{ item.port }}],5m)=1'
+      severity: warning
+      manual_close: false
+  loop: "{{ zabbix_tcp_checks }}"

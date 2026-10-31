@@ -5,3 +5,11 @@ zabbix_http_checks:
     name: GameAP API health
     url: http://10.10.20.63:8025/api/health
     required: '"status"\s*:\s*"ok"'
+
+# GameAP declares this installed server; uptime intent is separate from observation.
+zabbix_tcp_checks:
+  - host: game-node01
+    name: Minecraft Charlie-74 TCP availability
+    address: "{{ hostvars['game-node01'].ansible_host }}"
+    port: 25565
+    alert_when_down: false
