@@ -119,7 +119,10 @@ SNMP passphrase into an interface field; reference a secret macro there.
 DNS success, timing and record checks run from `monitor01`, independently of
 the DNS hosts' agents. Separate triggers distinguish one failed peer from a
 complete recursive or authoritative service failure. Complete failure suppresses
-the corresponding individual notifications.
+the corresponding individual notifications. Recursive peers additionally resolve
+an inventory-declared external name, separately from internal record checks.
+Cached answers count as successful resolution. Response time can include an
+error reply; use the independent success value when evaluating availability.
 
 For DNS counters on already enrolled agents, use the dedicated
 [DNS monitoring component](../playbooks/components/services/zabbix-dns.yml) with
