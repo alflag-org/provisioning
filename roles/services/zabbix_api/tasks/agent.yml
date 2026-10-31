@@ -55,9 +55,9 @@
       history: 30d
   when: zabbix_target in groups.get('svc_zabbix_mysql', [])
 
-- name: Monitor the existing MySQL backup completion record
+- name: Monitor declared backups independently of SQL credentials
   ansible.builtin.include_tasks: mysql-backup.yml
-  when: zabbix_target in groups.get('svc_zabbix_mysql', [])
+  when: hostvars[zabbix_target].mysql_backup_enabled | default(false) | bool
 
 - name: Add selected service state items
   community.zabbix.zabbix_item:
