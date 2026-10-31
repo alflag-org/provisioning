@@ -152,8 +152,13 @@ SNMPv3 algorithms, interface data and supported MIBs from each IX2215, AT-x510
 and UPS before registering it. The role requires encrypted SNMPv3 and secret
 macro references. VRRP, vendor CPU/memory, UPS runtime and Proxmox backup results
 must be checked against actual supported items; this repository assigns no
-unverified OIDs or device addresses. Add application HTTP checks only for
-verified private endpoints and expected responses.
+unverified OIDs or device addresses. Declare private application HTTP responses and TCP endpoints in inventory and apply
+[zabbix-service-checks.yml](../playbooks/operations/zabbix-service-checks.yml) with
+its matching secret declaration and `monitor01` limit. These checks verify the
+expected HTTP status and response body, or TCP connection availability, from the
+monitoring server. TCP unavailability notifications follow the declared uptime
+policy; collection continues for services whose stop notifications are disabled. They complement
+StatusFrame's independent external availability checks.
 
 ## Alerts and capacity
 
