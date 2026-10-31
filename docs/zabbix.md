@@ -140,6 +140,18 @@ official active MySQL template uses a local Unix-socket session; the supplementa
 query reports runtime read-only flags without treating inventory names as roles.
 Synchronize the API after the local session exists.
 
+Backup status collection is independent of that SQL account. Use the
+[backup monitoring component](../playbooks/components/services/zabbix-mysql-backup.yml)
+with its empty secret declaration and a selected MySQL member, followed by the
+[backup API operation](../playbooks/operations/zabbix-mysql-backup.yml) with its
+administrator declaration and the `monitor01` limit. These operations read
+existing records and timer state; they do not run or schedule backups.
+Completion and failure timestamps are evaluated across both members because a
+normal Primary skip preserves an earlier completion while clearing current
+attempt flags. Missing metadata remains an explicit collection failure. A
+completion record establishes that the backup program completed its storage and
+validation steps; restoration and off-site recovery require separate evidence.
+
 Declare Proxmox and verified network devices under `zabbix_remote_targets`.
 Each target supplies its actual template selection, interfaces, role tag and
 macros through inventory. Use the packaged
