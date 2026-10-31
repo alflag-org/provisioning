@@ -21,3 +21,8 @@
       loop_control:
         loop_var: zabbix_target
       when: hostvars[zabbix_target].zabbix_dns_statistics | default('') in ['unbound', 'nsd']
+
+    - name: Configure externally named DNS response measurements
+      ansible.builtin.include_role:
+        name: services/zabbix_api  # noqa role-name[path]
+        tasks_from: dns-external.yml
