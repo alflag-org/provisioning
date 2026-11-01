@@ -1,0 +1,18 @@
+{% set pages = [] %}
+{% for page in zabbix_dashboard_comparison_pages %}
+{% set widgets = [] %}
+{% for widget in page.widgets %}
+{% set fields = [] %}
+{% for field in widget.fields | default([]) | sort(attribute='name') %}
+{% set _ = fields.append({'type': field.type | string, 'name': field.name, 'value': field.value | string}) %}
+{% endfor %}
+{% set _ = widgets.append({'type': widget.type, 'name': widget.name | default(''),
+    'x': widget.x | default(0) | string, 'y': widget.y | default(0) | string,
+    'width': widget.width | default(36) | string, 'height': widget.height | default(5) | string,
+    'view_mode': widget.view_mode | default(0) | string, 'fields': fields}) %}
+{% endfor %}
+{% set _ = pages.append({'name': page.name | default(''),
+    'display_period': page.display_period | default(0) | string,
+    'widgets': widgets | sort(attribute='x') | sort(attribute='y')}) %}
+{% endfor %}
+{{ pages | to_json }}

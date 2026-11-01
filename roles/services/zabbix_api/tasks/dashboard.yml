@@ -1,0 +1,133 @@
+---
+- name: Require the declared monitoring endpoint
+  ansible.builtin.assert:
+    that:
+      - groups['svc_zabbix_server'] == ['monitor01']
+      - inventory_hostname in groups['svc_zabbix_server']
+
+# community.zabbix 4.2.0 has no global dashboard module. Keep the API calls
+# explicit and isolated from host enrollment and template configuration.
+- name: Manage the named dashboard through the private API
+  delegate_to: localhost
+  become: false
+  no_log: true
+  vars:
+    zabbix_dashboard_api_url: "http://{{ hostvars[inventory_hostname].ansible_host }}/api_jsonrpc.php"
+  block:
+    - name: Open a temporary dashboard administration session
+      ansible.builtin.uri:
+        url: "{{ zabbix_dashboard_api_url }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: '2.0'
+          method: user.login
+          params:
+            username: Admin
+            password: "{{ zabbix_admin_password }}"
+          id: 1
+        return_content: true
+        use_proxy: false
+        follow_redirects: none
+      register: zabbix_dashboard_session
+      check_mode: false
+      failed_when: zabbix_dashboard_session.json.result is not defined
+
+    - name: Read and converge the selected dashboard
+      module_defaults:
+        ansible.builtin.uri:
+          url: "{{ zabbix_dashboard_api_url }}"
+          method: POST
+          body_format: json
+          return_content: true
+          use_proxy: false
+          follow_redirects: none
+          headers:
+            Authorization: "Bearer {{ zabbix_dashboard_session.json.result }}"
+      block:
+        - name: Resolve the managed host group without fixed database IDs
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: hostgroup.get
+              params:
+                output: [groupid]
+                filter:
+                  name: [Provisioning]
+              id: 2
+          register: zabbix_dashboard_group
+          check_mode: false
+          failed_when: >-
+            zabbix_dashboard_group.json.result is not defined or
+            zabbix_dashboard_group.json.result | length != 1
+
+        - name: Read only the inventory-owned dashboard
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: dashboard.get
+              params:
+                output: [dashboardid, name, private, display_period, auto_start]
+                selectPages: extend
+                filter:
+                  name: ["{{ zabbix_dashboard.name }}"]
+              id: 3
+          register: zabbix_dashboard_current
+          check_mode: false
+          failed_when: >-
+            zabbix_dashboard_current.json.result is not defined or
+            zabbix_dashboard_current.json.result | length > 1
+
+        - name: Compare editable dashboard properties without server-issued IDs
+          ansible.builtin.set_fact:
+            zabbix_dashboard_needs_update: >-
+              {{ zabbix_dashboard_current.json.result | length == 0 or
+                 zabbix_dashboard_current.json.result[0].private | int != zabbix_dashboard.private | int or
+                 zabbix_dashboard_current.json.result[0].auto_start | int != zabbix_dashboard.auto_start | int or
+                 zabbix_dashboard_current.json.result[0].display_period | int != zabbix_dashboard.display_period | int or
+                 lookup('ansible.builtin.template', 'dashboard-comparison.json.j2',
+                   template_vars={'zabbix_dashboard_comparison_pages': zabbix_dashboard.pages}) | from_json !=
+                 lookup('ansible.builtin.template', 'dashboard-comparison.json.j2',
+                   template_vars={'zabbix_dashboard_comparison_pages': zabbix_dashboard_current.json.result[0].pages}) | from_json }}
+
+        - name: Report the planned dashboard change
+          ansible.builtin.debug:
+            msg: The inventory-managed dashboard differs from the API definition.
+          changed_when: zabbix_dashboard_needs_update
+          when: ansible_check_mode
+
+        - name: Create or update the selected dashboard
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: "{{ 'dashboard.create' if zabbix_dashboard_current.json.result | length == 0 else 'dashboard.update' }}"
+              params: >-
+                {{ zabbix_dashboard | combine({} if zabbix_dashboard_current.json.result | length == 0 else
+                   {'dashboardid': zabbix_dashboard_current.json.result[0].dashboardid}) }}
+              id: 4
+          register: zabbix_dashboard_apply
+          failed_when: zabbix_dashboard_apply.json.result is not defined
+          changed_when: true
+          when:
+            - not ansible_check_mode
+            - zabbix_dashboard_needs_update
+  always:
+    - name: Close the temporary API session
+      ansible.builtin.uri:
+        url: "{{ zabbix_dashboard_api_url }}"
+        method: POST
+        body_format: json
+        headers:
+          Authorization: "Bearer {{ zabbix_dashboard_session.json.result }}"
+        body:
+          jsonrpc: '2.0'
+          method: user.logout
+          params: []
+          id: 5
+        return_content: true
+        use_proxy: false
+        follow_redirects: none
+      register: zabbix_dashboard_logout
+      failed_when: zabbix_dashboard_logout.json.result | default(false) != true
+      check_mode: false
+      when: zabbix_dashboard_session.json.result | default('') | length > 0
