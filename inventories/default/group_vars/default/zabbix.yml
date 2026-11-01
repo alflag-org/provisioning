@@ -10,6 +10,7 @@ zabbix_service_units_by_group:
   svc_dns_authoritative: [nsd.service]
   svc_connector: [cloudflared.service]
   svc_mysql: [mysql.service]
+  mysql_router_clients: [mysqlrouter.service]
   svc_gameap_panel: [gameap.service]
   svc_gameap_daemon: [gameap-daemon.service]
 zabbix_monitor_services: >-
