@@ -1,0 +1,24 @@
+---
+- name: Prepare backup status collection without SQL account changes
+  hosts: svc_mysql
+  serial: 1
+  gather_facts: false
+  pre_tasks:
+    - name: Inspect the enrolled monitoring agent
+      ansible.builtin.stat:
+        path: /etc/zabbix/zabbix_agent2.conf
+      register: zabbix_mysql_backup_agent
+
+    - name: Require declared backups and an enrolled agent
+      ansible.builtin.assert:
+        that:
+          - mysql_backup_enabled | bool
+          - inventory_hostname in groups['svc_zabbix_agent']
+          - zabbix_mysql_backup_agent.stat.isreg | default(false)
+        fail_msg: Prepare physical backups and enroll the agent before configuring their reader.
+
+  tasks:
+    - name: Configure only the backup reader on the existing agent
+      ansible.builtin.include_role:
+        name: services/zabbix_mysql  # noqa role-name[path]
+        tasks_from: backup-status.yml

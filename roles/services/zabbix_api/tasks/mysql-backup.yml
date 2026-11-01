@@ -10,37 +10,48 @@
       interval: 60s
       history: 30d
 
-- name: Measure the age and integrity of the last MySQL backup
+# last_success follows validated storage, binlog archival and source-health checks.
+# A PRIMARY skip resets attempt flags without invalidating that earlier completion.
+- name: Extract recorded completion and failure timestamps
   community.zabbix.zabbix_item:
     host_name: "{{ zabbix_target }}"
-    name: MySQL backup age
+    name: "MySQL backup {{ 'completion' if item == 'last_success' else 'failure' }} timestamp"
     params:
-      key: mysql.backup.age
+      key: "mysql.backup.{{ item }}"
       type: dependent_item
       value_type: numeric_unsigned
       history: 30d
       trends: 365d
-      units: s
+      units: unixtime
+      description: >-
+        Recorded UTC timestamp; zero means the status document explicitly records null.
+        Missing or invalid metadata is unsupported. Completion does not prove restore or off-site recovery.
       master_item:
         host_name: "{{ zabbix_target }}"
         item_name: MySQL backup completion status
       preprocessing:
         - type: javascript
           params: |
-            var status = JSON.parse(value), now = Date.now();
-            var success = Date.parse(status.last_success || ''), failure = Date.parse(status.last_failure || '');
-            if (!isFinite(success) || (isFinite(failure) && failure > success) ||
-                    !status.storage_success || !status.local_validation_success) { return 4294967295; }
-            return Math.max(0, Math.floor((now - success) / 1000));
+            var field = '{{ item }}';
+            {{ lookup('ansible.builtin.file', role_path ~ '/files/mysql-backup-timestamp.js') }}
           error_handler: zabbix_server
           error_handler_params: ""
+  loop: [last_success, last_failure]
 
-- name: Alert when a MySQL backup fails or stops completing
-  community.zabbix.zabbix_trigger:
+- name: Read backup component defaults without overriding inventory
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../components/mysql_backup/defaults/main.yml"
+    name: zabbix_api_backup_defaults
+
+- name: Measure the actual backup timer state without starting it
+  community.zabbix.zabbix_item:
     host_name: "{{ zabbix_target }}"
-    name: MySQL backup failed or stale
+    name: "MySQL backup timer {{ 'active state' if item == 'ActiveState' else 'enablement state' }}"
     params:
-      expression: >-
-        last(/{{ zabbix_target }}/mysql.backup.age)>26h or
-        nodata(/{{ zabbix_target }}/mysql.backup.age,10m)=1
-      severity: high
+      key: >-
+        systemd.unit.info[{{ hostvars[zabbix_target].mysql_backup_timer_name | default(zabbix_api_backup_defaults.mysql_backup_timer_name) }},{{ item }}]
+      type: zabbix_agent_active
+      value_type: character
+      interval: 60s
+      history: 30d
+  loop: [ActiveState, UnitFileState]
