@@ -13,7 +13,7 @@
 
 - name: Prepare a read-only notification group
   community.zabbix.zabbix_usergroup:
-    name: Provisioning notifications
+    name: Discord notifications
     gui_access: disable
     hostgroup_rights:
       - host_group: Provisioning
@@ -21,8 +21,8 @@
 
 - name: Configure the Discord recipient with the packaged official media type
   community.zabbix.zabbix_user:
-    username: provisioning-notifications
-    usrgrps: [Provisioning notifications]
+    username: notify-discord
+    usrgrps: [Discord notifications]
     role_name: User role
     # The recipient cannot log into the frontend. Only creation sets this password.
     passwd: "{{ lookup('ansible.builtin.password', '/dev/null', length=64) }}"
@@ -41,7 +41,7 @@
 
 - name: Notify once for problems and once for their recovery
   community.zabbix.zabbix_action:
-    name: Provisioning Discord problems and recovery
+    name: Discord problems and recovery
     event_source: trigger
     status: enabled
     esc_period: 1h
@@ -56,7 +56,7 @@
     eval_type: and
     operations:
       - type: send_message
-        send_to_users: [provisioning-notifications]
+        send_to_users: [notify-discord]
         media_type: Discord
         esc_step_from: 1
         esc_step_to: 1
