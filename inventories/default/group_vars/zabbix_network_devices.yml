@@ -1,0 +1,12 @@
+---
+# Device configuration and SNMP enrollment require separate verified access.
+zabbix_monitor_role: network
+zabbix_monitor_templates:
+  - ICMP Ping
+zabbix_monitor_interfaces:
+  - type: agent
+    main: 1
+    useip: 1
+    ip: "{{ ansible_host }}"
+    dns: ""
+    port: "10050"
