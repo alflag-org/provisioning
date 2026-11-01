@@ -134,6 +134,9 @@
   loop_control:
     loop_var: zabbix_dns_target
 
+- name: Verify external-name resolution through both recursive peers
+  ansible.builtin.import_tasks: dns-external.yml
+
 - name: Disable the package's demonstration host without deleting history
   community.zabbix.zabbix_host:
     host_name: Zabbix server
