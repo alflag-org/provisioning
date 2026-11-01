@@ -1,0 +1,28 @@
+---
+- name: Configure local monitoring on existing Cloudflare connectors one peer at a time
+  hosts: svc_connector
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Configure only the existing connector's metrics listener
+      ansible.builtin.include_role:
+        name: cloudflared
+        tasks_from: monitoring.yml
+
+    - name: Activate the selected peer's monitoring listener
+      ansible.builtin.meta: flush_handlers
+
+    - name: Require a connected tunnel before continuing to another peer
+      ansible.builtin.uri:
+        url: "http://{{ cloudflared_metrics_address }}:{{ cloudflared_metrics_port }}/ready"
+        return_content: true
+        use_proxy: false
+        follow_redirects: none
+        timeout: 5
+      register: cloudflared_monitoring_ready
+      until: >-
+        cloudflared_monitoring_ready.status == 200 and
+        (cloudflared_monitoring_ready.content | from_json).readyConnections | int > 0
+      retries: 12
+      delay: 5
+      when: not ansible_check_mode

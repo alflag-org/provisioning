@@ -1,0 +1,4 @@
+---
+cloudflared_metrics_enabled: true
+cloudflared_metrics_address: 127.0.0.1
+cloudflared_metrics_port: 60123

@@ -1,0 +1,23 @@
+---
+- name: Configure Cloudflare connector readiness measurements
+  hosts: svc_zabbix_server
+  gather_facts: false
+  become: false
+  connection: ansible.netcommon.httpapi
+  vars:
+    ansible_become: false
+    ansible_network_os: community.zabbix.zabbix
+    ansible_user: Admin
+    ansible_httpapi_pass: "{{ zabbix_admin_password }}"
+    ansible_httpapi_port: 80
+    ansible_httpapi_use_ssl: false
+    ansible_zabbix_url_path: ""
+  tasks:
+    - name: Configure explicitly enabled connectors on their existing agent hosts
+      ansible.builtin.include_role:
+        name: services/zabbix_api  # noqa role-name[path]
+        tasks_from: cloudflare.yml
+      loop: "{{ groups['svc_connector'] | intersect(groups['svc_zabbix_agent']) | sort }}"
+      loop_control:
+        loop_var: zabbix_target
+      when: hostvars[zabbix_target].cloudflared_metrics_enabled | default(false)

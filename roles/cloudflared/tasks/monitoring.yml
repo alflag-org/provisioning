@@ -1,0 +1,51 @@
+---
+- name: Require explicitly enabled loopback connector monitoring
+  ansible.builtin.assert:
+    that:
+      - cloudflared_enabled | bool
+      - cloudflared_metrics_enabled | bool
+      - cloudflared_metrics_address == '127.0.0.1'
+      - cloudflared_metrics_port | int >= 1024
+      - cloudflared_metrics_port | int <= 65535
+      - inventory_hostname in groups['svc_zabbix_agent']
+
+- name: Inspect the existing connector prerequisites without reading credentials
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ cloudflared_binary_path }}"
+    - "{{ cloudflared_tunnel_token_env_file }}"
+    - "/etc/systemd/system/{{ cloudflared_service_name }}.service"
+  register: cloudflared_monitoring_prerequisites
+
+- name: Require an existing connector installation
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+    fail_msg: Configure the connector separately before enabling monitoring.
+  loop: "{{ cloudflared_monitoring_prerequisites.results }}"
+
+- name: Read the existing service definition
+  ansible.builtin.slurp:
+    src: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
+  register: cloudflared_monitoring_unit
+  no_log: true
+
+# This entry point must not replace an independently configured tunnel command.
+- name: Require the existing unit to match the managed template except for metrics
+  ansible.builtin.assert:
+    that:
+      - >-
+        cloudflared_monitoring_unit.content | b64decode | regex_replace(' --metrics \S+', '') | trim ==
+        lookup('ansible.builtin.template', 'cloudflared.service.j2') | regex_replace(' --metrics \S+', '') | trim
+    fail_msg: Inspect the existing connector unit before changing its monitoring listener.
+  no_log: true
+
+- name: Bind metrics locally without changing the binary or tunnel credentials
+  ansible.builtin.template:
+    src: cloudflared.service.j2
+    dest: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart cloudflared

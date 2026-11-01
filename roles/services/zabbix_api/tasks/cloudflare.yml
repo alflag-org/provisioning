@@ -1,0 +1,58 @@
+---
+- name: Collect local tunnel readiness through the enrolled active agent
+  community.zabbix.zabbix_item:
+    host_name: "{{ zabbix_target }}"
+    name: Cloudflare tunnel readiness response
+    params:
+      key: >-
+        web.page.get[{{ hostvars[zabbix_target].cloudflared_metrics_address }},/ready,{{ hostvars[zabbix_target].cloudflared_metrics_port }}]
+      type: zabbix_agent_active
+      value_type: text
+      interval: 60s
+      history: 1d
+
+- name: Extract readiness status and active edge connection count
+  community.zabbix.zabbix_item:
+    host_name: "{{ zabbix_target }}"
+    name: "{{ item.name }}"
+    params:
+      key: "{{ item.key }}"
+      type: dependent_item
+      value_type: numeric_unsigned
+      history: 30d
+      trends: 365d
+      master_item:
+        host_name: "{{ zabbix_target }}"
+        item_name: Cloudflare tunnel readiness response
+      preprocessing:
+        - type: regular_expressions
+          params: "{{ item.pattern }}\n\\1"
+          error_handler: zabbix_server
+          error_handler_params: ""
+  loop:
+    - name: Cloudflare tunnel readiness HTTP status
+      key: cloudflared.ready.status
+      pattern: '^HTTP/\S+ ([0-9]{3})'
+    - name: Cloudflare tunnel active edge connections
+      key: cloudflared.ready.connections
+      pattern: '"readyConnections"\s*:\s*([0-9]+)'
+
+- name: Alert when the connector repeatedly reports no ready tunnel
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ zabbix_target }}"
+    name: Cloudflare tunnel is not ready
+    params:
+      expression: >-
+        count(/{{ zabbix_target }}/cloudflared.ready.status,3m)>=3 and
+        count(/{{ zabbix_target }}/cloudflared.ready.status,3m,"eq",200)=0
+      severity: average
+      manual_close: false
+
+- name: Alert when readiness collection stops
+  community.zabbix.zabbix_trigger:
+    host_name: "{{ zabbix_target }}"
+    name: Cloudflare tunnel readiness has no monitoring data
+    params:
+      expression: 'nodata(/{{ zabbix_target }}/cloudflared.ready.status,5m)=1'
+      severity: warning
+      manual_close: false
