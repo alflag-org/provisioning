@@ -89,7 +89,7 @@ unregistered Runner based on an assumed service name.
 
 Initial API configuration uses the administrator because retention, users,
 actions and templates require administrative access. It also prepares the
-`provisioning-sync` identity and an ungenerated token. Generate that token once
+`api-host-sync` identity and an ungenerated token. Generate that token once
 in the private UI and store its value under the declared Atlas provider name.
 The identity has access only to the managed host group, selected template groups
 and explicitly allowed synchronization methods. It cannot delete hosts or
