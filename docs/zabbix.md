@@ -184,10 +184,12 @@ Declare Proxmox and verified network devices under `zabbix_remote_targets`.
 The [network playbook](../playbooks/operations/zabbix-network.yml) synchronizes
 only the declared network devices using its matching secret declaration and
 `monitor01` limit. Device accounts and source restrictions require separate
-approval and setup; this operation changes Zabbix only. Before initial SNMP
-activation, verify authenticated high-capacity interface-counter GETs from
+approval and setup; this operation changes Zabbix only. Before initial Zabbix SNMP
+enrollment, verify authenticated high-capacity interface-counter GETs from
 `monitor01` for every interface selected by discovery on each SNMP target, then supply
-`zabbix_network_hc_verified=true` to the operation. It changes only the standard
+`ZABBIX_NETWORK_HC_VERIFIED=true` in that operation invocation's environment.
+This acknowledgement requires separate actual GET evidence; the API operation
+does not test SNMP connectivity. It changes only the standard
 Generic template's two traffic OIDs to Counter64, retaining its keys for graph
 and trigger compatibility, and refuses unrelated template consumers.
 

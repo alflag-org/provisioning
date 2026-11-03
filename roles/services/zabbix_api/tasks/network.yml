@@ -252,7 +252,7 @@
               - zabbix_network_hc_verified | default(false) | bool
             fail_msg: >-
               Verify authenticated ifHCInOctets/ifHCOutOctets GETs from monitor01 for every discovered interface on each SNMP target,
-              then pass zabbix_network_hc_verified=true to this operation.
+              then set ZABBIX_NETWORK_HC_VERIFIED=true for this operation invocation.
           when:
             - not ansible_check_mode
             - >-

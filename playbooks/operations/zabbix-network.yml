@@ -12,6 +12,8 @@
     ansible_httpapi_port: 80
     ansible_httpapi_use_ssl: false
     ansible_zabbix_url_path: ""
+    zabbix_network_hc_verified: >-
+      {{ lookup('ansible.builtin.env', 'ZABBIX_NETWORK_HC_VERIFIED', default='false') == 'true' }}
   tasks:
     - name: Read existing metadata without enrolling Linux agents
       community.zabbix.zabbix_host_info:
