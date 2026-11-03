@@ -142,7 +142,8 @@ zabbix_dashboard_base:
 zabbix_dashboard: >-
   {{ zabbix_dashboard_base | combine({'pages': zabbix_dashboard_base.pages
      + ([zabbix_dashboard_network_page] if zabbix_dashboard_network_hosts_json | from_json | length > 0 else [])
-     + ([zabbix_dashboard_dns_page] if zabbix_dashboard_dns_hosts_json | from_json | length > 0 else [])}) }}
+     + ([zabbix_dashboard_dns_page] if zabbix_dashboard_dns_hosts_json | from_json | length > 0 else [])
+     + ([zabbix_dashboard_mysql_page] if zabbix_dashboard_mysql_hosts_json | from_json | length > 0 else [])}) }}
 zabbix_dashboard_network_hosts_json: >-
   {% set fields = [] %}
   {% for target in groups.get('zabbix_network_devices', []) | sort %}
@@ -311,3 +312,71 @@ zabbix_dashboard_dns_cache_widget:
       {'type': 1, 'name': 'ds.0.items.0', 'value': 'DNS cache_hits per second'},
       {'type': 1, 'name': 'ds.0.items.1', 'value': 'DNS cache_misses per second'},
       {'type': 1, 'name': 'ds.0.color', 'value': '2774A4'}] }}
+zabbix_dashboard_mysql_hosts_json: >-
+  {% set fields = [] %}
+  {% for target in groups.get('svc_zabbix_mysql', []) | sort %}
+  {% if target in groups['svc_zabbix_agent'] %}
+  {% set _ = fields.append({'type': 1, 'name': 'ds.0.hosts.' ~ (fields | length), 'value': target}) %}
+  {% endif %}
+  {% endfor %}
+  {{ fields | to_json }}
+zabbix_dashboard_mysql_page:
+  name: MySQL
+  display_period: 0
+  widgets:
+    - type: svggraph
+      name: Statement rate
+      x: 0
+      y: 0
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_mysql_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'MYQPS'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'Queries per second'},
+          {'type': 1, 'name': 'ds.0.items.1', 'value': 'Questions per second'},
+          {'type': 0, 'name': 'ds.0.missingdatafunc', 'value': 0},
+          {'type': 1, 'name': 'ds.0.color', 'value': '199C0D'}] }}
+    - type: svggraph
+      name: Connections and running threads
+      x: 36
+      y: 0
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_mysql_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'MYTHR'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'Threads connected'},
+          {'type': 1, 'name': 'ds.0.items.1', 'value': 'Threads running'},
+          {'type': 0, 'name': 'ds.0.missingdatafunc', 'value': 0},
+          {'type': 1, 'name': 'ds.0.color', 'value': '2774A4'}] }}
+    - type: svggraph
+      name: InnoDB buffer pool
+      x: 0
+      y: 5
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_mysql_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'MYBFP'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'Buffer pool utilization'},
+          {'type': 1, 'name': 'ds.0.items.1', 'value': 'Buffer pool efficiency'},
+          {'type': 0, 'name': 'ds.0.missingdatafunc', 'value': 0},
+          {'type': 1, 'name': 'ds.0.color', 'value': 'F7941D'}] }}
+    - type: svggraph
+      name: InnoDB reads per second
+      x: 36
+      y: 5
+      width: 36
+      height: 5
+      view_mode: 0
+      fields: >-
+        {{ (zabbix_dashboard_mysql_hosts_json | from_json) + [
+          {'type': 1, 'name': 'reference', 'value': 'MYBFR'},
+          {'type': 1, 'name': 'ds.0.items.0', 'value': 'InnoDB buffer pool read requests per second'},
+          {'type': 1, 'name': 'ds.0.items.1', 'value': 'InnoDB buffer pool reads per second'},
+          {'type': 0, 'name': 'ds.0.missingdatafunc', 'value': 0},
+          {'type': 1, 'name': 'ds.0.color', 'value': 'F63100'}] }}
