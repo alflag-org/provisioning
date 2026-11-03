@@ -62,6 +62,9 @@
           error_handler_params: ""
   loop: [cpu, memory, io]
 
+- name: Align packaged Linux disk counters to a common sample
+  ansible.builtin.import_tasks: linux-disks.yml
+
 - name: Secure the packaged Proxmox HTTP template
   ansible.builtin.import_tasks: proxmox-tls.yml
 

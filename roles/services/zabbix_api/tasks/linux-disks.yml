@@ -1,0 +1,96 @@
+---
+- name: Align packaged Linux disk rates to the same kernel sample
+  no_log: true
+  vars:
+    zabbix_linux_disk_template: Linux by Zabbix agent active
+    zabbix_linux_disk_rule: Block devices discovery
+    zabbix_linux_disk_master: '{% raw %}{#DEVNAME}: Get stats{% endraw %}'
+    zabbix_linux_disk_master_key: '{% raw %}vfs.file.contents[/sys/block/{#DEVNAME}/stat]{% endraw %}'
+    zabbix_linux_disk_changes:
+      - name: '{% raw %}{#DEVNAME}: Disk utilization{% endraw %}'
+        key: '{% raw %}vfs.dev.util[{#DEVNAME}]{% endraw %}'
+        path: '$[9]'
+        multiplier: '0.1'
+      - name: '{% raw %}{#DEVNAME}: Disk read rate{% endraw %}'
+        key: '{% raw %}vfs.dev.read.rate[{#DEVNAME}]{% endraw %}'
+        path: '$[0]'
+      - name: '{% raw %}{#DEVNAME}: Disk write rate{% endraw %}'
+        key: '{% raw %}vfs.dev.write.rate[{#DEVNAME}]{% endraw %}'
+        path: '$[4]'
+  block:
+    - name: Require the declared monitoring endpoint
+      ansible.builtin.assert:
+        that:
+          - groups['svc_zabbix_server'] == ['monitor01']
+          - inventory_hostname in groups['svc_zabbix_server']
+
+    - name: Read existing template consumers without synchronizing hosts
+      community.zabbix.zabbix_host_info:
+        remove_duplicate: false
+      register: zabbix_linux_disk_hosts
+
+    - name: Refuse to change Linux template consumers outside inventory
+      ansible.builtin.assert:
+        that:
+          - item.host in groups['svc_zabbix_agent']
+          - zabbix_linux_disk_template in hostvars[item.host].zabbix_monitor_templates
+      loop: "{{ zabbix_linux_disk_hosts.hosts }}"
+      when: zabbix_linux_disk_template in (item.parentTemplates | map(attribute='name') | list)
+
+    - name: Read existing disk prototype identities
+      community.zabbix.zabbix_template_info:
+        template_name: "{{ zabbix_linux_disk_template }}"
+        format: json
+      register: zabbix_linux_disk_export
+
+    - name: Require the existing raw-stat master and discovery rule
+      vars:
+        zabbix_linux_disk_rules: >-
+          {{ zabbix_linux_disk_export.template_json.zabbix_export.templates[0].discovery_rules
+             | selectattr('name', 'equalto', zabbix_linux_disk_rule) | list }}
+      ansible.builtin.assert:
+        that:
+          - zabbix_linux_disk_rules | length == 1
+          - >-
+            zabbix_linux_disk_rules[0].item_prototypes
+            | selectattr('key', 'equalto', zabbix_linux_disk_master_key)
+            | selectattr('name', 'equalto', zabbix_linux_disk_master)
+            | selectattr('type', 'equalto', 'ZABBIX_ACTIVE') | list | length == 1
+
+    - name: Require all three existing prototypes before updating any
+      vars:
+        zabbix_linux_disk_prototypes: >-
+          {{ zabbix_linux_disk_export.template_json.zabbix_export.templates[0].discovery_rules
+             | selectattr('name', 'equalto', zabbix_linux_disk_rule)
+             | map(attribute='item_prototypes') | flatten }}
+      ansible.builtin.assert:
+        that:
+          - >-
+            zabbix_linux_disk_prototypes | selectattr('key', 'equalto', item.key)
+            | selectattr('name', 'equalto', item.name)
+            | selectattr('type', 'equalto', 'DEPENDENT') | list | length == 1
+      loop: "{{ zabbix_linux_disk_changes }}"
+
+    # RC2 vfs.dev.get maps io_time_ms to weighted time (stat[10]), not busy
+    # time (stat[9]). Completed-operation rates also need the same 1m master as
+    # the existing read/write time rates; the other master samples every 3m.
+    # https://github.com/zabbix/zabbix/blob/8.0.0rc2/src/go/plugins/vfs/dev/dev_get_linux.go#L346-L381
+    - name: Update only the disk masters and counter extraction
+      community.zabbix.zabbix_itemprototype:
+        template_name: "{{ zabbix_linux_disk_template }}"
+        discoveryrule_name: "{{ zabbix_linux_disk_rule }}"
+        name: "{{ item.name }}"
+        params:
+          master_item:
+            template_name: "{{ zabbix_linux_disk_template }}"
+            discoveryrule_name: "{{ zabbix_linux_disk_rule }}"
+            item_name: "{{ zabbix_linux_disk_master }}"
+          preprocessing: >-
+            {{ [{'type': 'jsonpath', 'params': item.path,
+                 'error_handler': 'zabbix_server', 'error_handler_params': ''},
+                {'type': 'change_per_second', 'params': '',
+                 'error_handler': 'zabbix_server', 'error_handler_params': ''}]
+               + ([{'type': 'custom_multiplier', 'params': item.multiplier,
+                    'error_handler': 'zabbix_server', 'error_handler_params': ''}]
+                  if item.multiplier is defined else []) }}
+      loop: "{{ zabbix_linux_disk_changes }}"
