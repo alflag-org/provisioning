@@ -166,7 +166,11 @@ writable member. It never promotes a member. The account can inspect global
 status and performance schema, but cannot read application table data. The
 official active MySQL template uses a local Unix-socket session; the supplemental
 query reports runtime read-only flags without treating inventory names as roles.
-Synchronize the API after the local session exists.
+After both local sessions work, use the [MySQL API operation](../playbooks/operations/zabbix-mysql.yml)
+with its matching administrator secret declaration and the `monitor01` limit.
+It updates only the two declared members and requires both existing hosts to
+match their provider-managed agent PSK tags before any changes. It does not
+bootstrap agents or rotate their keys.
 
 Backup status collection is independent of that SQL account. Use the
 [backup monitoring component](../playbooks/components/services/zabbix-mysql-backup.yml)
