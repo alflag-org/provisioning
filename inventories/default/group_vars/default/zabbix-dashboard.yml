@@ -146,11 +146,20 @@ zabbix_dashboard: >-
 zabbix_dashboard_network_hosts_json: >-
   {% set fields = [] %}
   {% for target in groups.get('zabbix_network_devices', []) | sort %}
-  {% if 'ICMP Ping' in hostvars[target].zabbix_monitor_templates | default([]) %}
+  {% if hostvars[target].zabbix_monitor_templates | default([])
+        | intersect(['ICMP Ping', 'Network Generic Device by SNMP']) | length > 0 %}
   {% set _ = fields.append({'type': 1, 'name': 'ds.0.hosts.' ~ (fields | length), 'value': target}) %}
   {% endif %}
   {% endfor %}
   {{ fields | to_json }}
+zabbix_dashboard_network_snmp_targets_json: >-
+  {% set targets = [] %}
+  {% for target in groups.get('zabbix_network_devices', []) | sort %}
+  {% if 'Network Generic Device by SNMP' in hostvars[target].zabbix_monitor_templates | default([]) %}
+  {% set _ = targets.append(target) %}
+  {% endif %}
+  {% endfor %}
+  {{ targets | to_json }}
 zabbix_dashboard_dns_hosts_json: >-
   {% set fields = [] %}
   {% for target in (groups['svc_dns_recursive'] + groups['svc_dns_authoritative']) | sort %}
@@ -170,45 +179,92 @@ zabbix_dashboard_dns_cache_hosts_json: >-
   {% endfor %}
   {{ fields | to_json }}
 zabbix_dashboard_network_page:
-  name: Network ICMP
+  name: Network
   display_period: 0
-  widgets:
-    - type: svggraph
-      name: Device reachability
-      x: 0
-      y: 0
-      width: 36
-      height: 5
-      view_mode: 0
-      fields: >-
-        {{ (zabbix_dashboard_network_hosts_json | from_json) + [
-          {'type': 1, 'name': 'reference', 'value': 'ICMPS'},
-          {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP ping'},
-          {'type': 1, 'name': 'ds.0.color', 'value': '199C0D'}] }}
-    - type: svggraph
-      name: Device response time
-      x: 36
-      y: 0
-      width: 36
-      height: 5
-      view_mode: 0
-      fields: >-
-        {{ (zabbix_dashboard_network_hosts_json | from_json) + [
-          {'type': 1, 'name': 'reference', 'value': 'ICMPR'},
-          {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP response time'},
-          {'type': 1, 'name': 'ds.0.color', 'value': '2774A4'}] }}
-    - type: svggraph
-      name: Device packet loss
-      x: 0
-      y: 5
-      width: 36
-      height: 5
-      view_mode: 0
-      fields: >-
-        {{ (zabbix_dashboard_network_hosts_json | from_json) + [
-          {'type': 1, 'name': 'reference', 'value': 'ICMPL'},
-          {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP loss'},
-          {'type': 1, 'name': 'ds.0.color', 'value': 'F63100'}] }}
+  widgets: >-
+    {{ zabbix_dashboard_network_icmp_widgets
+       + (zabbix_dashboard_network_snmp_widgets_json | from_json) }}
+zabbix_dashboard_network_icmp_widgets:
+  - type: svggraph
+    name: Device reachability
+    x: 0
+    y: 0
+    width: 36
+    height: 5
+    view_mode: 0
+    fields: >-
+      {{ (zabbix_dashboard_network_hosts_json | from_json) + [
+        {'type': 1, 'name': 'reference', 'value': 'ICMPS'},
+        {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP ping'},
+        {'type': 1, 'name': 'ds.0.color', 'value': '199C0D'}] }}
+  - type: svggraph
+    name: Device response time
+    x: 36
+    y: 0
+    width: 36
+    height: 5
+    view_mode: 0
+    fields: >-
+      {{ (zabbix_dashboard_network_hosts_json | from_json) + [
+        {'type': 1, 'name': 'reference', 'value': 'ICMPR'},
+        {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP response time'},
+        {'type': 1, 'name': 'ds.0.color', 'value': '2774A4'}] }}
+  - type: svggraph
+    name: Device packet loss
+    x: 0
+    y: 5
+    width: 36
+    height: 5
+    view_mode: 0
+    fields: >-
+      {{ (zabbix_dashboard_network_hosts_json | from_json) + [
+        {'type': 1, 'name': 'reference', 'value': 'ICMPL'},
+        {'type': 1, 'name': 'ds.0.items.0', 'value': 'ICMP loss'},
+        {'type': 1, 'name': 'ds.0.color', 'value': 'F63100'}] }}
+# SVG graphs load at most 50 metrics before aggregation. Keep counter families
+# and devices separate so another enrolled device cannot truncate this device.
+zabbix_dashboard_network_snmp_widgets_json: >-
+  {% set widgets = [] %}
+  {% for target in zabbix_dashboard_network_snmp_targets_json | from_json %}
+  {% set target_index = loop.index0 %}
+  {% for graph in zabbix_dashboard_network_snmp_graphs %}
+  {% set _ = widgets.append({
+    'type': 'svggraph', 'name': target ~ ': ' ~ graph.name,
+    'x': (loop.index0 % 2) * 36, 'y': 10 + target_index * 15 + (loop.index0 // 2) * 5,
+    'width': 36, 'height': 5, 'view_mode': 0,
+    'fields': [
+      {'type': 1, 'name': 'reference', 'value': 'N' ~ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[target_index] ~ graph.reference},
+      {'type': 1, 'name': 'ds.0.hosts.0', 'value': target},
+      {'type': 1, 'name': 'ds.0.items.0', 'value': graph.item},
+      {'type': 1, 'name': 'ds.0.color', 'value': graph.color}]}) %}
+  {% endfor %}
+  {% endfor %}
+  {{ widgets | to_json }}
+zabbix_dashboard_network_snmp_graphs:
+  - name: Received traffic
+    item: 'Interface *: Bits received'
+    reference: RXB
+    color: 199C0D
+  - name: Sent traffic
+    item: 'Interface *: Bits sent'
+    reference: TXB
+    color: 2774A4
+  - name: Inbound errors
+    item: 'Interface *: Inbound packets with errors'
+    reference: RXE
+    color: F63100
+  - name: Outbound errors
+    item: 'Interface *: Outbound packets with errors'
+    reference: TXE
+    color: F63100
+  - name: Inbound discards
+    item: 'Interface *: Inbound packets discarded'
+    reference: RXD
+    color: F7941D
+  - name: Outbound discards
+    item: 'Interface *: Outbound packets discarded'
+    reference: TXD
+    color: F7941D
 zabbix_dashboard_dns_page:
   name: DNS counters
   display_period: 0
