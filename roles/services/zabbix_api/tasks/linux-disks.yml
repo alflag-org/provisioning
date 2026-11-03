@@ -86,8 +86,11 @@
             discoveryrule_name: "{{ zabbix_linux_disk_rule }}"
             item_name: "{{ zabbix_linux_disk_master }}"
           preprocessing: >-
-            {{ [{'type': 'jsonpath', 'params': item.path},
-                {'type': 'change_per_second', 'params': ''}]
-               + ([{'type': 'custom_multiplier', 'params': item.multiplier}]
+            {{ [{'type': 'jsonpath', 'params': item.path,
+                 'error_handler': 'zabbix_server', 'error_handler_params': ''},
+                {'type': 'change_per_second', 'params': '',
+                 'error_handler': 'zabbix_server', 'error_handler_params': ''}]
+               + ([{'type': 'custom_multiplier', 'params': item.multiplier,
+                    'error_handler': 'zabbix_server', 'error_handler_params': ''}]
                   if item.multiplier is defined else []) }}
       loop: "{{ zabbix_linux_disk_changes }}"
