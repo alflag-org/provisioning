@@ -1,0 +1,37 @@
+---
+zabbix_snmp_authprotocol: 1
+zabbix_snmp_auth_passphrase: "{{ zabbix_snmp_at_x510_auth_passphrase }}"
+zabbix_snmp_priv_passphrase: "{{ zabbix_snmp_at_x510_priv_passphrase }}"
+zabbix_monitor_templates:
+  - Network Generic Device by SNMP
+zabbix_monitor_interfaces:
+  # Retain the interface referenced by the existing ICMP items during adoption.
+  - type: agent
+    main: 1
+    useip: 1
+    ip: "{{ ansible_host }}"
+    dns: ""
+    port: "10050"
+  - type: snmp
+    main: 1
+    useip: 1
+    ip: "{{ ansible_host }}"
+    dns: ""
+    port: "161"
+    details:
+      version: 3
+      securityname: zabbix-monitor
+      securitylevel: 2
+      authprotocol: "{{ zabbix_snmp_authprotocol }}"
+      authpassphrase: '{$SNMP.AUTH.PASSPHRASE}'
+      privprotocol: 1
+      privpassphrase: '{$SNMP.PRIV.PASSPHRASE}'
+zabbix_monitor_macros:
+  - macro: '{$SNMP.AUTH.PASSPHRASE}'
+    value: "{{ zabbix_snmp_auth_passphrase }}"
+    type: secret
+    description: SNMP authentication generation 1
+  - macro: '{$SNMP.PRIV.PASSPHRASE}'
+    value: "{{ zabbix_snmp_priv_passphrase }}"
+    type: secret
+    description: SNMP privacy generation 1

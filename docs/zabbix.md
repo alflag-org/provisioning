@@ -183,8 +183,25 @@ validation steps; restoration and off-site recovery require separate evidence.
 Declare Proxmox and verified network devices under `zabbix_remote_targets`.
 The [network playbook](../playbooks/operations/zabbix-network.yml) synchronizes
 only the declared network devices using its matching secret declaration and
-`monitor01` limit. ICMP enrollment changes Zabbix definitions only; SNMP requires
-separately verified device access and credentials.
+`monitor01` limit. Device accounts and source restrictions require separate
+approval and setup; this operation changes Zabbix only. Before initial Zabbix SNMP
+enrollment, verify authenticated high-capacity interface-counter GETs from
+`monitor01` for every interface selected by discovery on each SNMP target, then supply
+`ZABBIX_NETWORK_HC_VERIFIED=true` in that operation invocation's environment.
+This acknowledgement requires separate actual GET evidence; the API operation
+does not test SNMP connectivity. It changes only the standard
+Generic template's two traffic OIDs to Counter64, retaining its keys for graph
+and trigger compatibility, and refuses unrelated template consumers.
+
+The first network operation adopts existing ICMP items and triggers without
+clearing their history. It checks alert behavior before unlinking the ICMP
+template, aligns trigger names and lets the standard template inherit the same
+entities. Interrupted transitions can be resumed; ambiguous or modified alerts
+require inspection. Record existing host ICMP threshold overrides in inventory
+before adoption; preparation refuses to discard them or alter packaged alert
+behavior. Check mode reports this transition and defers enrollment
+that depends on its mutation. Full configuration and restricted synchronization
+require this preparation before initial SNMP enrollment.
 Each target supplies its actual template selection, interfaces, role tag and
 macros through inventory. Use the packaged
 [Proxmox VE by HTTP template](https://www.zabbix.com/integrations/proxmox)

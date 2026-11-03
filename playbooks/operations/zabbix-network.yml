@@ -1,5 +1,5 @@
 ---
-- name: Register declared network reachability checks without changing devices
+- name: Register declared SNMPv3 monitoring without changing network devices
   hosts: svc_zabbix_server
   gather_facts: false
   become: false
@@ -12,13 +12,29 @@
     ansible_httpapi_port: 80
     ansible_httpapi_use_ssl: false
     ansible_zabbix_url_path: ""
+    zabbix_network_hc_verified: >-
+      {{ lookup('ansible.builtin.env', 'ZABBIX_NETWORK_HC_VERIFIED', default='false') == 'true' }}
   tasks:
+    - name: Read existing metadata without enrolling Linux agents
+      community.zabbix.zabbix_host_info:
+      register: zabbix_api_existing_hosts
+      no_log: true
+
+    - name: Prepare high-capacity polling and retain the existing ICMP definitions
+      ansible.builtin.include_role:
+        name: services/zabbix_api  # noqa role-name[path]
+        tasks_from: network.yml
+
     - name: Synchronize network targets using the existing registration role
       ansible.builtin.include_role:
         name: services/zabbix_api  # noqa role-name[path]
         tasks_from: remote.yml
       vars:
         zabbix_target: "{{ zabbix_network_target }}"
+        zabbix_network_prepared: "{{ zabbix_network_target in zabbix_network_snmp_targets }}"
       loop: "{{ groups['zabbix_network_devices'] | sort }}"
       loop_control:
         loop_var: zabbix_network_target
+      when:
+        - not ansible_check_mode or
+          not (zabbix_network_plans | default({})).get(zabbix_network_target, {}).get('pending', false)
