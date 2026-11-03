@@ -1,0 +1,315 @@
+---
+- name: Require the declared network monitoring endpoint and target set
+  ansible.builtin.assert:
+    that:
+      - groups['svc_zabbix_server'] == ['monitor01']
+      - inventory_hostname in groups['svc_zabbix_server']
+      - groups['zabbix_network_devices'] | length > 0
+
+- name: Select only inventory targets assigned the SNMP template
+  ansible.builtin.set_fact:
+    zabbix_network_plans: {}
+    zabbix_network_session: {}
+    zabbix_network_snmp_targets: >-
+      {{ groups['zabbix_network_devices'] | map('extract', hostvars)
+         | selectattr('zabbix_monitor_templates', 'contains', 'Network Generic Device by SNMP')
+         | map(attribute='inventory_hostname') | list | sort }}
+
+- name: Validate every declared SNMP interface before preparation
+  ansible.builtin.include_tasks: remote-validate.yml
+  vars:
+    zabbix_target: "{{ zabbix_network_target }}"
+  loop: "{{ zabbix_network_snmp_targets }}"
+  loop_control:
+    loop_var: zabbix_network_target
+
+- name: Prepare high-capacity counters and adopt existing ICMP history
+  delegate_to: localhost
+  become: false
+  no_log: true
+  vars:
+    ansible_connection: local
+    zabbix_network_api_url: "http://{{ hostvars[inventory_hostname].ansible_host }}/api_jsonrpc.php"
+    zabbix_network_icmp_keys: [icmpping, icmppingloss, icmppingsec]
+    zabbix_network_counter_oids:
+      !unsafe 'net.if.in[ifInOctets.{#SNMPINDEX}]':
+        old: '{% raw %}get[1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}]{% endraw %}'
+        new: '{% raw %}get[1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}]{% endraw %}'
+      !unsafe 'net.if.out[ifOutOctets.{#SNMPINDEX}]':
+        old: '{% raw %}get[1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}]{% endraw %}'
+        new: '{% raw %}get[1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}]{% endraw %}'
+  when: zabbix_network_snmp_targets | length > 0
+  block:
+    - name: Authenticate a temporary network preparation session
+      ansible.builtin.uri:
+        url: "{{ zabbix_network_api_url }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: '2.0'
+          method: user.login
+          params:
+            username: Admin
+            password: "{{ zabbix_admin_password }}"
+          id: 1
+        use_proxy: false
+        follow_redirects: none
+      register: zabbix_network_session
+      check_mode: false
+      failed_when: zabbix_network_session.json.result is not defined
+
+    - name: Read and prepare only the declared network resources
+      module_defaults:
+        ansible.builtin.uri:
+          url: "{{ zabbix_network_api_url }}"
+          method: POST
+          body_format: json
+          use_proxy: false
+          follow_redirects: none
+          headers:
+            Authorization: "Bearer {{ zabbix_network_session.json.result }}"
+      block:
+        - name: Resolve the packaged template identities and consumers
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: template.get
+              params:
+                output: [templateid, name]
+                filter:
+                  host: [ICMP Ping, Network Generic Device by SNMP]
+                selectHosts: [host]
+                selectTemplates: [templateid]
+                selectMacros: [macro, value]
+              id: 2
+          register: zabbix_network_templates
+          check_mode: false
+          failed_when: zabbix_network_templates.json.result is not defined
+
+        - name: Select the standard network template without hard-coded IDs
+          ansible.builtin.set_fact:
+            zabbix_network_generic: >-
+              {{ zabbix_network_templates.json.result
+                 | selectattr('name', 'equalto', 'Network Generic Device by SNMP') | list }}
+            zabbix_network_plans: {}
+
+        - name: Reject unrelated consumers before changing shared traffic prototypes
+          ansible.builtin.assert:
+            that:
+              - zabbix_network_templates.json.result | length == 2
+              - zabbix_network_generic | length == 1
+              - zabbix_network_generic[0].templates | length == 0
+              - >-
+                zabbix_network_generic[0].hosts | map(attribute='host') | list
+                | difference(zabbix_network_snmp_targets) | length == 0
+
+        - name: Read the two interface traffic prototypes by template and key
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: itemprototype.get
+              params:
+                output: [itemid, key_, snmp_oid, type, value_type]
+                templateids: ["{{ zabbix_network_generic[0].templateid }}"]
+                filter:
+                  key_: "{{ zabbix_network_counter_oids.keys() | list }}"
+              id: 3
+          register: zabbix_network_prototypes
+          check_mode: false
+          failed_when: >-
+            zabbix_network_prototypes.json.result is not defined or
+            zabbix_network_prototypes.json.result | length != 2
+
+        - name: Refuse unexpected traffic definitions
+          ansible.builtin.assert:
+            that:
+              - item.type == '20'
+              - item.value_type == '3'
+              - item.snmp_oid in [zabbix_network_counter_oids[item.key_].old, zabbix_network_counter_oids[item.key_].new]
+          loop: "{{ zabbix_network_prototypes.json.result }}"
+
+        - name: Refuse automatic counter-width changes on existing traffic series
+          ansible.builtin.assert:
+            that:
+              - zabbix_network_generic[0].hosts | length == 0
+            fail_msg: Inspect existing Counter32 traffic history before changing an active template to Counter64.
+          when: >-
+            zabbix_network_prototypes.json.result | selectattr('snmp_oid', 'search', 'get\[1\.3\.6\.1\.2\.1\.2\.')
+            | list | length > 0
+
+        - name: Read the current inventory network targets
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: host.get
+              params:
+                output: [hostid, host]
+                filter:
+                  host: "{{ zabbix_network_snmp_targets }}"
+                selectParentTemplates: [templateid, name]
+                selectMacros: [macro]
+              id: 4
+          register: zabbix_network_hosts
+          check_mode: false
+          failed_when: zabbix_network_hosts.json.result is not defined
+
+        - name: Preserve the packaged ICMP threshold defaults
+          ansible.builtin.assert:
+            that:
+              - >-
+                zabbix_network_templates.json.result | selectattr('name', 'equalto', 'ICMP Ping')
+                | map(attribute='macros') | flatten | selectattr('macro', 'equalto', item)
+                | map(attribute='value') | list ==
+                zabbix_network_generic[0].macros | selectattr('macro', 'equalto', item)
+                | map(attribute='value') | list
+              - zabbix_network_generic[0].macros | selectattr('macro', 'equalto', item) | list | length == 1
+          loop: ['{$ICMP_LOSS_WARN}', '{$ICMP_RESPONSE_TIME_WARN}']
+
+        - name: Read the packaged ICMP item behavior including preprocessing
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: item.get
+              params:
+                output: [itemid, key_, type, value_type, delay, status, units, history, trends, timeout, master_itemid]
+                templateids: "{{ zabbix_network_templates.json.result | map(attribute='templateid') | list }}"
+                filter:
+                  key_: "{{ zabbix_network_icmp_keys }}"
+                selectPreprocessing: extend
+              id: 40
+          register: zabbix_network_template_items
+          check_mode: false
+          failed_when: zabbix_network_template_items.json.result is not defined
+
+        - name: Read the packaged ICMP trigger behavior
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: trigger.get
+              params:
+                output: [triggerid, description, expression, recovery_expression, recovery_mode, priority, status,
+                         type, manual_close, correlation_mode, correlation_tag, templateid]
+                templateids: "{{ zabbix_network_templates.json.result | map(attribute='templateid') | list }}"
+                selectFunctions: extend
+                selectDependencies: [triggerid]
+              id: 5
+          register: zabbix_network_template_triggers
+          check_mode: false
+          failed_when: zabbix_network_template_triggers.json.result is not defined
+
+        - name: Read only existing ICMP items on the selected targets
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: item.get
+              params:
+                output: [itemid, hostid, templateid, key_, type, value_type, delay, status, units,
+                         history, trends, timeout, master_itemid]
+                hostids: "{{ zabbix_network_hosts.json.result | map(attribute='hostid') | list }}"
+                filter:
+                  key_: "{{ zabbix_network_icmp_keys }}"
+                selectPreprocessing: extend
+              id: 6
+          register: zabbix_network_host_items
+          check_mode: false
+          failed_when: zabbix_network_host_items.json.result is not defined
+          when: zabbix_network_hosts.json.result | length > 0
+
+        - name: Read the existing ICMP trigger definitions and dependencies
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: trigger.get
+              params:
+                output: [triggerid, description, expression, recovery_expression, recovery_mode, priority, status,
+                         type, manual_close, correlation_mode, correlation_tag, templateid]
+                hostids: "{{ zabbix_network_hosts.json.result | map(attribute='hostid') | list }}"
+                selectHosts: [hostid]
+                selectFunctions: extend
+                selectDependencies: [triggerid]
+              id: 7
+          register: zabbix_network_host_triggers
+          check_mode: false
+          failed_when: zabbix_network_host_triggers.json.result is not defined
+          when: zabbix_network_hosts.json.result | length > 0
+
+        - name: Validate every target before making any template or host change
+          ansible.builtin.set_fact:
+            zabbix_network_plans: >-
+              {{ zabbix_network_plans | combine({item:
+                 ((zabbix_network_hosts.json.result | selectattr('host', 'equalto', item) | first | default({}))
+                  | zabbix_icmp_migration(
+                      zabbix_network_host_items.json.result | default([]),
+                      zabbix_network_host_triggers.json.result | default([]),
+                      zabbix_network_template_items.json.result,
+                      zabbix_network_template_triggers.json.result,
+                      hostvars[item].zabbix_monitor_macros | default([]) | map(attribute='macro') | list))}) }}
+          loop: "{{ zabbix_network_snmp_targets }}"
+
+        - name: Require measured high-capacity support before initial activation
+          ansible.builtin.assert:
+            that:
+              - zabbix_network_hc_verified | default(false) | bool
+            fail_msg: >-
+              Verify authenticated ifHCInOctets/ifHCOutOctets GETs from monitor01 for every discovered interface on each SNMP target,
+              then pass zabbix_network_hc_verified=true to this operation.
+          when:
+            - not ansible_check_mode
+            - >-
+              zabbix_network_plans.values() | selectattr('pending') | list | length > 0 or
+              zabbix_network_prototypes.json.result | selectattr('snmp_oid', 'search', 'get\[1\.3\.6\.1\.2\.1\.2\.')
+              | list | length > 0
+
+        # Keep the standard keys, graphs and triggers, but use counters that cannot
+        # wrap multiple times between the packaged three-minute samples.
+        - name: Replace only the two traffic prototype OIDs with Counter64
+          ansible.builtin.uri:
+            body:
+              jsonrpc: '2.0'
+              method: itemprototype.update
+              params:
+                itemid: "{{ item.itemid }}"
+                snmp_oid: "{{ zabbix_network_counter_oids[item.key_].new }}"
+                description: IF-MIB high-capacity Counter64; standard key retained for graph and trigger compatibility.
+              id: 8
+          register: zabbix_network_prototype_update
+          failed_when: zabbix_network_prototype_update.json.result is not defined
+          changed_when: true
+          loop: "{{ zabbix_network_prototypes.json.result }}"
+          when:
+            - not ansible_check_mode
+            - item.snmp_oid != zabbix_network_counter_oids[item.key_].new
+
+        - name: Prepare the history-preserving adoption for each existing target
+          ansible.builtin.include_tasks: network-migrate.yml
+          loop: "{{ zabbix_network_snmp_targets }}"
+          loop_control:
+            loop_var: zabbix_network_target
+
+        - name: Report the pending history-preserving network transition
+          ansible.builtin.debug:
+            msg: Existing ICMP definitions would be adopted and traffic would use high-capacity counters.
+          changed_when: >-
+            zabbix_network_plans.values() | selectattr('pending') | list | length > 0 or
+            zabbix_network_prototypes.json.result | selectattr('snmp_oid', 'search', 'get\[1\.3\.6\.1\.2\.1\.2\.')
+            | list | length > 0
+          when: ansible_check_mode
+  always:
+    - name: Close the temporary network preparation session
+      ansible.builtin.uri:
+        url: "{{ zabbix_network_api_url }}"
+        method: POST
+        body_format: json
+        headers:
+          Authorization: "Bearer {{ zabbix_network_session.json.result }}"
+        body:
+          jsonrpc: '2.0'
+          method: user.logout
+          params: []
+          id: 10
+        use_proxy: false
+        follow_redirects: none
+      register: zabbix_network_logout
+      failed_when: zabbix_network_logout.json.result | default(false) != true
+      check_mode: false
+      when: zabbix_network_session.json.result | default('') | length > 0

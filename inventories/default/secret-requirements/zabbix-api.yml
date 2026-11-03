@@ -2,3 +2,5 @@
 required_secrets:
   zabbix_admin_password: zabbix.admin.password
   zabbix_agent_psks_json: zabbix.agent.psks
+  zabbix_snmp_at_x510_auth_passphrase: network.at_x510.snmp_auth_passphrase
+  zabbix_snmp_at_x510_priv_passphrase: network.at_x510.snmp_priv_passphrase
