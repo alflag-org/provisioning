@@ -85,6 +85,14 @@ inventory service assignments and can be overridden per host. Only explicitly
 enabled services belong in that selection; do not add a Minecraft unit or an
 unregistered Runner based on an assumed service name.
 
+The active Linux template's disk utilization and completed-operation rates use
+the same kernel-stat sample as the read/write time rates. The
+[disk correction operation](../playbooks/operations/zabbix-linux-disks.yml), with
+its matching administrator secret declaration and the `monitor01` limit, updates
+only the three existing prototypes. It preserves item identities and history.
+Earlier utilization values used weighted I/O time, and earlier await values mixed
+collection windows; the correction does not rewrite those historical values.
+
 For existing Cloudflare connectors, the
 [monitoring-only component](../playbooks/components/services/cloudflared-monitoring.yml)
 selects an explicit loopback metrics listener while preserving the installed
