@@ -209,8 +209,18 @@ require this preparation before initial SNMP enrollment.
 Each target supplies its actual template selection, interfaces, role tag and
 macros through inventory. Use the packaged
 [Proxmox VE by HTTP template](https://www.zabbix.com/integrations/proxmox)
-with a separately verified read-only API token. Bootstrap requires TLS peer and
-hostname verification on its HTTP items and nested prototypes. Trust the node's
+with a separately verified read-only API token. Before enrolling the token, use
+the [Proxmox template operation](../playbooks/operations/zabbix-proxmox.yml) with
+its administrator secret declaration and the `monitor01` limit. It prepares
+cluster/node, VM/LXC resource and storage measurements in the packaged template
+without registering a Proxmox host. Users, hardware, SMART, certificates, updates
+and guest-agent queries are excluded at their collectors or discovery rules;
+filtering returned objects alone would still perform those API requests.
+The template adds items under a Proxmox monitoring host rather than creating
+duplicate guest Agent hosts. Backup/task failures and node I/O latency require
+separate collection and acceptance.
+Bootstrap requires TLS peer and hostname verification on its HTTP items and
+nested prototypes. Trust the node's
 CA on the monitoring server and use a private endpoint matching its certificate
 before transmitting the token. Obtain device identity,
 SNMPv3 algorithms, interface data and supported MIBs from each IX2215, AT-x510
