@@ -1,4 +1,13 @@
 ---
+- name: Require coordinated MySQL server package upgrades
+  ansible.builtin.copy:
+    src: unattended-upgrades.conf
+    dest: /etc/apt/apt.conf.d/52mysql-server-maintenance
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/bin/apt-config -c %s shell mysql_server_policy Unattended-Upgrade::Package-Blacklist
+
 - name: Pin MySQL packages to the 8.4 LTS series
   ansible.builtin.copy:
     content: |
