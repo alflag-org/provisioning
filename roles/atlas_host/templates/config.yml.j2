@@ -14,12 +14,12 @@ programs:
     root: "{{ program.root }}"
     runtime:
       type: "{{ program.runtime.type }}"
-{% if program.runtime.type == 'python' %}
-{% if program.runtime.python | default('') | length > 0 %}
-      python: "{{ program.runtime.python }}"
+{% if program.runtime.type in ['python', 'perl'] %}
+{% if program.runtime.version | default('') | length > 0 %}
+      version: "{{ program.runtime.version }}"
 {% endif %}
-{% if program.runtime.venv | default('') | length > 0 %}
-      venv: "{{ program.runtime.venv }}"
+{% if program.runtime.environment | default('') | length > 0 %}
+      environment: "{{ program.runtime.environment }}"
 {% endif %}
 {% endif %}
 {% endfor %}

@@ -149,9 +149,8 @@ def run(playbook, required, arguments, *, provider=None, executable=None, transi
                 "ANSIBLE_STDOUT_CALLBACK": "ansible.builtin.default",
                 "ANSIBLE_LOAD_CALLBACK_PLUGINS": "False",
             })
-            # Atlas may resolve the interpreter symlink outside the program venv.
-            bin_dir = (Path(os.environ["ATLAS_VENV"]) / "bin"
-                       if os.environ.get("ATLAS_VENV") else Path(sys.executable).parent)
+            bin_dir = (Path(os.environ["ATLAS_ENVIRONMENT"]) / "bin"
+                       if os.environ.get("ATLAS_ENVIRONMENT") else Path(sys.executable).parent)
             binary = str(bin_dir / "ansible-playbook") if executable is None else executable
             argv = [binary, str(playbook), *arguments, "--extra-vars", f"@{path}"]
             if executable is None:

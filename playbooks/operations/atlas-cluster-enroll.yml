@@ -1,0 +1,190 @@
+---
+- name: Initialize the selected Cluster and enroll its prepared peers
+  hosts: default
+  gather_facts: false
+  become: false
+  vars:
+    ansible_become: false
+    ansible_remote_tmp: /dev/shm/atlas-cluster-ansible
+
+  pre_tasks:
+    - name: Require volatile remote staging before handling shared credentials
+      ansible.builtin.command:
+        argv: [stat, -f, -c, '%T', /dev/shm]
+      register: atlas_cluster_staging_filesystem
+      changed_when: false
+      check_mode: false
+      failed_when: atlas_cluster_staging_filesystem.stdout != 'tmpfs'
+
+    - name: Require the credential source to be in the selected operation scope
+      ansible.builtin.assert:
+        that: atlas_cluster_bootstrap_host in ansible_play_hosts_all
+        fail_msg: Include the bootstrap host in --limit; enrollment never mutates an unselected host.
+
+  tasks:
+    - name: Read local Cluster membership before any mutation
+      ansible.builtin.command:
+        # The CLI's 15-second IPC timeout expires during observed guest I/O stalls.
+        argv:
+          - "{{ atlas_cli_venv }}/bin/python"
+          - -c
+          - |
+            import asyncio
+            import json
+            from atlas_core.cluster import ClusterClient
+            client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+            print(json.dumps(asyncio.run(client.request("status"))))
+      register: atlas_cluster_before
+      changed_when: false
+      check_mode: false
+
+    - name: Require the configured host identity and a recoverable membership state
+      ansible.builtin.assert:
+        that:
+          - (atlas_cluster_before.stdout | from_json).local_id == inventory_hostname
+          - (atlas_cluster_before.stdout | from_json).membership in ['uninitialized', 'joined']
+        fail_msg: Inspect mismatched identities or previously left membership before enrollment.
+
+    - name: Enroll prepared peers outside check mode
+      when: not ansible_check_mode
+      block:
+        - name: Initialize only the selected uninitialized bootstrap peer
+          ansible.builtin.command:
+            argv:
+              - "{{ atlas_cli_venv }}/bin/python"
+              - -c
+              - |
+                import asyncio
+                import json
+                import sys
+                from atlas_core.cluster import ClusterClient
+                client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+                print(json.dumps(asyncio.run(client.request("init", {"name": sys.argv[1]}))))
+              - "{{ atlas_cluster_name }}"
+          when:
+            - inventory_hostname == atlas_cluster_bootstrap_host
+            - (atlas_cluster_before.stdout | from_json).membership == 'uninitialized'
+          changed_when: true
+
+        - name: Read the initialized Cluster identity
+          ansible.builtin.command:
+            argv:
+              - "{{ atlas_cli_venv }}/bin/python"
+              - -c
+              - |
+                import asyncio
+                import json
+                from atlas_core.cluster import ClusterClient
+                client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+                print(json.dumps(asyncio.run(client.request("status"))))
+          when: inventory_hostname == atlas_cluster_bootstrap_host
+          register: atlas_cluster_bootstrap_status
+          changed_when: false
+
+        - name: Require the selected Cluster name and identity
+          ansible.builtin.assert:
+            that:
+              - (hostvars[atlas_cluster_bootstrap_host].atlas_cluster_bootstrap_status.stdout | from_json).name == atlas_cluster_name
+              - (hostvars[atlas_cluster_bootstrap_host].atlas_cluster_bootstrap_status.stdout | from_json).membership == 'joined'
+              - >-
+                (atlas_cluster_before.stdout | from_json).membership != 'joined' or
+                (atlas_cluster_before.stdout | from_json).cluster_id ==
+                (hostvars[atlas_cluster_bootstrap_host].atlas_cluster_bootstrap_status.stdout | from_json).cluster_id
+            fail_msg: Existing membership belongs to another Cluster; refusing automatic replacement.
+
+        - name: Read the existing shared credential without displaying its contents
+          ansible.builtin.slurp:
+            src: "{{ atlas_cluster_credentials_file }}"
+          when: inventory_hostname == atlas_cluster_bootstrap_host
+          register: atlas_cluster_credential
+          no_log: true
+
+        - name: Inspect existing peer credentials
+          ansible.builtin.stat:
+            path: "{{ atlas_cluster_credentials_file }}"
+            follow: false
+            get_checksum: false
+            get_mime: false
+            get_attributes: false
+          register: atlas_cluster_peer_credential
+          no_log: true
+
+        - name: Require an existing credential to be a regular file
+          ansible.builtin.assert:
+            that:
+              - not atlas_cluster_peer_credential.stat.islnk
+              - atlas_cluster_peer_credential.stat.isreg
+              - atlas_cluster_peer_credential.stat.nlink == 1
+              - atlas_cluster_peer_credential.stat.pw_name == ansible_user
+          when: atlas_cluster_peer_credential.stat.exists
+          no_log: true
+
+        - name: Read existing peer credentials for conflict detection
+          ansible.builtin.slurp:
+            src: "{{ atlas_cluster_credentials_file }}"
+          register: atlas_cluster_existing_credential
+          when: atlas_cluster_peer_credential.stat.exists
+          no_log: true
+
+        - name: Refuse to replace different credentials
+          ansible.builtin.assert:
+            that: atlas_cluster_existing_credential.content == hostvars[atlas_cluster_bootstrap_host].atlas_cluster_credential.content
+          when: atlas_cluster_peer_credential.stat.exists
+          no_log: true
+
+        - name: Distribute the credential without overwriting an existing identity
+          ansible.builtin.copy:
+            dest: "{{ atlas_cluster_credentials_file }}"
+            content: "{{ hostvars[atlas_cluster_bootstrap_host].atlas_cluster_credential.content | b64decode }}"
+            force: false
+            mode: "0600"
+          no_log: true
+          diff: false
+
+        - name: Keep shared credentials owner-only
+          ansible.builtin.file:
+            path: "{{ atlas_cluster_credentials_file }}"
+            mode: "0600"
+          no_log: true
+
+        # Join can commit before returning an error. Inspect status before any retry.
+        - name: Join each uninitialized peer through the initialized bootstrap peer
+          throttle: 1
+          ansible.builtin.command:
+            argv:
+              - "{{ atlas_cli_venv }}/bin/python"
+              - -c
+              - |
+                import asyncio
+                import json
+                import sys
+                from atlas_core.cluster import ClusterClient
+                client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+                print(json.dumps(asyncio.run(client.request("join", {"seeds": [sys.argv[1]]}))))
+              - "{{ hostvars[atlas_cluster_bootstrap_host].ansible_host }}:{{ atlas_cluster_port }}"
+          when:
+            - inventory_hostname != atlas_cluster_bootstrap_host
+            - (atlas_cluster_before.stdout | from_json).membership == 'uninitialized'
+          changed_when: true
+
+        - name: Read the resulting local membership
+          ansible.builtin.command:
+            argv:
+              - "{{ atlas_cli_venv }}/bin/python"
+              - -c
+              - |
+                import asyncio
+                import json
+                from atlas_core.cluster import ClusterClient
+                client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+                print(json.dumps(asyncio.run(client.request("status"))))
+          register: atlas_cluster_after
+          changed_when: false
+
+        - name: Verify that the peer joined the selected Cluster
+          ansible.builtin.assert:
+            that:
+              - (atlas_cluster_after.stdout | from_json).membership == 'joined'
+              - >-
+                (atlas_cluster_after.stdout | from_json).cluster_id ==
+                (hostvars[atlas_cluster_bootstrap_host].atlas_cluster_bootstrap_status.stdout | from_json).cluster_id

@@ -37,7 +37,8 @@ atlas_cli_venv: "{{ atlas_operator_home }}/.local/share/atlas-cli-venv"
 atlas_cli_bin_dir: "{{ atlas_operator_home }}/.local/bin"
 atlas_cli_bin: "{{ atlas_cli_bin_dir }}/atlas"
 atlas_cli_python: /usr/bin/python3
-atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master"
+atlas_cli_revision: ""  # Full commit ID when the CLI source is pinned.
+atlas_cli_source: "git+https://github.com/alflag-org/atlas.git@master#subdirectory=src/python"
 
 atlas_runtime_python_version: "3.14.6"
 atlas_runtime_python_executable: ""

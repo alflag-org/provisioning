@@ -1,0 +1,16 @@
+# Replace only the Atlas Cluster table in one transaction.
+add table inet atlas_cluster
+delete table inet atlas_cluster
+table inet atlas_cluster {
+    set peers {
+        type ipv4_addr
+        elements = { {% for host in groups[atlas_cluster_members_group] | sort %}{{ hostvars[host].ansible_host }}{{ ", " if not loop.last else "" }}{% endfor %} }
+    }
+    chain input {
+        type filter hook input priority -10; policy accept;
+        tcp dport {{ atlas_cluster_port }} ip saddr @peers accept
+        udp dport {{ atlas_cluster_port }} ip saddr @peers accept
+        tcp dport {{ atlas_cluster_port }} drop
+        udp dport {{ atlas_cluster_port }} drop
+    }
+}

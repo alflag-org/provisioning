@@ -73,6 +73,9 @@
     - name: Install Atlas CLI
       ansible.builtin.import_tasks: cli.yml
 
+    - name: Activate the selected Atlas CLI
+      ansible.builtin.import_tasks: activate.yml
+
     - name: Manage Atlas runtime
       ansible.builtin.import_tasks: runtime.yml
       when: atlas_manage_runtime | bool
