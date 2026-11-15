@@ -4,29 +4,26 @@
     that:
       - atlas.programs.talos.root == talos_root
       - atlas.programs.talos.runtime.type == 'python'
-      - atlas.programs.talos.runtime.python == talos_python_version
-      - atlas.programs.talos.runtime.venv == 'talos'
-      - talos_venv == atlas_home ~ '/venvs/talos'
+      - atlas.programs.talos.runtime.version == talos_python_version
+      - atlas.programs.talos.runtime.environment == 'talos'
+      - talos_environment == atlas_home ~ '/environments/python/talos'
     fail_msg: Talos deployment and Atlas registration must agree.
 
 - name: Create the Talos virtual environment through Atlas
   ansible.builtin.command:
-    argv: ["{{ atlas_cli_bin }}", venv, create, talos]
-    creates: "{{ talos_venv }}/bin/python"
+    argv: ["{{ atlas_cli_bin }}", env, create, talos]
+    creates: "{{ talos_environment }}/bin/python"
   become: true
   become_user: "{{ talos_owner }}"
 
-- name: Keep the selected interpreter inside the Talos virtual environment
-  ansible.builtin.import_tasks: interpreter.yml
-
 - name: Inspect the installed Talos revision marker
   ansible.builtin.stat:
-    path: "{{ talos_venv }}/.talos-revision"
+    path: "{{ talos_environment }}/.talos-revision"
   register: talos_marker
 
 - name: Read the installed Talos revision marker
   ansible.builtin.slurp:
-    path: "{{ talos_venv }}/.talos-revision"
+    path: "{{ talos_environment }}/.talos-revision"
   register: talos_installed
   when: talos_marker.stat.exists
 
@@ -38,9 +35,8 @@
          or talos_checkout.changed | default(false) }}
 
 - name: Install the selected Talos package and its pinned requirements
-  # Atlas renames a staged venv; generated pip shebangs can retain its old path.
   ansible.builtin.command:
-    argv: ["{{ talos_venv }}/bin/python", -m, pip, install, "{{ talos_root }}"]
+    argv: ["{{ talos_environment }}/bin/python", -m, pip, install, "{{ talos_root }}"]
   become: true
   become_user: "{{ talos_owner }}"
   changed_when: true
@@ -50,12 +46,12 @@
 
 - name: Inspect the Talos virtual environment
   ansible.builtin.stat:
-    path: "{{ talos_venv }}/bin/python"
+    path: "{{ talos_environment }}/bin/python"
   register: talos_python
 
 - name: Require coherent installed Talos dependencies
   ansible.builtin.command:
-    argv: ["{{ talos_venv }}/bin/python", -m, pip, check]
+    argv: ["{{ talos_environment }}/bin/python", -m, pip, check]
   become: true
   become_user: "{{ talos_owner }}"
   changed_when: false
@@ -64,7 +60,7 @@
 - name: Record the installed Talos revision after successful installation
   ansible.builtin.copy:
     content: "{{ talos_revision }}\n"
-    dest: "{{ talos_venv }}/.talos-revision"
+    dest: "{{ talos_environment }}/.talos-revision"
     owner: "{{ talos_owner }}"
     group: "{{ talos_group }}"
     mode: "0644"

@@ -1,0 +1,136 @@
+---
+- name: Install Atlas Cluster prerequisites
+  ansible.builtin.apt:
+    name: [git, python3-venv, nftables]
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time }}"
+    policy_rc_d: 101
+
+- name: Prepare existing Atlas directories
+  ansible.builtin.include_role:
+    name: atlas_host
+    tasks_from: directories.yml
+    public: true
+
+- name: Install the selected Atlas CLI with Cluster dependencies
+  ansible.builtin.include_role:
+    name: atlas_host
+    tasks_from: cli.yml
+    apply:
+      environment:
+        TMPDIR: "{{ atlas_tmp_dir }}"
+
+- name: Preserve existing Atlas program registrations
+  ansible.builtin.copy:
+    dest: "{{ atlas_etc_dir }}/config.yml"
+    content: "programs: {}\n"
+    force: false
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0644"
+
+- name: Create missing Atlas host identities
+  ansible.builtin.template:
+    src: "{{ role_path }}/../atlas_host/templates/host.yml.j2"
+    dest: "{{ atlas_etc_dir }}/host.yml"
+    force: false
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0644"
+
+- name: Validate existing Atlas registrations before CLI activation
+  ansible.builtin.command:
+    argv: ["{{ atlas_cli_venv }}/bin/atlas", check]
+  changed_when: false
+  when: not ansible_check_mode
+  environment:
+    PATH: "{{ atlas_pyenv_root }}/bin:/usr/local/bin:/usr/bin:/bin"
+    PYENV_ROOT: "{{ atlas_pyenv_root }}"
+
+- name: Activate the prepared Atlas CLI
+  ansible.builtin.include_role:
+    name: atlas_host
+    tasks_from: activate.yml
+
+- name: Create the private Cluster credential directory
+  ansible.builtin.file:
+    path: "{{ atlas_cluster_credentials_file | dirname }}"
+    state: directory
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0700"
+
+- name: Configure the Cluster peer
+  ansible.builtin.template:
+    src: cluster.yml.j2
+    dest: "{{ atlas_etc_dir }}/cluster.yml"
+    owner: "{{ atlas_operator_user }}"
+    group: "{{ atlas_operator_group }}"
+    mode: "0644"
+  notify: Restart Atlas Cluster
+
+- name: Configure member-restricted Cluster ingress
+  ansible.builtin.template:
+    src: ingress.nft.j2
+    dest: "{{ atlas_etc_dir }}/cluster-ingress.nft"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/nft --check --file %s
+  notify: Reload Atlas Cluster ingress
+
+- name: Install Cluster ingress service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/atlas-cluster-ingress.service
+    content: |
+      [Unit]
+      Description=Atlas Cluster peer ingress
+      After=network.target nftables.service
+      Before=atlas-daemon-cluster.service
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/nft --file {{ atlas_etc_dir }}/cluster-ingress.nft
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Atlas Cluster ingress
+
+- name: Install the Cluster daemon service
+  ansible.builtin.template:
+    src: atlas-daemon-cluster.service.j2
+    dest: /etc/systemd/system/atlas-daemon-cluster.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Atlas Cluster
+
+- name: Apply pending Cluster configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Inspect the owned ingress table
+  ansible.builtin.command:
+    argv: [/usr/sbin/nft, list, table, inet, atlas_cluster]
+  register: atlas_cluster_ingress
+  changed_when: false
+  failed_when: atlas_cluster_ingress.rc != 0 and 'No such file or directory' not in atlas_cluster_ingress.stderr
+  when: not ansible_check_mode
+
+- name: Enable Cluster ingress and restore a missing table
+  ansible.builtin.systemd_service:
+    name: atlas-cluster-ingress
+    state: "{{ 'restarted' if atlas_cluster_ingress.rc != 0 else 'started' }}"
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Enable the Cluster daemon and activate an updated CLI
+  ansible.builtin.systemd_service:
+    name: atlas-daemon-cluster
+    state: "{{ 'restarted' if atlas_cli_install.changed else 'started' }}"
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode

@@ -18,7 +18,9 @@ with synthetic data; verify Ansible changes and deployed behavior separately.
 
 Configure SSH and privilege escalation for the selected inventory. Register
 this repository as an Atlas Python program using [requirements.txt](requirements.txt)
-and generate its command shims. Configure secret providers on the control host.
+and runtime fields `type`, `version`, and `environment`. Create its dependency environment
+with `atlas env create`, install its requirements there, and generate command shims.
+Configure secret providers on the control host.
 
 Select a [playbook](playbooks/) and an explicit target. Declare the secrets
 required by its roles as variable-to-provider-name mappings, without values:
@@ -74,3 +76,20 @@ for unmanaged devices and services, optional reverse records, and DNS convergenc
 
 The [monitoring guide](docs/zabbix.md) covers the dedicated private Zabbix VM,
 explicit agent enrollment, API configuration, and rebuilding after data loss.
+
+The [Atlas runtime migration playbook](playbooks/operations/atlas-runtime-migrate.yml)
+prepares language-scoped dependency environments for the registered controller programs.
+Supply a reviewed controller source tar archive and its SHA-256. It verifies the candidate
+configuration and both commands before activating the new registrations and CLI.
+
+The [Atlas Cluster playbook](playbooks/components/atlas-cluster.yml) prepares the
+inventory-managed Linux peers without enrolling them. The separate
+[enrollment playbook](playbooks/operations/atlas-cluster-enroll.yml) initializes
+the selected Cluster and joins prepared peers. Include the configured bootstrap
+host in the operation's explicit target limit. That host supplies the initial shared
+credential; peers have equal roles. The
+[verification playbook](playbooks/operations/atlas-cluster-verify.yml) checks each
+selected peer's observations against current inventory membership. Existing credentials and membership
+in another Cluster are never replaced automatically. See the
+[Atlas operator reference](https://github.com/alflag-org/atlas/blob/b50e6b3431428d29c33211ce38064f4756e3d171/docs/reference.rst#cluster-membership)
+for membership semantics and network requirements.

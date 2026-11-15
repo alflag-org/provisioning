@@ -1,0 +1,83 @@
+---
+- name: Verify every Cluster peer against current inventory membership
+  hosts: default
+  gather_facts: false
+  become: false
+  vars:
+    ansible_become: false
+  tasks:
+    - name: Require the Cluster daemon to be active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, atlas-daemon-cluster.service, atlas-cluster-ingress.service]
+      changed_when: false
+      check_mode: false
+      tags: runtime
+
+    - name: Require both Cluster services to be enabled for boot
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, atlas-daemon-cluster.service, atlas-cluster-ingress.service]
+      changed_when: false
+      check_mode: false
+      tags: runtime
+
+    - name: Verify the installed Atlas revision and Cluster dependency
+      ansible.builtin.command:
+        argv:
+          - "{{ atlas_cli_venv }}/bin/python"
+          - -c
+          - |
+            import importlib.metadata
+            import json
+            import cryptography
+            source = importlib.metadata.distribution("atlas").read_text("direct_url.json")
+            assert json.loads(source)["vcs_info"]["commit_id"] == "{{ atlas_cli_revision }}"
+            print("Atlas source and Cluster dependency verified")
+      changed_when: false
+      check_mode: false
+      tags: runtime
+
+    - name: Wait for each peer to observe every inventory member as alive
+      ansible.builtin.command:
+        argv:
+          - "{{ atlas_cli_venv }}/bin/python"
+          - -c
+          - |
+            import asyncio
+            import json
+            from atlas_core.cluster import ClusterClient
+            client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+            print(json.dumps(asyncio.run(client.request("members"))))
+      register: atlas_cluster_observed
+      changed_when: false
+      check_mode: false
+      retries: 20
+      delay: 3
+      until: >-
+        atlas_cluster_observed.rc == 0 and
+        ((atlas_cluster_observed.stdout | from_json).members | map(attribute='id') | sort
+         == groups[atlas_cluster_members_group] | sort) and
+        ((atlas_cluster_observed.stdout | from_json).members
+         | selectattr('state', 'equalto', 'alive') | list | length
+         == groups[atlas_cluster_members_group] | length)
+
+    - name: Read each peer's membership and authenticated contact status
+      ansible.builtin.command:
+        argv:
+          - "{{ atlas_cli_venv }}/bin/python"
+          - -c
+          - |
+            import asyncio
+            import json
+            from atlas_core.cluster import ClusterClient
+            client = ClusterClient(timeout={{ atlas_cluster_request_timeout_seconds }})
+            print(json.dumps(asyncio.run(client.request("status"))))
+      register: atlas_cluster_status
+      changed_when: false
+      check_mode: false
+
+    - name: Require joined membership and an authenticated peer contact
+      ansible.builtin.assert:
+        that:
+          - (atlas_cluster_status.stdout | from_json).membership == 'joined'
+          - (atlas_cluster_status.stdout | from_json).last_peer_contact is not none
+          - (atlas_cluster_status.stdout | from_json).local_id == inventory_hostname

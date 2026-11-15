@@ -2,6 +2,9 @@
 - name: Converge foundation components
   ansible.builtin.import_playbook: components/foundation.yml
 
+- name: Converge Atlas Cluster peers
+  ansible.builtin.import_playbook: components/atlas-cluster.yml
+
 - name: Converge Web host middleware
   ansible.builtin.import_playbook: components/nginx.yml
 

@@ -1,0 +1,7 @@
+bind: "{{ ansible_host }}:{{ atlas_cluster_port }}"
+advertise: "{{ ansible_host }}:{{ atlas_cluster_port }}"
+credentials_file: {{ atlas_cluster_credentials_file | to_json }}
+seeds:
+{% for host in groups[atlas_cluster_members_group] | sort if host != inventory_hostname %}
+  - "{{ hostvars[host].ansible_host }}:{{ atlas_cluster_port }}"
+{% endfor %}
