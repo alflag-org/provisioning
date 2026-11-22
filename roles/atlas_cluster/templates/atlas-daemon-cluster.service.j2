@@ -1,0 +1,26 @@
+# Managed by Ansible. Atlas configuration directories are operator-owned.
+[Unit]
+Description=Atlas Cluster peer
+Wants=network-online.target
+Requires=atlas-cluster-ingress.service
+After=network-online.target atlas-cluster-ingress.service
+
+[Service]
+Type=notify
+User={{ atlas_operator_user }}
+WorkingDirectory=/var/lib/atlas/cluster
+ExecStart={{ atlas_cli_venv }}/bin/atlasd --config {{ atlas_etc_dir }}/cluster.yml
+StateDirectory=atlas/cluster
+StateDirectoryMode=0700
+RuntimeDirectory=atlas/cluster
+RuntimeDirectoryMode=0700
+UMask=0077
+KillMode=control-group
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec={{ atlas_cluster_startup_timeout_seconds }}
+TimeoutStopSec={{ atlas_cluster_shutdown_timeout_seconds }}
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,169 @@
+---
+- name: Prepare language-scoped Atlas environments before activating the new CLI
+  hosts: control01
+  gather_facts: false
+  tasks:
+    - name: Load Atlas paths and prepare operator-owned directories
+      ansible.builtin.include_role:
+        name: atlas_host
+        tasks_from: directories.yml
+        public: true
+
+    - name: Install the candidate Atlas without changing the active command
+      ansible.builtin.include_role:
+        name: atlas_host
+        tasks_from: cli.yml
+        apply:
+          environment:
+            TMPDIR: "{{ atlas_tmp_dir }}"
+
+    - name: Require a verified controller source archive
+      ansible.builtin.assert:
+        that:
+          - atlas_provisioning_archive is defined
+          - atlas_provisioning_archive_sha256 is match('^[0-9a-f]{64}$')
+          - atlas.programs.provisioning.root != '/opt/provisioning'
+        fail_msg: Supply the reviewed source archive and SHA-256 for the separate controller deployment.
+
+    - name: Inspect the selected source deployment
+      ansible.builtin.stat:
+        path: "{{ atlas.programs.provisioning.root }}"
+      register: atlas_source_deployment
+
+    - name: Inspect the existing source archive identity
+      ansible.builtin.stat:
+        path: "{{ atlas.programs.provisioning.root }}/.source-archive-sha256"
+      register: atlas_source_identity
+
+    - name: Read the existing source archive identity
+      ansible.builtin.slurp:
+        src: "{{ atlas.programs.provisioning.root }}/.source-archive-sha256"
+      register: atlas_source_digest
+      when: atlas_source_identity.stat.exists
+
+    - name: Refuse to overwrite a different or unrecognized source deployment
+      ansible.builtin.assert:
+        that: >-
+          not atlas_source_deployment.stat.exists or
+          (atlas_source_digest.content | default('') | b64decode | trim)
+          == atlas_provisioning_archive_sha256
+
+    - name: Copy the selected controller source archive
+      ansible.builtin.copy:
+        src: "{{ atlas_provisioning_archive }}"
+        dest: "{{ atlas_tmp_dir }}/provisioning-{{ atlas_provisioning_archive_sha256 }}.tar"
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+        mode: "0644"
+
+    - name: Verify the transferred source archive
+      ansible.builtin.stat:
+        path: "{{ atlas_tmp_dir }}/provisioning-{{ atlas_provisioning_archive_sha256 }}.tar"
+        checksum_algorithm: sha256
+      register: atlas_provisioning_archive_state
+      when: not ansible_check_mode
+
+    - name: Require the reviewed archive contents before extraction
+      ansible.builtin.assert:
+        that: atlas_provisioning_archive_state.stat.checksum == atlas_provisioning_archive_sha256
+      when: not ansible_check_mode
+
+    - name: Create the separate controller source directory
+      ansible.builtin.file:
+        path: "{{ atlas.programs.provisioning.root }}"
+        state: directory
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+        mode: "0755"
+
+    - name: Extract the selected controller source
+      ansible.builtin.unarchive:
+        src: "{{ atlas_tmp_dir }}/provisioning-{{ atlas_provisioning_archive_sha256 }}.tar"
+        dest: "{{ atlas.programs.provisioning.root }}"
+        remote_src: true
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+      when:
+        - not ansible_check_mode
+        - not atlas_source_deployment.stat.exists
+
+    - name: Record the installed source archive identity
+      ansible.builtin.copy:
+        content: "{{ atlas_provisioning_archive_sha256 }}\n"
+        dest: "{{ atlas.programs.provisioning.root }}/.source-archive-sha256"
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+        mode: "0644"
+      when: not ansible_check_mode
+
+    - name: Render the candidate configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/atlas_host/templates/config.yml.j2"
+        dest: "{{ atlas_tmp_dir }}/config-{{ atlas_cli_revision }}.yml"
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+        mode: "0644"
+
+    - name: Prepare and verify environments against the candidate configuration
+      when: not ansible_check_mode
+      become: true
+      become_user: "{{ atlas_operator_user }}"
+      environment:
+        PATH: "{{ atlas_pyenv_root }}/bin:{{ atlas_cli_bin_dir }}:/usr/local/bin:/usr/bin:/bin"
+        PYENV_ROOT: "{{ atlas_pyenv_root }}"
+        ATLAS_CONFIG_FILE: "{{ atlas_tmp_dir }}/config-{{ atlas_cli_revision }}.yml"
+        TMPDIR: "{{ atlas_tmp_dir }}"
+      block:
+        - name: Create the Provisioning dependency environment through Atlas
+          ansible.builtin.command:
+            argv: ["{{ atlas_cli_venv }}/bin/atlas", env, create, provisioning]
+            creates: "{{ atlas_home }}/environments/python/provisioning/bin/python"
+
+        - name: Install the declared Provisioning requirements including its SDK
+          ansible.builtin.pip:
+            requirements: "{{ atlas.programs.provisioning.root }}/requirements.txt"
+            virtualenv: "{{ atlas_home }}/environments/python/provisioning"
+
+        - name: Prepare the Talos dependency environment and declared package
+          ansible.builtin.include_role:
+            name: components/talos  # noqa role-name[path]
+            tasks_from: runtime.yml
+          vars:
+            atlas_cli_bin: "{{ atlas_cli_venv }}/bin/atlas"
+
+        - name: Check the candidate registrations and interpreter identities
+          ansible.builtin.command:
+            argv: ["{{ atlas_cli_venv }}/bin/atlas", check]
+          changed_when: false
+
+        - name: Verify the Provisioning command through the new executor
+          ansible.builtin.command:
+            argv: ["{{ atlas_cli_venv }}/bin/atlas", run, provision, --help]
+          changed_when: false
+
+        - name: Verify the Talos command through the new executor
+          ansible.builtin.command:
+            argv: ["{{ atlas_cli_venv }}/bin/atlas", run, registry-sync, --help]
+          changed_when: false
+
+    - name: Activate the verified registration configuration
+      ansible.builtin.copy:
+        src: "{{ atlas_tmp_dir }}/config-{{ atlas_cli_revision }}.yml"
+        dest: "{{ atlas_etc_dir }}/config.yml"
+        remote_src: true
+        owner: "{{ atlas_operator_user }}"
+        group: "{{ atlas_operator_group }}"
+        mode: "0644"
+      when: not ansible_check_mode
+
+    - name: Activate the selected Atlas command
+      ansible.builtin.include_role:
+        name: atlas_host
+        tasks_from: activate.yml
+      when: not ansible_check_mode
+
+    - name: Refresh registered command shims
+      ansible.builtin.include_role:
+        name: atlas_host
+        tasks_from: shims.yml
+      when: not ansible_check_mode

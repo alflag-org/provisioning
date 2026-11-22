@@ -5,7 +5,7 @@
       {{ ([atlas_runtime_python_version | default('configured', true)]
           + (atlas.programs.values()
              | selectattr('runtime.type', 'equalto', 'python')
-             | map(attribute='runtime.python', default=atlas_runtime_python_version)
+             | map(attribute='runtime.version', default=atlas_runtime_python_version)
              | list))
          | reject('equalto', '') | unique | list }}
 

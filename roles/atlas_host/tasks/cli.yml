@@ -28,6 +28,34 @@
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
 
+- name: Inspect the CLI interpreter for source verification
+  ansible.builtin.stat:
+    path: "{{ atlas_cli_venv }}/bin/python"
+  register: atlas_cli_interpreter
+  when: atlas_cli_revision | length > 0
+
+- name: Read the installed Atlas source revision
+  ansible.builtin.command:
+    argv:
+      - "{{ atlas_cli_venv }}/bin/python"
+      - -c
+      - |
+        import importlib.metadata
+        import json
+        try:
+            source = importlib.metadata.distribution("atlas").read_text("direct_url.json")
+        except importlib.metadata.PackageNotFoundError:
+            source = None
+        print(json.loads(source or "{}").get("vcs_info", {}).get("commit_id", ""))
+  register: atlas_cli_installed_revision
+  changed_when: false
+  check_mode: false
+  become: "{{ atlas_become_operator }}"
+  become_user: "{{ atlas_operator_user }}"
+  when:
+    - atlas_cli_revision | length > 0
+    - atlas_cli_interpreter.stat.exists
+
 # Atlas follows the configured source; retain its existing upgrade policy.
 - name: Upgrade pip in Atlas CLI venv  # noqa package-latest
   ansible.builtin.pip:
@@ -42,17 +70,15 @@
   ansible.builtin.pip:
     name: "{{ atlas_cli_source }}"
     state: latest
+    # pip otherwise retains a different Git commit with the same package version.
+    extra_args: >-
+      {{ '--force-reinstall'
+         if atlas_cli_revision | length > 0
+            and atlas_cli_installed_revision.stdout | default('') != atlas_cli_revision
+         else omit }}
     virtualenv: "{{ atlas_cli_venv }}"
     virtualenv_command: "{{ atlas_cli_python }} -m venv"
   become: "{{ atlas_become_operator }}"
   become_user: "{{ atlas_operator_user }}"
 
-- name: Link atlas command
-  ansible.builtin.file:
-    src: "{{ atlas_cli_venv }}/bin/atlas"
-    dest: "{{ atlas_cli_bin }}"
-    state: link
-    force: true
-    owner: "{{ atlas_operator_user }}"
-    group: "{{ atlas_operator_group }}"
-  become: "{{ atlas_become_operator }}"
+  register: atlas_cli_install

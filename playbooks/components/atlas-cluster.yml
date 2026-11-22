@@ -1,0 +1,7 @@
+---
+- name: Prepare Atlas Cluster peers without enrolling them
+  hosts: default
+  gather_facts: false
+  serial: 4
+  roles:
+    - atlas_cluster

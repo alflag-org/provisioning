@@ -67,7 +67,7 @@ class SecretExecutionTests(unittest.TestCase):
             ), patch.object(provision.subprocess, 'Popen', side_effect=spawn), patch.object(
                 provision, '_stop', side_effect=stop
             ) as stopped, patch.dict(os.environ, {
-                'ATLAS_VENV': '/synthetic-venv', 'ANSIBLE_CALLBACK_PLUGINS': 'untrusted',
+                'ATLAS_ENVIRONMENT': '/synthetic-venv', 'ANSIBLE_CALLBACK_PLUGINS': 'untrusted',
             }), redirect_stdout(output), redirect_stderr(output):
                 result = provision.run(
                     Path('unused'), {'password': 'fixture.secret'}, [], provider=provider,

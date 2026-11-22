@@ -18,16 +18,16 @@ talos_config:
 atlas:
   programs:
     provisioning:
-      root: /opt/provisioning
+      root: /opt/provisioning-atlas-b50e6b3
       runtime:
         type: python
-        python: "3.14.6"
-        venv: provisioning
+        version: "3.14.6"
+        environment: provisioning
     talos:
       root: "{{ talos_root }}"
       runtime:
         type: python
-        python: "{{ talos_python_version }}"
-        venv: talos
+        version: "{{ talos_python_version }}"
+        environment: talos
 
 ssh_server_enabled: true

@@ -1,0 +1,13 @@
+---
+atlas_cli_revision: b50e6b3431428d29c33211ce38064f4756e3d171
+atlas_cli_venv: "/home/ops/.local/share/atlas-cli-{{ atlas_cli_revision[:12] }}"
+atlas_cli_bin: /home/ops/.local/bin/atlas
+atlas_cli_source: "atlas[cluster,secrets] @ git+https://github.com/alflag-org/atlas.git@{{ atlas_cli_revision }}#subdirectory=src/python"
+atlas_cluster_members_group: default
+atlas_cluster_bootstrap_host: control01
+atlas_cluster_name: "{{ site_name }}"
+atlas_cluster_port: 7947
+atlas_cluster_credentials_file: /etc/atlas/cluster/credentials.json
+atlas_cluster_startup_timeout_seconds: 180
+atlas_cluster_request_timeout_seconds: 120
+atlas_cluster_shutdown_timeout_seconds: 180
